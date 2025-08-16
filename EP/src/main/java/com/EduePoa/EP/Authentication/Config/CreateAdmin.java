@@ -72,6 +72,7 @@ public class CreateAdmin implements ApplicationRunner {
                 user.setRole(adminRole);
                 user.setLocation("EM-TECH");
                 user.setGender("null");
+                user.setDeletedFlag('N');
                 userRepository.save(user);
 
                 log.info("System admin created successfully.");
