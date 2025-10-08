@@ -21,5 +21,12 @@ public class FeeStructureContoller {
         var response = feeStructureService.getAllFeeStructures();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-fee-structure/{id}")
+    ResponseEntity<?> getFeeStructureById(@PathVariable Long id){
+        var response = feeStructureService.getFeeStructureById(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+
 
 }

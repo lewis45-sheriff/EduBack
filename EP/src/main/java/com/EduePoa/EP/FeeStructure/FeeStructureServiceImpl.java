@@ -154,13 +154,50 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         }
         return response;
     }
+    @Override
+    public CustomResponse<?> getFeeStructureById(Long id) {
+        CustomResponse<FeeStructureResponseDTO> response = new CustomResponse<>();
+        try {
+            Optional<FeeStructure> optionalFeeStructure = feeStructureRepository.findById(id);
+            if (optionalFeeStructure.isEmpty()) {
+                response.setMessage("Fee structure Not Found");
+                response.setEntity(null);
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            FeeStructure feeStructure = optionalFeeStructure.get();
+
+            // Use the helper method to convert to DTO
+            FeeStructureResponseDTO dto = convertToResponseDTO(feeStructure);
+
+            // Set additional fields that might be specific to this endpoint
+//            dto.setName(feeStructure.getName());
+//            dto.setYear(feeStructure.getYear());
+//            dto.setTotalAmount(feeStructure.getTotalAmount());
+//            dto.setDatePosted(feeStructure.getDatePosted());
+//            dto.setIsApproved(feeStructure.getIsApproved());
+//            dto.setIsRejected(feeStructure.getIsRejected());
+//            dto.setApprovedAt(feeStructure.getApprovedAt());
+
+            response.setMessage("Fee structure retrieved successfully");
+            response.setEntity(dto);
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        }
+
+        return response;
+    }
 
     // Helper method to convert entity to DTO
     private FeeStructureResponseDTO convertToResponseDTO(FeeStructure feeStructure) {
         FeeStructureResponseDTO dto = new FeeStructureResponseDTO();
         dto.setId(feeStructure.getId());
         dto.setGrade(feeStructure.getGrade() != null ? feeStructure.getGrade().getName() : "Unknown");
-        dto.setTerm(feeStructure.getName());
         dto.setCreatedOn(feeStructure.getDatePosted());
         dto.setUpdatedOn(feeStructure.getDatePosted());
 
@@ -176,10 +213,9 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         if (feeStructure.getTermComponents() != null) {
             for (FeeComponentConfig config : feeStructure.getTermComponents()) {
                 FeeStructureResponseDTO.FeeItemDTO item = new FeeStructureResponseDTO.FeeItemDTO();
+                item.setTerm(config.getTerm());
                 item.setId(Long.valueOf(config.getId()));
-                // Get the fee component name directly from FeeComponentConfig
                 item.setName(config.getName() != null ? config.getName() : "Unknown");
-                // Convert BigDecimal to Double for the response
                 item.setAmount(config.getAmount() != null ? config.getAmount().doubleValue() : 0.0);
                 feeItems.add(item);
             }

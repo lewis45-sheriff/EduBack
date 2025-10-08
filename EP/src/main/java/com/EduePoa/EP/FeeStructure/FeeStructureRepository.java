@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface FeeStructureRepository extends JpaRepository< FeeStructure,Long > {
     Optional<FeeStructure> findByGradeAndYear(Grade grade, Integer year);
      List<FeeStructure> findByIsDeletedAndDeletedOrderByDatePostedDesc(char isDeleted, char deleted);
+    Optional<FeeStructure> findByGrade(Grade grade);
+
 
 
 }

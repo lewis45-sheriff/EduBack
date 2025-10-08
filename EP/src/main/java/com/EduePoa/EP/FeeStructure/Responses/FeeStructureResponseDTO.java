@@ -15,7 +15,7 @@ import java.util.List;
 public class FeeStructureResponseDTO {
     private Long id;
     private String grade;
-    private String term;
+
     private LocalDateTime createdOn;
     private LocalDateTime updatedOn;
     private List<FeeItemDTO> feeItems;
@@ -27,5 +27,7 @@ public class FeeStructureResponseDTO {
         private Long id;
         private String name;
         private Double amount;
+        private String term;
+
     }
 }

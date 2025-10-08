@@ -6,4 +6,5 @@ import com.EduePoa.EP.Utils.CustomResponse;
 public interface FeeStructureService {
     CustomResponse<?>create(FeeStructureRequestDTO feeStructureRequestDTO);
     CustomResponse<?>getAllFeeStructures();
+    CustomResponse<?>getFeeStructureById(Long id);
 }
