@@ -63,7 +63,7 @@ public class CreateAdmin implements ApplicationRunner {
 
                 User user = new User();
                 user.setUsername("Admin");
-                user.setEmail("admin1.system@info");
+                user.setEmail("lewiskipkemoi53@gmail.com");
                 user.setFirstName("Super");
                 user.setLastName("Admin");
                 user.setPassword(passwordEncoder.encode("1234"));
