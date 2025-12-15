@@ -249,6 +249,25 @@ public class StudentServiceImpl implements  StudentService{
         }
         return response;
     }
+
+    @Override
+    public CustomResponse<?> totalNumberStudents() {
+        CustomResponse<Long> response = new CustomResponse<>();
+        try {
+
+            Long studentCount = studentRepository.count();
+            response.setEntity(studentCount);
+            response.setMessage("Students Retrived Successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
     private FeeStructureResponseDTO convertToResponseDTO(FeeStructure feeStructure) {
         FeeStructureResponseDTO dto = new FeeStructureResponseDTO();
         dto.setId(feeStructure.getId());

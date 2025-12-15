@@ -31,6 +31,12 @@ public class StudentController {
         var response = studentService.getFeeStructurePerStudent(studentId);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("total-number-students")
+    ResponseEntity<?>totalNumberStudents(){
+        var response = studentService.totalNumberStudents();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 }
