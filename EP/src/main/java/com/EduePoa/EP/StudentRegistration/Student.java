@@ -76,8 +76,8 @@ public class Student {
 //    private char isRejected = 'N'; // 'Y' = rejected, 'N' = not rejected
 //    @Column(name = "approved_at")
 //    private LocalDate approvedAt;
-//    @Column
-//    private char isDeleted ='N';
+@Column(nullable = false)
+private Boolean isDeleted = false;
 //    @Column
 //    private char deleted='N';
 //
