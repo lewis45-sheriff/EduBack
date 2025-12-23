@@ -21,5 +21,11 @@ public class StudentInvoicesController {
         var response = studentInvoicesService.invoiceAll(term);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-all-invoives")
+    ResponseEntity<?> getAllInvoices(){
+        var response = studentInvoicesService. getAllInvoices();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 }

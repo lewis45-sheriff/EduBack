@@ -12,10 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -115,6 +112,32 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         }
         return response;
     }
+    @Override
+    public CustomResponse<?> getById(Long id) {
+        CustomResponse<FinanceTransaction> response = new CustomResponse<>();
+        try {
+            Optional<FinanceTransaction> optionalFinanceTransaction =
+                    financeTransactionRepository.findById(id);
+
+            if (optionalFinanceTransaction.isEmpty()) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setEntity(null);
+                response.setMessage("Finance Transaction not found with ID: " + id);
+                return response;
+            }
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(optionalFinanceTransaction.get());
+            response.setMessage("Finance Transaction retrieved successfully");
+
+        } catch (Exception e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("Error retrieving transaction: " + e.getMessage());
+        }
+        return response;
+    }
+
 
 
     private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO, Student student) {

@@ -7,4 +7,5 @@ public interface FinanceTransactionService {
     CustomResponse<?>createTransaction(Long studentId,CreateTransactionDTO createTransactionDTO);
     CustomResponse<?> getTransactions();
     CustomResponse<?>getByStudentId(Long studentId);
+    CustomResponse<?>getById(Long id);
 }

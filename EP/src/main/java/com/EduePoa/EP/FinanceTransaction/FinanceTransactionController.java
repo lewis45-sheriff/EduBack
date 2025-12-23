@@ -25,6 +25,12 @@ public class FinanceTransactionController {
         var response = financeTransactionService.getByStudentId(studentId);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-by-id/{id}")
+    ResponseEntity<?> getById(@PathVariable Long id){
+        var response = financeTransactionService.getById(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 }

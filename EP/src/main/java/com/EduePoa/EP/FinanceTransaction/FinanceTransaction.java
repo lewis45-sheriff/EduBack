@@ -9,6 +9,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Year;
 
 @Entity
 @Getter
@@ -55,6 +56,8 @@ public class FinanceTransaction {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+    @Column
+    private Year year;
 
     @PrePersist
     protected void onCreate() {

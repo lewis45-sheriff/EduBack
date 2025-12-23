@@ -22,10 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -38,7 +35,7 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
     public CustomResponse<?> create(Long studentId, String term) {
         CustomResponse<StudentInvoiceResponseDTO> response = new CustomResponse<>();
         try {
-            //  Fetch the student
+            // Fetch the student
             Student student = studentRepository.findById(studentId)
                     .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
 
@@ -59,7 +56,7 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
                                     " and year: " + currentYear
                     ));
 
-            //  Check if invoice already exists for this student, term, and year
+            // Check if invoice already exists for this student, term, and year
             Term termEnum = Term.valueOf(term.toUpperCase());
             Optional<StudentInvoices> existingInvoice = studentInvoicesRepository
                     .findByStudentAndTermAndAcademicYear(student, termEnum, currentYear);
@@ -84,11 +81,17 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
                 );
             }
 
-            BigDecimal totalAmount = termComponents.stream()
+            BigDecimal currentTermAmount = termComponents.stream()
                     .map(FeeComponentConfig::getAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            //  Create the invoice
+            // Get previous term balance from Finance table
+            BigDecimal previousBalance = getPreviousTermBalance(studentId, termEnum, currentYear);
+
+            // Calculate total amount including previous balance
+            BigDecimal totalAmount = currentTermAmount.add(previousBalance);
+
+            // Create the invoice
             StudentInvoices invoice = StudentInvoices.builder()
                     .student(student)
                     .feeStructure(feeStructure)
@@ -106,13 +109,17 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
             // Save the invoice
             StudentInvoices savedInvoice = studentInvoicesRepository.save(invoice);
 
-            // Create Finance record
-            Finance finance = new Finance();
+            // Update or Create Finance record
+            Finance finance = financeRepository.findByStudentIdAndTermAndYear(
+                            studentId, termEnum, currentYear)
+                    .orElse(new Finance());
+
             finance.setStudentId(studentId);
             finance.setTotalFeeAmount(totalAmount);
             finance.setPaidAmount(BigDecimal.ZERO);
             finance.setBalance(totalAmount);
-            finance.setTerm(termEnum);
+            finance.setTerm(String.valueOf(termEnum));
+            finance.setYear(currentYear);
             finance.setLastUpdated(LocalDateTime.now());
 
             // Save the finance record
@@ -138,8 +145,16 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
 
             response.setEntity(dto);
 
-            response.setMessage("Invoice created successfully for " + student.getFirstName() +
-                    " - Term: " + term + ", Amount: " + totalAmount);
+            String message = "Invoice created successfully for " + student.getFirstName() +
+                    " - Term: " + term + ", Current Term Fees: " + currentTermAmount;
+
+            if (previousBalance.compareTo(BigDecimal.ZERO) > 0) {
+                message += ", Previous Balance: " + previousBalance;
+            }
+
+            message += ", Total Amount: " + totalAmount;
+
+            response.setMessage(message);
             response.setStatusCode(HttpStatus.CREATED.value());
 
         } catch (RuntimeException e) {
@@ -150,11 +165,45 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
         return response;
     }
 
+
+    private BigDecimal getPreviousTermBalance(Long studentId, Term currentTerm, Year academicYear) {
+        // Get all previous terms for this academic year
+        List<Term> previousTerms = getPreviousTerms(currentTerm);
+
+        BigDecimal totalPreviousBalance = BigDecimal.ZERO;
+
+        for (Term previousTerm : previousTerms) {
+            Optional<Finance> previousFinance = financeRepository
+                    .findByStudentIdAndTermAndYear(studentId, previousTerm, academicYear);
+
+            if (previousFinance.isPresent()) {
+                BigDecimal balance = previousFinance.get().getBalance();
+                if (balance != null && balance.compareTo(BigDecimal.ZERO) > 0) {
+                    totalPreviousBalance = totalPreviousBalance.add(balance);
+                }
+            }
+        }
+
+        return totalPreviousBalance;
+    }
+
+
+    private List<Term> getPreviousTerms(Term currentTerm) {
+        List<Term> allTerms = Arrays.asList(Term.values());
+        int currentIndex = allTerms.indexOf(currentTerm);
+
+        if (currentIndex <= 0) {
+            return Collections.emptyList();
+        }
+
+        return allTerms.subList(0, currentIndex);
+    }
+
     @Override
     public CustomResponse<?> invoiceAll(String term) {
         CustomResponse<InvoiceSummary> response = new CustomResponse<>();
         try {
-            // 1. Validate term
+            //  Validate term
             Term termEnum;
             try {
                 termEnum = Term.valueOf(term.toUpperCase());
@@ -163,17 +212,19 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
                         Arrays.toString(Term.values()));
             }
 
-            // 2. Get current academic year
+            //  Get current academic year
             Year currentYear = Year.now();
 
-            // 3. Fetch all active students
-            List<Student> allStudents = studentRepository.findAllByIsDeleted(true);
+            // Fetch all active students
+            List<Student> allStudents = studentRepository.findAllByIsDeleted(false);
 
             if (allStudents.isEmpty()) {
-                throw new RuntimeException("No active students found in the system");
+                response.setMessage("No active students found in the system");
+                response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+                response.setEntity(null);
+                return response;
             }
-
-            // 4. Track results
+            //  Track results
             List<InvoiceResult> successfulInvoices = new ArrayList<>();
             List<InvoiceResult> failedInvoices = new ArrayList<>();
             int skippedCount = 0;
@@ -303,6 +354,53 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
             response.setMessage(e.getMessage());
             response.setEntity(null);
         }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getAllInvoices() {
+        CustomResponse<List<StudentInvoiceResponseDTO>> response = new CustomResponse<>();
+
+        try {
+            List<StudentInvoices> invoices = studentInvoicesRepository.findAll();
+
+            if (invoices.isEmpty()) {
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("No invoices found");
+                response.setEntity(Collections.emptyList());
+                return response;
+            }
+
+            List<StudentInvoiceResponseDTO> invoiceDTOs = invoices.stream()
+                    .map(invoice -> StudentInvoiceResponseDTO.builder()
+                            .invoiceId(invoice.getId())
+                            .studentName(
+                                    invoice.getStudent().getFirstName() + " " + invoice.getStudent().getLastName()
+                            )
+                            .admissionNumber(invoice.getStudent().getAdmissionNumber())
+                            .grade(invoice.getStudent().getGrade().getName())
+                            .term(invoice.getTerm())
+                            .academicYear(invoice.getAcademicYear())
+                            .totalAmount(invoice.getTotalAmount())
+                            .amountPaid(invoice.getAmountPaid())
+                            .balance(invoice.getBalance())
+                            .status(invoice.getStatus())
+                            .invoiceDate(invoice.getInvoiceDate())
+                            .dueDate(invoice.getDueDate())
+                            .build()
+                    )
+                    .toList();
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Invoices retrieved successfully");
+            response.setEntity(invoiceDTOs);
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Failed to retrieve invoices: " + e.getMessage());
+            response.setEntity(null);
+        }
+
         return response;
     }
 

@@ -6,6 +6,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Year;
 
 @Entity
 @Getter
@@ -32,5 +33,6 @@ public class Finance {
     private BigDecimal balance;
 
     private LocalDateTime lastUpdated;
-    private Term term;
+    private String term;
+    private Year year;
 }
