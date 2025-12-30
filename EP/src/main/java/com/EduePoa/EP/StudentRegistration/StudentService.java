@@ -9,4 +9,5 @@ public interface StudentService {
     CustomResponse<?>getStudentById(Long id);
     CustomResponse<?>getFeeStructurePerStudent(Long studentId);
     CustomResponse<?>totalNumberStudents();
+    CustomResponse<?>studentsPerGrade();
 }

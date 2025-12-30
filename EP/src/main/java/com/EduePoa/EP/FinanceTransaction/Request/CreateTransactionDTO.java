@@ -1,10 +1,12 @@
 package com.EduePoa.EP.FinanceTransaction.Request;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.FinanceTransaction.FinanceTransaction;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Year;
 
 @Data
 public class CreateTransactionDTO {
@@ -18,5 +20,8 @@ public class CreateTransactionDTO {
     private String description;
     private FinanceTransaction.PaymentMethod paymentMethod;
     private String reference;
+    private Term term;
+    private Year year;
+    private Long invoiceId;
 
 }

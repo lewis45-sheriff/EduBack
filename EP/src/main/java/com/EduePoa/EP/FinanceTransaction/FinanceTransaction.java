@@ -58,6 +58,8 @@ public class FinanceTransaction {
     private LocalDateTime updatedAt;
     @Column
     private Year year;
+    @Column(name = "invoice_id")
+    private Long invoiceId;
 
     @PrePersist
     protected void onCreate() {

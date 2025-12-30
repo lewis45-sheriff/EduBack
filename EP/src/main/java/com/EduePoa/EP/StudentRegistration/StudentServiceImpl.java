@@ -9,6 +9,7 @@ import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
 import com.EduePoa.EP.StudentRegistration.Request.StudentRequestDTO;
 import com.EduePoa.EP.StudentRegistration.Response.StudentResponseDTO;
+import com.EduePoa.EP.StudentRegistration.Response.StudentsPerGradeDTO;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -267,6 +268,26 @@ public class StudentServiceImpl implements  StudentService{
         }
         return response;
     }
+
+    @Override
+    public CustomResponse<?> studentsPerGrade() {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+
+            List<StudentsPerGradeDTO> data = studentRepository.countStudentsPerGrade();
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(data);
+            response.setMessage("Students per grade retrieved successfully");
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        }
+        return response;
+    }
+
 
     private FeeStructureResponseDTO convertToResponseDTO(FeeStructure feeStructure) {
         FeeStructureResponseDTO dto = new FeeStructureResponseDTO();

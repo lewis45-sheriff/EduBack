@@ -36,6 +36,12 @@ public class StudentController {
         var response = studentService.totalNumberStudents();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("students-per-grade")
+    ResponseEntity<?>studentsPerGrade(){
+        var response = studentService.studentsPerGrade();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 

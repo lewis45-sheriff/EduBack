@@ -26,6 +26,12 @@ public class StudentInvoicesController {
         var response = studentInvoicesService. getAllInvoices();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-invoice-by-student/{id}")
+    ResponseEntity<?> getInvoiceByStudentId(@PathVariable Long id){
+        var response = studentInvoicesService. getAllInvoices(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 }

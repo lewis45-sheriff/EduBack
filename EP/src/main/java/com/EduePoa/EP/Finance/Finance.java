@@ -33,6 +33,8 @@ public class Finance {
     private BigDecimal balance;
 
     private LocalDateTime lastUpdated;
-    private String term;
+    @Enumerated(EnumType.STRING)  // Add this annotation
+    @Column(length = 20)
+    private Term term;
     private Year year;
 }

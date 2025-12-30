@@ -88,7 +88,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                     FeeComponentConfig component = new FeeComponentConfig();
 
                     // Special handling for Transport
-                    if ("Transport".equalsIgnoreCase(config.getName())) {
+                    if ("Transport11".equalsIgnoreCase(config.getName())) {
                         component.setAmount(BigDecimal.ZERO);
                     } else {
                         component.setAmount(BigDecimal.valueOf(itemDTO.getAmount()));
