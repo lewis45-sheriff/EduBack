@@ -15,5 +15,12 @@ public interface StudentInvoicesRepository extends JpaRepository<StudentInvoices
             Year academicYear
     );
     List<StudentInvoices> findAllByStudent_IdAndIsDeleted(Long studentId, char isDeleted);
+    List<StudentInvoices> findByTerm(Term term);
+
+    // Find invoices by term and academic year
+    List<StudentInvoices> findByTermAndAcademicYear(Term term, Year academicYear);
+
+    // Find invoices by term, excluding deleted ones
+    List<StudentInvoices> findByTermAndIsDeleted(Term term, char isDeleted);
 
 }

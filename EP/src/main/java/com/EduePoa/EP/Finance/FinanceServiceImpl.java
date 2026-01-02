@@ -42,7 +42,8 @@ public class FinanceServiceImpl implements FinanceService{
                         }
 
                         return StudentBalanceDTO.builder()
-                                .studentName(student.getFirstName() + " " + student.getLastName()) // or student.getFullName()
+                                .studentName(student.getFirstName() + " " + student.getLastName())
+                                .gradeName(student.getGradeName())  // Add grade name
                                 .totalFeeAmount(finance.getTotalFeeAmount())
                                 .paidAmount(finance.getPaidAmount())
                                 .balance(balance)

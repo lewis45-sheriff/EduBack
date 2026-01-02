@@ -418,6 +418,121 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
 
         return response;
     }
+    @Override
+    public CustomResponse<?> getCurrentTermInvoices() {
+        CustomResponse<List<StudentInvoiceResponseDTO>> response = new CustomResponse<>();
+
+        try {
+            // Get current term
+            Term currentTerm = Term.getCurrentTerm();
+
+            if (currentTerm == null) {
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("No active term at the moment");
+                response.setEntity(Collections.emptyList());
+                return response;
+            }
+
+            // Fetch invoices for current term (excluding deleted ones)
+            List<StudentInvoices> invoices = studentInvoicesRepository
+                    .findByTermAndIsDeleted(currentTerm, 'N');
+
+            if (invoices.isEmpty()) {
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("No invoices found for current term: " + currentTerm.name());
+                response.setEntity(Collections.emptyList());
+                return response;
+            }
+
+            // Map to DTOs
+            List<StudentInvoiceResponseDTO> invoiceDTOs = invoices.stream()
+                    .map(invoice -> StudentInvoiceResponseDTO.builder()
+                            .invoiceId(invoice.getId())
+                            .studentName(
+                                    invoice.getStudent().getFirstName() + " " +
+                                            invoice.getStudent().getLastName()
+                            )
+                            .admissionNumber(invoice.getStudent().getAdmissionNumber())
+                            .grade(invoice.getStudent().getGrade().getName())
+                            .term(invoice.getTerm())
+                            .academicYear(invoice.getAcademicYear())
+                            .totalAmount(invoice.getTotalAmount())
+                            .amountPaid(invoice.getAmountPaid())
+                            .balance(invoice.getBalance())
+                            .status(invoice.getStatus())
+                            .invoiceDate(invoice.getInvoiceDate())
+                            .dueDate(invoice.getDueDate())
+                            .build()
+                    )
+                    .toList();
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Invoices for " + currentTerm.name() + " retrieved successfully");
+            response.setEntity(invoiceDTOs);
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Failed to retrieve current term invoices: " + e.getMessage());
+            response.setEntity(null);
+        }
+
+        return response;
+    }
+    @Override
+    public CustomResponse<?> getInvoicesByTerm(Term term) {
+        CustomResponse<List<StudentInvoiceResponseDTO>> response = new CustomResponse<>();
+
+        try {
+            if (term == null) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Term cannot be null");
+                response.setEntity(null);
+                return response;
+            }
+
+            List<StudentInvoices> invoices = studentInvoicesRepository
+                    .findByTermAndIsDeleted(term, 'N');
+
+            if (invoices.isEmpty()) {
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("No invoices found for term: " + term.name());
+                response.setEntity(Collections.emptyList());
+                return response;
+            }
+
+            List<StudentInvoiceResponseDTO> invoiceDTOs = invoices.stream()
+                    .map(invoice -> StudentInvoiceResponseDTO.builder()
+                            .invoiceId(invoice.getId())
+                            .studentName(
+                                    invoice.getStudent().getFirstName() + " " +
+                                            invoice.getStudent().getLastName()
+                            )
+                            .admissionNumber(invoice.getStudent().getAdmissionNumber())
+                            .grade(invoice.getStudent().getGrade().getName())
+                            .term(invoice.getTerm())
+                            .academicYear(invoice.getAcademicYear())
+                            .totalAmount(invoice.getTotalAmount())
+                            .amountPaid(invoice.getAmountPaid())
+                            .balance(invoice.getBalance())
+                            .status(invoice.getStatus())
+                            .invoiceDate(invoice.getInvoiceDate())
+                            .dueDate(invoice.getDueDate())
+                            .build()
+                    )
+                    .toList();
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Invoices for " + term.name() + " retrieved successfully");
+            response.setEntity(invoiceDTOs);
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Failed to retrieve invoices: " + e.getMessage());
+            response.setEntity(null);
+        }
+
+        return response;
+    }
 
 
 

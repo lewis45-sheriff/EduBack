@@ -16,6 +16,8 @@ public class StudentBalanceDTO {
     private Long studentId;
     private BigDecimal totalFeeAmount;
     private BigDecimal paidAmount;
+    private String gradeName;
+
     private BigDecimal balance;
     private Term term;
     private Year year;

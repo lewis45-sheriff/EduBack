@@ -1,5 +1,6 @@
 package com.EduePoa.EP.StudentInvoices;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,17 @@ public class StudentInvoicesController {
         var response = studentInvoicesService. getAllInvoices(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-current-terms")
+    ResponseEntity<?> getCurrentTermInvoices(){
+        var response = studentInvoicesService. getCurrentTermInvoices();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @GetMapping("/term/{term}")
+    public ResponseEntity<?> getInvoicesByTerm(@PathVariable Term term) {
+       var response = studentInvoicesService.getInvoicesByTerm(term);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 

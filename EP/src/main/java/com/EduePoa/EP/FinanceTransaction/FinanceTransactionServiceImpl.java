@@ -47,11 +47,15 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             }
 
             // Validate current year
-           Year currentYear = Year.now();
-            if (createTransactionDTO.getYear() != currentYear) {
-                throw new RuntimeException("Transactions can only be created for the current year ("
-                        + currentYear + "). Requested year: " + createTransactionDTO.getYear());
+            Year currentYear = Year.now();
+
+            if (!currentYear.equals(createTransactionDTO.getYear())) {
+                throw new RuntimeException(
+                        "Transactions can only be created for the current year ("
+                                + currentYear + "). Requested year: " + createTransactionDTO.getYear()
+                );
             }
+
 
             // Validate student exists
             Student student = studentRepository.findById(studentId)
@@ -67,14 +71,19 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             }
 
             // Verify invoice is for the current term and year
-            if (invoice.getTerm() != currentTerm || invoice.getAcademicYear() != currentYear) {
-                throw new RuntimeException("Invoice is not for the current term and year. Cannot process transaction.");
+            if (invoice.getTerm() != currentTerm ||
+                    !currentYear.equals(invoice.getAcademicYear())) {
+
+                throw new RuntimeException(
+                        "Invoice is not for the current term and year. Cannot process transaction."
+                );
             }
 
+
             // Verify invoice is not already cleared
-            if (invoice.getStatus() == 'C') {
-                throw new RuntimeException("Invoice is already cleared");
-            }
+//            if (invoice.getStatus() == 'C') {
+//                throw new RuntimeException("Invoice is already cleared");
+//            }
 
             // Get Finance record for student (should be for current term)
             Finance finance = financeRepository.findByStudentIdAndTermAndYear(
@@ -141,7 +150,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage("Transaction created and invoice updated successfully");
-            response.setEntity(responseData); // Changed from null to responseData
+            response.setEntity(null); // Changed from null to responseData
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());

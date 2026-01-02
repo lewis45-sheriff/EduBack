@@ -9,16 +9,16 @@ import java.time.Month;
 @Getter
 public enum Term {
     TERM_1(
-            LocalDate.of(2025, Month.JANUARY, 1),
-            LocalDate.of(2025, Month.APRIL, 27)
+            LocalDate.of(2026, Month.JANUARY, 1),
+            LocalDate.of(2026, Month.APRIL, 27)
     ),
     TERM_2(
-            LocalDate.of(2025, Month.APRIL, 28),
-            LocalDate.of(2025, Month.AUGUST, 31)
+            LocalDate.of(2026, Month.APRIL, 28),
+            LocalDate.of(2026, Month.AUGUST, 31)
     ),
     TERM_3(
-            LocalDate.of(2025, Month.SEPTEMBER, 1),
-            LocalDate.of(2025, Month.DECEMBER, 31)
+            LocalDate.of(2026, Month.SEPTEMBER, 1),
+            LocalDate.of(2026, Month.DECEMBER, 31)
     );
 
     private final LocalDate startDate;
