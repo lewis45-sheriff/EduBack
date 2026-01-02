@@ -2,8 +2,12 @@ package com.EduePoa.EP.StudentRegistration;
 
 import com.EduePoa.EP.StudentRegistration.Request.StudentRequestDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
+
 
 @RestController
 @RequestMapping("api/v1/students/")
@@ -40,6 +44,18 @@ public class StudentController {
     ResponseEntity<?>studentsPerGrade(){
         var response = studentService.studentsPerGrade();
         return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> bulkUploadStudents(
+            @RequestParam("file") MultipartFile file) {
+        var response = studentService.bulkUploads(file);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    @GetMapping("/bulk-upload/template")
+    public ResponseEntity<Resource> downloadBulkUploadTemplate(
+            @RequestParam(defaultValue = "excel") String type) {
+        return studentService.generateBulkUploadTemplate(type);
     }
 
 

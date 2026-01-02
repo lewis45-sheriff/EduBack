@@ -7,6 +7,8 @@ import com.EduePoa.EP.FeeStructure.FeeStructureRepository;
 import com.EduePoa.EP.FeeStructure.Responses.FeeStructureResponseDTO;
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
+import com.EduePoa.EP.StudentRegistration.Request.BulkUploadError;
+import com.EduePoa.EP.StudentRegistration.Request.BulkUploadResponseDTO;
 import com.EduePoa.EP.StudentRegistration.Request.StudentRequestDTO;
 import com.EduePoa.EP.StudentRegistration.Response.StudentResponseDTO;
 import com.EduePoa.EP.StudentRegistration.Response.StudentsPerGradeDTO;
@@ -16,6 +18,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+import org.apache.poi.ss.usermodel.*;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 
 import java.time.LocalDate;
 import java.time.Period;
@@ -286,6 +307,423 @@ public class StudentServiceImpl implements  StudentService{
             response.setMessage(e.getMessage());
         }
         return response;
+    }
+
+    @Override
+    public CustomResponse<?> bulkUploads(MultipartFile file) {
+        CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
+        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
+
+        try {
+            // Validate file
+            if (file == null || file.isEmpty()) {
+                throw new RuntimeException("File cannot be empty");
+            }
+
+            String filename = file.getOriginalFilename();
+            if (filename == null) {
+                throw new RuntimeException("Invalid file name");
+            }
+
+            List<StudentRequestDTO> studentDTOs = new ArrayList<>();
+
+            // Parse file based on extension
+            if (filename.endsWith(".csv")) {
+                studentDTOs = parseCSV(file);
+            } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+                studentDTOs = parseExcel(file);
+            } else {
+                throw new RuntimeException("Unsupported file format. Please upload CSV or Excel file");
+            }
+
+            uploadResponse.setTotalRecords(studentDTOs.size());
+
+            // Process each student
+            for (int i = 0; i < studentDTOs.size(); i++) {
+                StudentRequestDTO studentDTO = studentDTOs.get(i);
+                int rowNumber = i + 2; // +2 because row 1 is header and arrays are 0-indexed
+
+                try {
+                    // Use the existing captureNewStudent method
+                    CustomResponse<?> studentResponse = captureNewStudent(studentDTO);
+
+                    if (studentResponse.getStatusCode() == HttpStatus.CREATED.value()) {
+                        uploadResponse.setSuccessCount(uploadResponse.getSuccessCount() + 1);
+                        uploadResponse.getSuccessfulStudents().add((StudentResponseDTO) studentResponse.getEntity());
+                    } else {
+                        uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
+                        uploadResponse.getErrors().add(new BulkUploadError(
+                                rowNumber,
+                                studentDTO.getAdmissionNumber(),
+                                studentResponse.getMessage()
+                        ));
+                    }
+                } catch (Exception e) {
+                    uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
+                    uploadResponse.getErrors().add(new BulkUploadError(
+                            rowNumber,
+                            studentDTO.getAdmissionNumber(),
+                            e.getMessage()
+                    ));
+                    log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
+                }
+            }
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(uploadResponse);
+            response.setMessage(String.format("Bulk upload completed. Success: %d, Failed: %d",
+                    uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()));
+
+            log.info("Bulk upload completed. Total: {}, Success: {}, Failed: {}",
+                    uploadResponse.getTotalRecords(),
+                    uploadResponse.getSuccessCount(),
+                    uploadResponse.getFailureCount());
+
+        } catch (RuntimeException e) {
+            log.error("Runtime exception during bulk upload: {}", e.getMessage());
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during bulk upload: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("An unexpected error occurred during bulk upload");
+        }
+        return response;
+    }
+
+    private List<StudentRequestDTO> parseCSV(MultipartFile file) throws Exception {
+        List<StudentRequestDTO> students = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT
+                    .withFirstRecordAsHeader()
+                    .withIgnoreHeaderCase()
+                    .withTrim());
+
+            for (CSVRecord record : csvParser) {
+                StudentRequestDTO dto = new StudentRequestDTO();
+                dto.setAdmissionNumber(record.get("admissionNumber"));
+                dto.setFirstName(record.get("firstName"));
+                dto.setLastName(record.get("lastName"));
+                dto.setDateOfBirth(LocalDate.parse(record.get("dateOfBirth"))); // Expected format: yyyy-MM-dd
+                dto.setAdmissionDate(record.get("admissionDate")); // Expected format: yyyy-MM-dd
+                dto.setGrade(Long.parseLong(record.get("gradeId")));
+                dto.setGender(record.get("gender"));
+
+                // Optional fields
+                if (record.isMapped("studentImage") && !record.get("studentImage").isEmpty()) {
+                    dto.setStudentImage(record.get("studentImage"));
+                }
+
+                students.add(dto);
+            }
+        }
+
+        return students;
+    }
+
+    private List<StudentRequestDTO> parseExcel(MultipartFile file) throws Exception {
+        List<StudentRequestDTO> students = new ArrayList<>();
+
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            Sheet sheet = workbook.getSheetAt(0);
+
+            // Get header row to map column names
+            Row headerRow = sheet.getRow(0);
+            Map<String, Integer> columnMap = new HashMap<>();
+
+            for (Cell cell : headerRow) {
+                columnMap.put(cell.getStringCellValue().toLowerCase().trim(), cell.getColumnIndex());
+            }
+
+            // Process data rows
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                StudentRequestDTO dto = new StudentRequestDTO();
+                dto.setAdmissionNumber(getCellValueAsString(row.getCell(columnMap.get("admissionnumber"))));
+                dto.setFirstName(getCellValueAsString(row.getCell(columnMap.get("firstname"))));
+                dto.setLastName(getCellValueAsString(row.getCell(columnMap.get("lastname"))));
+                dto.setDateOfBirth(getCellValueAsDate(row.getCell(columnMap.get("dateofbirth"))));
+                dto.setAdmissionDate(getCellValueAsString(row.getCell(columnMap.get("admissiondate"))));
+                dto.setGrade(getCellValueAsLong(row.getCell(columnMap.get("gradeid"))));
+                dto.setGender(getCellValueAsString(row.getCell(columnMap.get("gender"))));
+
+                // Optional fields
+                if (columnMap.containsKey("studentimage")) {
+                    String imageValue = getCellValueAsString(row.getCell(columnMap.get("studentimage")));
+                    if (imageValue != null && !imageValue.isEmpty()) {
+                        dto.setStudentImage(imageValue);
+                    }
+                }
+
+                students.add(dto);
+            }
+        }
+
+        return students;
+    }
+
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) return null;
+
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                }
+                return String.valueOf((long) cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                return cell.getCellFormula();
+            default:
+                return null;
+        }
+    }
+
+    private LocalDate getCellValueAsDate(Cell cell) {
+        if (cell == null) return null;
+
+        if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+            return cell.getLocalDateTimeCellValue().toLocalDate();
+        } else if (cell.getCellType() == CellType.STRING) {
+            return LocalDate.parse(cell.getStringCellValue().trim());
+        }
+        return null;
+    }
+
+    private Long getCellValueAsLong(Cell cell) {
+        if (cell == null) return null;
+
+        if (cell.getCellType() == CellType.NUMERIC) {
+            return (long) cell.getNumericCellValue();
+        } else if (cell.getCellType() == CellType.STRING) {
+            return Long.parseLong(cell.getStringCellValue().trim());
+        }
+        return null;
+    }
+    @Override
+    public ResponseEntity<Resource> generateBulkUploadTemplate(String fileType) {
+        try {
+            if ("csv".equalsIgnoreCase(fileType)) {
+                return generateCSVTemplate();
+            } else if ("excel".equalsIgnoreCase(fileType) || "xlsx".equalsIgnoreCase(fileType)) {
+                return generateExcelTemplate();
+            } else {
+                throw new RuntimeException("Unsupported file type. Use 'csv' or 'excel'");
+            }
+        } catch (Exception e) {
+            log.error("Error generating template: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate template: " + e.getMessage());
+        }
+    }
+
+    private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
+        StringBuilder csvContent = new StringBuilder();
+
+        // Add headers
+        csvContent.append("admissionNumber,firstName,lastName,dateOfBirth,admissionDate,gradeId,gender,studentImage\n");
+
+        // Add sample data rows
+        csvContent.append("STU001,John,Doe,2010-05-15,2024-01-10,1,Male,\n");
+        csvContent.append("STU002,Jane,Smith,2011-08-22,2024-01-10,1,Female,\n");
+        csvContent.append("STU003,Michael,Johnson,2010-12-03,2024-01-10,2,Male,\n");
+
+        // Add instructions as comments (CSV comments start with #)
+        csvContent.insert(0, "# Student Bulk Upload Template\n");
+        csvContent.insert(0, "# Instructions:\n");
+        csvContent.insert(0, "# 1. admissionNumber: Must be unique (e.g., STU001, STU002)\n");
+        csvContent.insert(0, "# 2. firstName: Student's first name (required)\n");
+        csvContent.insert(0, "# 3. lastName: Student's last name (required)\n");
+        csvContent.insert(0, "# 4. dateOfBirth: Format YYYY-MM-DD (required)\n");
+        csvContent.insert(0, "# 5. admissionDate: Format YYYY-MM-DD (required)\n");
+        csvContent.insert(0, "# 6. gradeId: Numeric ID of the grade (required)\n");
+        csvContent.insert(0, "# 7. gender: Male/Female (required)\n");
+        csvContent.insert(0, "# 8. studentImage: Base64 encoded image or URL (optional)\n");
+        csvContent.insert(0, "# \n");
+        csvContent.insert(0, "# Note: Delete these instruction lines before uploading\n");
+        csvContent.insert(0, "# Sample data is provided below. Replace with actual student data.\n");
+        csvContent.insert(0, "#\n");
+
+        ByteArrayResource resource = new ByteArrayResource(csvContent.toString().getBytes(StandardCharsets.UTF_8));
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_bulk_upload_template.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .contentLength(resource.contentLength())
+                .body(resource);
+    }
+
+    private ResponseEntity<Resource> generateExcelTemplate() throws Exception {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Students");
+
+        // Create styles
+        CellStyle headerStyle = workbook.createCellStyle();
+        Font headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerFont.setFontHeightInPoints((short) 12);
+        headerFont.setColor(IndexedColors.WHITE.getIndex());
+        headerStyle.setFont(headerFont);
+        headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        headerStyle.setBorderBottom(BorderStyle.THIN);
+        headerStyle.setBorderTop(BorderStyle.THIN);
+        headerStyle.setBorderRight(BorderStyle.THIN);
+        headerStyle.setBorderLeft(BorderStyle.THIN);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+        CellStyle instructionStyle = workbook.createCellStyle();
+        Font instructionFont = workbook.createFont();
+        instructionFont.setItalic(true);
+        instructionFont.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+        instructionStyle.setFont(instructionFont);
+
+        CellStyle sampleDataStyle = workbook.createCellStyle();
+        sampleDataStyle.setBorderBottom(BorderStyle.THIN);
+        sampleDataStyle.setBorderTop(BorderStyle.THIN);
+        sampleDataStyle.setBorderRight(BorderStyle.THIN);
+        sampleDataStyle.setBorderLeft(BorderStyle.THIN);
+
+        CellStyle dateStyle = workbook.createCellStyle();
+        dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("yyyy-mm-dd"));
+        dateStyle.setBorderBottom(BorderStyle.THIN);
+        dateStyle.setBorderTop(BorderStyle.THIN);
+        dateStyle.setBorderRight(BorderStyle.THIN);
+        dateStyle.setBorderLeft(BorderStyle.THIN);
+
+        // Create instructions sheet
+        Sheet instructionsSheet = workbook.createSheet("Instructions");
+        int instructionRow = 0;
+
+        String[] instructions = {
+                "STUDENT BULK UPLOAD TEMPLATE - INSTRUCTIONS",
+                "",
+                "Column Descriptions:",
+                "1. admissionNumber - Unique identifier for the student (e.g., STU001, STU002) [REQUIRED]",
+                "2. firstName - Student's first name [REQUIRED]",
+                "3. lastName - Student's last name [REQUIRED]",
+                "4. dateOfBirth - Student's date of birth in YYYY-MM-DD format [REQUIRED]",
+                "5. admissionDate - Date of admission in YYYY-MM-DD format [REQUIRED]",
+                "6. gradeId - Numeric ID of the grade/class [REQUIRED]",
+                "7. gender - Student's gender (Male/Female) [REQUIRED]",
+                "8. studentImage - Base64 encoded image string or image URL [OPTIONAL]",
+                "",
+                "Important Notes:",
+                "- All fields marked as REQUIRED must be filled",
+                "- Admission numbers must be unique across all students",
+                "- Date format must be YYYY-MM-DD (e.g., 2010-05-15)",
+                "- Grade ID must exist in your system",
+                "- Delete or replace the sample data before uploading",
+                "- Maximum file size: 10MB",
+                "- Supported formats: .xlsx, .xls, .csv",
+                "",
+                "Sample Data:",
+                "The 'Students' sheet contains sample data to help you understand the format.",
+                "Replace this data with your actual student information.",
+                "",
+                "For any questions, please contact your system administrator."
+        };
+
+        for (String instruction : instructions) {
+            Row row = instructionsSheet.createRow(instructionRow++);
+            Cell cell = row.createCell(0);
+            cell.setCellValue(instruction);
+            if (instructionRow == 1) {
+                CellStyle titleStyle = workbook.createCellStyle();
+                Font titleFont = workbook.createFont();
+                titleFont.setBold(true);
+                titleFont.setFontHeightInPoints((short) 14);
+                titleStyle.setFont(titleFont);
+                cell.setCellStyle(titleStyle);
+            } else {
+                cell.setCellStyle(instructionStyle);
+            }
+        }
+        instructionsSheet.setColumnWidth(0, 100 * 256);
+
+        // Create header row
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {
+                "admissionNumber", "firstName", "lastName", "dateOfBirth",
+                "admissionDate", "gradeId", "gender", "studentImage"
+        };
+
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+
+            // Set column width
+            if (i == 3 || i == 4) { // Date columns
+                sheet.setColumnWidth(i, 15 * 256);
+            } else if (i == 7) { // Image column
+                sheet.setColumnWidth(i, 20 * 256);
+            } else {
+                sheet.setColumnWidth(i, 20 * 256);
+            }
+        }
+
+        // Add sample data
+        Object[][] sampleData = {
+                {"STU001", "John", "Doe", LocalDate.of(2010, 5, 15), "2024-01-10", 1L, "Male", ""},
+                {"STU002", "Jane", "Smith", LocalDate.of(2011, 8, 22), "2024-01-10", 1L, "Female", ""},
+                {"STU003", "Michael", "Johnson", LocalDate.of(2010, 12, 3), "2024-01-10", 2L, "Male", ""}
+        };
+
+        for (int i = 0; i < sampleData.length; i++) {
+            Row row = sheet.createRow(i + 1);
+            Object[] rowData = sampleData[i];
+
+            for (int j = 0; j < rowData.length; j++) {
+                Cell cell = row.createCell(j);
+                Object value = rowData[j];
+
+                if (value instanceof String) {
+                    cell.setCellValue((String) value);
+                    cell.setCellStyle(sampleDataStyle);
+                } else if (value instanceof Long) {
+                    cell.setCellValue((Long) value);
+                    cell.setCellStyle(sampleDataStyle);
+                } else if (value instanceof LocalDate) {
+                    cell.setCellValue((LocalDate) value);
+                    cell.setCellStyle(dateStyle);
+                }
+            }
+        }
+
+        // Add data validation for gender column
+        DataValidationHelper validationHelper = sheet.getDataValidationHelper();
+        DataValidationConstraint constraint = validationHelper.createExplicitListConstraint(
+                new String[]{"Male", "Female"}
+        );
+        CellRangeAddressList addressList = new CellRangeAddressList(1, 1000, 6, 6);
+        DataValidation dataValidation = validationHelper.createValidation(constraint, addressList);
+        dataValidation.setShowErrorBox(true);
+        dataValidation.createErrorBox("Invalid Gender", "Please select Male or Female");
+        sheet.addValidationData(dataValidation);
+
+        // Freeze header row
+        sheet.createFreezePane(0, 1);
+
+        // Write to byte array
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        workbook.write(outputStream);
+        workbook.close();
+
+        ByteArrayResource resource = new ByteArrayResource(outputStream.toByteArray());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_bulk_upload_template.xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentLength(resource.contentLength())
+                .body(resource);
     }
 
 

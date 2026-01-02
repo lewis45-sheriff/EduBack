@@ -74,7 +74,7 @@ public class AuthService {
                     + "<p>This OTP will expire in 5 minutes.</p>"
                     + "<br><p>Regards,<br>Security Team</p>";
 
-            emailService.sendEmail(user.getEmail(), subject, body); // You create this service
+//            emailService.sendEmail(user.getEmail(), subject, body); // You create this service
 
             // ===== JWT Token Generation =====
             Map<String, Object> accessClaims = new HashMap<>();
@@ -100,7 +100,7 @@ public class AuthService {
                     .build();
 
             response.setEntity(authResponse);
-            response.setMessage("Login successful. OTP sent to your registered phone/email.");
+            response.setMessage("Login successful");
             response.setStatusCode(HttpStatus.OK.value());
 
         } catch (RuntimeException e) {

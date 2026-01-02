@@ -253,7 +253,7 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
             List<InvoiceResult> failedInvoices = new ArrayList<>();
             int skippedCount = 0;
 
-            // Process each student by calling the create method
+            // Process each student by calling the create method with bypass
             for (Student student : allStudents) {
                 try {
                     // Check if student has a grade (early validation)
@@ -276,7 +276,7 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService{
                         continue;
                     }
 
-                    // Call the create method for this student
+                    // Call the create method with bypass=true to allow any term
                     CustomResponse<?> createResponse = this.create(student.getId(), term);
 
                     // Check the result
