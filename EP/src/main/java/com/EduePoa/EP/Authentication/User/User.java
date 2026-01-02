@@ -43,6 +43,7 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String idNumber;
     private String gender;
+    private Boolean passwordReset;
 
     @Column(nullable = true)
     private String location;

@@ -45,6 +45,7 @@ public class UserService {
             String encodedPassword = passwordEncoder.encode(rawPassword);
             user.setPassword(encodedPassword);
             user.setStatus(Status.ACTIVE);
+            user.setPasswordReset(true);
 
             Role role = roleRepository.findById(userRequest.getRoleId())
                     .orElseThrow(() -> {

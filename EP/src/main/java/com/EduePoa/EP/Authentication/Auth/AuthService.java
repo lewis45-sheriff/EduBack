@@ -2,6 +2,7 @@ package com.EduePoa.EP.Authentication.Auth;
 
 import com.EduePoa.EP.Authentication.Auth.Request.LoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.RequestOTP;
+import com.EduePoa.EP.Authentication.Auth.Request.ResetPassword;
 import com.EduePoa.EP.Authentication.Auth.Request.ValidateOtp;
 import com.EduePoa.EP.Authentication.Auth.Response.AuthResponse;
 import com.EduePoa.EP.Authentication.Email.EmailService;
@@ -17,8 +18,10 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +36,8 @@ public class AuthService {
     private final EmailService emailService;
     private static final long ACCESS_TOKEN_DURATION = 24 * 60 * 60 * 1000;
     private static final long REFRESH_TOKEN_DURATION = 7 * 24 * 60 * 60 * 1000;
+    private final PasswordEncoder passwordEncoder;
+
 
     CustomResponse<?> login(LoginRequest loginRequest) {
         CustomResponse<AuthResponse> response = new CustomResponse<>();
@@ -45,12 +50,16 @@ public class AuthService {
             User user = userRepository.findByEmail(loginRequest.getEmail())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-            if (user.getPassword() == null || user.getPassword().trim().isEmpty()) {
+            if (user.getPassword() == null || user.getPassword().trim().isEmpty() || Boolean.TRUE.equals(user.getPasswordReset())) {
+                // Mark that the user needs to reset password if not already set
+                user.setPasswordReset(true);
+
                 response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-                response.setMessage("Account setup incomplete. Please reset your password.");
+                response.setMessage("Password reset required. Please reset your password to continue.");
                 response.setEntity(null);
-                return response;
+//                return response;
             }
+
 
             if (user.getStatus().equals(Status.INACTIVE)) {
                 response.setStatusCode(HttpStatus.FORBIDDEN.value());
@@ -96,6 +105,7 @@ public class AuthService {
                     .refreshToken(refreshToken)
                     .refreshTokenExpiresIn(REFRESH_TOKEN_DURATION / 1000)
                     .phoneNumber(user.getPhoneNumber())
+                    .passwordReset(user.getPasswordReset())  // Add this line
                     .role(user.getRole().getName())
                     .build();
 
@@ -107,6 +117,101 @@ public class AuthService {
             response.setMessage(e.getMessage());
             response.setEntity(null);
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
+
+
+    CustomResponse<?> resetPassword(ResetPassword resetPassword) {
+        CustomResponse<?> response = new CustomResponse<>();
+        try {
+            // Validate request
+            if (resetPassword.getEmail() == null || resetPassword.getEmail().trim().isEmpty()) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Email is required");
+                response.setEntity(null);
+                return response;
+            }
+
+            if (resetPassword.getOldPassword() == null || resetPassword.getOldPassword().trim().isEmpty()) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Old password is required");
+                response.setEntity(null);
+                return response;
+            }
+
+            if (resetPassword.getNewPassword() == null || resetPassword.getNewPassword().trim().isEmpty()) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("New password is required");
+                response.setEntity(null);
+                return response;
+            }
+
+            // Check if new password is at least 8 characters
+            if (resetPassword.getNewPassword().length() < 8) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("New password must be at least 8 characters long");
+                response.setEntity(null);
+                return response;
+            }
+
+            // Check if old and new passwords are different
+            if (resetPassword.getOldPassword().equals(resetPassword.getNewPassword())) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("New password must be different from old password");
+                response.setEntity(null);
+                return response;
+            }
+
+            // Find user by email
+            User user = userRepository.findByEmail(resetPassword.getEmail())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + resetPassword.getEmail()));
+
+            // Check if user account is active
+            if (user.getStatus().equals(Status.INACTIVE)) {
+                response.setStatusCode(HttpStatus.FORBIDDEN.value());
+                response.setMessage("User account is inactive. Please contact system admin");
+                response.setEntity(null);
+                return response;
+            }
+
+            // Verify old password
+            if (!passwordEncoder.matches(resetPassword.getOldPassword(), user.getPassword())) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Old password is incorrect");
+                response.setEntity(null);
+                return response;
+            }
+
+            // Encode and set new password
+            String encodedNewPassword = passwordEncoder.encode(resetPassword.getNewPassword());
+            user.setPassword(encodedNewPassword);
+
+            // Set passwordReset flag to false since user has successfully reset their password
+            user.setPasswordReset(false);
+
+            // Set forcePasswordReset to false as well
+//            user.setForcePasswordReset(false);
+
+            // Update timestamp
+            user.setUpdatedOn(new Timestamp(System.currentTimeMillis()));
+
+            // Save user
+            userRepository.save(user);
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Password reset successful. Please login with your new password");
+            response.setEntity(null);
+
+        } catch (ResourceNotFoundException e) {
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("An error occurred while resetting password: " + e.getMessage());
         }
         return response;
     }

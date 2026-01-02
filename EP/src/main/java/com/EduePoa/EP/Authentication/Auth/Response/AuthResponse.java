@@ -18,6 +18,7 @@ public class AuthResponse {
     private String refreshToken;
     private long refreshTokenExpiresIn;
     private String phoneNumber;
+    private Boolean passwordReset;
     private String role;
 
 

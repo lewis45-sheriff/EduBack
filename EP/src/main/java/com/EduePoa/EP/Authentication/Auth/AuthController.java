@@ -3,6 +3,7 @@ package com.EduePoa.EP.Authentication.Auth;
 
 import com.EduePoa.EP.Authentication.Auth.Request.LoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.RequestOTP;
+import com.EduePoa.EP.Authentication.Auth.Request.ResetPassword;
 import com.EduePoa.EP.Authentication.Auth.Request.ValidateOtp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,10 @@ public class AuthController {
     ResponseEntity<?>requestOtp(@RequestBody RequestOTP requestOTP){
         var response = authService.requestOtp(requestOTP);
         return ResponseEntity.status(response.getStatusCode()).body(response);
-
+    }
+    @PostMapping("/reset-password")
+    ResponseEntity<?>resetPassword(@RequestBody ResetPassword requestOTP){
+        var response = authService.resetPassword(requestOTP);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 }
