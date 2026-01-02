@@ -8,4 +8,5 @@ public interface FinanceTransactionService {
     CustomResponse<?> getTransactions();
     CustomResponse<?>getByStudentId(Long studentId);
     CustomResponse<?>getById(Long id);
+    CustomResponse<?>getStatistics();
 }

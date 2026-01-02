@@ -4,6 +4,8 @@ import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Finance;
 import com.EduePoa.EP.Finance.FinanceRepository;
 import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
+import com.EduePoa.EP.FinanceTransaction.Response.MonthlyFeeDTO;
+import com.EduePoa.EP.FinanceTransaction.Response.StatisticsDTO;
 import com.EduePoa.EP.StudentInvoices.StudentInvoices;
 import com.EduePoa.EP.StudentInvoices.StudentInvoicesRepository;
 import com.EduePoa.EP.StudentInvoices.StudentInvoicesService;
@@ -227,6 +229,69 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         return response;
     }
 
+    @Override
+    public CustomResponse<?> getStatistics() {
+        CustomResponse<StatisticsDTO> response = new CustomResponse<>();
+        try {
+            int currentYear = LocalDate.now().getYear();
+
+            // Get monthly income data from repository
+            List<Object[]> monthlyData = financeTransactionRepository.getMonthlyIncomeStatistics(currentYear);
+
+            // Initialize all months with zero
+            Map<Integer, BigDecimal> monthlyIncomeMap = new HashMap<>();
+            for (int i = 1; i <= 12; i++) {
+                monthlyIncomeMap.put(i, BigDecimal.ZERO);
+            }
+
+            // Fill in actual data
+            for (Object[] data : monthlyData) {
+                Integer month = (Integer) data[0];
+                BigDecimal income = (BigDecimal) data[1];
+                monthlyIncomeMap.put(month, income);
+            }
+
+            // Convert to MonthlyFeeDTO list
+            String[] monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+            List<MonthlyFeeDTO> monthlyFees = new ArrayList<>();
+            for (int i = 1; i <= 12; i++) {
+                monthlyFees.add(new MonthlyFeeDTO(
+                        monthNames[i - 1],
+                        monthlyIncomeMap.get(i)
+                ));
+            }
+
+            // Calculate totals
+            BigDecimal totalIncome = financeTransactionRepository
+                    .sumByTransactionTypeAndYear(FinanceTransaction.TransactionType.INCOME, currentYear);
+            BigDecimal totalExpense = financeTransactionRepository
+                    .sumByTransactionTypeAndYear(FinanceTransaction.TransactionType.EXPENSE, currentYear);
+
+            if (totalIncome == null) totalIncome = BigDecimal.ZERO;
+            if (totalExpense == null) totalExpense = BigDecimal.ZERO;
+
+            BigDecimal netBalance = totalIncome.subtract(totalExpense);
+
+            // Build response
+            StatisticsDTO statistics = new StatisticsDTO();
+            statistics.setMonthlyFees(monthlyFees);
+            statistics.setTotalIncome(totalIncome);
+            statistics.setTotalExpense(totalExpense);
+            statistics.setNetBalance(netBalance);
+
+            response.setEntity(statistics);
+            response.setMessage("Statistics retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (Exception e) {
+            response.setMessage("Error retrieving statistics: " + e.getMessage());
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
 
 
     private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO, Student student) {

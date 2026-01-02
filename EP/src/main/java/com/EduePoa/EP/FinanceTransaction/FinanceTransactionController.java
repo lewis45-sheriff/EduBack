@@ -30,6 +30,12 @@ public class FinanceTransactionController {
         var response = financeTransactionService.getById(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-statistic")
+    ResponseEntity<?> getStatistics(){
+        var response = financeTransactionService.getStatistics();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 
