@@ -58,7 +58,6 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
                 );
             }
 
-
             // Validate student exists
             Student student = studentRepository.findById(studentId)
                     .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
@@ -75,17 +74,10 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             // Verify invoice is for the current term and year
             if (invoice.getTerm() != currentTerm ||
                     !currentYear.equals(invoice.getAcademicYear())) {
-
                 throw new RuntimeException(
                         "Invoice is not for the current term and year. Cannot process transaction."
                 );
             }
-
-
-            // Verify invoice is not already cleared
-//            if (invoice.getStatus() == 'C') {
-//                throw new RuntimeException("Invoice is already cleared");
-//            }
 
             // Get Finance record for student (should be for current term)
             Finance finance = financeRepository.findByStudentIdAndTermAndYear(
@@ -96,11 +88,29 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
                             "No finance record found for student in current term. Please create an invoice first."
                     ));
 
+            // Get the current balance before this transaction (from the latest transaction or finance record)
+            BigDecimal previousBalance = finance.getBalance();
+
             // Create the transaction with invoice reference
             FinanceTransaction transaction = getFinanceTransaction(studentId, createTransactionDTO, student);
             transaction.setInvoiceId(invoice.getId());
-//            transaction.set(currentTerm); // Ensure term is set to current
-            transaction.setYear(currentYear); // Ensure year is current
+            transaction.setTerm(currentTerm);
+            transaction.setYear(currentYear);
+
+            // Set the opening balance (balance before this transaction)
+            transaction.setOpeningBalance(previousBalance);
+
+            // Calculate and set the new balance after this transaction
+            BigDecimal newBalance;
+            if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.INCOME) {
+                // Payment received - reduces balance
+                newBalance = previousBalance.subtract(createTransactionDTO.getAmount());
+            } else {
+                // Expense/Refund - increases balance
+                newBalance = previousBalance.add(createTransactionDTO.getAmount());
+            }
+
+            transaction.setClosingBalance(newBalance);
 
             // Save transaction first
             FinanceTransaction savedTransaction = financeTransactionRepository.save(transaction);
@@ -120,7 +130,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
                 // Update Finance record
                 finance.setPaidAmount(finance.getPaidAmount().add(createTransactionDTO.getAmount()));
-                finance.setBalance(finance.getTotalFeeAmount().subtract(finance.getPaidAmount()));
+                finance.setBalance(newBalance);
 
             } else if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.EXPENSE) {
                 // Refund or adjustment - update invoice
@@ -134,7 +144,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
                 // Update Finance record
                 finance.setPaidAmount(finance.getPaidAmount().subtract(createTransactionDTO.getAmount()));
-                finance.setBalance(finance.getTotalFeeAmount().subtract(finance.getPaidAmount()));
+                finance.setBalance(newBalance);
             }
 
             // Save updated invoice
@@ -152,7 +162,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage("Transaction created and invoice updated successfully");
-            response.setEntity(null); // Changed from null to responseData
+            response.setEntity(responseData);
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -161,7 +171,6 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         }
         return response;
     }
-
     @Override
     public CustomResponse<?> getTransactions() {
         CustomResponse<List<FinanceTransaction>> response = new CustomResponse<>();

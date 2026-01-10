@@ -158,6 +158,13 @@
             <version>1.10.0</version>
         </dependency>
 
+        <!-- JasperReports Dependencies -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports</artifactId>
+            <version>6.20.6</version>
+        </dependency>
+
 
 
 		<dependency>

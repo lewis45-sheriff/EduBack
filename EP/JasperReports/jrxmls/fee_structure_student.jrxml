@@ -1,0 +1,748 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="fee_structure_student_with_discounts"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20">
+
+    <property name="com.jaspersoft.studio.unit." value="pixel"/>
+    <property name="com.jaspersoft.studio.data.sql.tables" value=""/>
+    <property name="com.jaspersoft.studio.data.defaultdataadapter" value="EdutechMSSSQL"/>
+
+    <!-- Styles -->
+    <style name="TitleStyle" forecolor="#1565C0" fontName="Arial" fontSize="22" isBold="true"/>
+    <style name="SubTitleStyle" forecolor="#546E7A" fontName="Arial" fontSize="14"/>
+    <style name="SectionHeader" forecolor="#1565C0" fontName="Arial" fontSize="12" isBold="true"/>
+    <style name="TableHeader" mode="Opaque" forecolor="#FFFFFF" backcolor="#1565C0" fontName="Arial" fontSize="11" isBold="true">
+        <box>
+            <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+            <bottomPen lineWidth="0.5" lineColor="#BBDEFB"/>
+        </box>
+    </style>
+    <style name="DetailStyle" fontName="Arial" fontSize="10">
+        <box>
+            <pen lineWidth="0.5" lineColor="#E3F2FD"/>
+        </box>
+        <conditionalStyle>
+            <conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+            <style mode="Opaque" backcolor="#F5F5F5"/>
+        </conditionalStyle>
+    </style>
+    <style name="DiscountStyle" fontName="Arial" fontSize="9" isItalic="true" forecolor="#D32F2F">
+        <box>
+            <pen lineWidth="0.5" lineColor="#E3F2FD"/>
+        </box>
+    </style>
+    <style name="SubtotalStyle" mode="Opaque" backcolor="#E8F5E8" fontName="Arial" fontSize="10" isBold="true">
+        <box>
+            <topPen lineWidth="1.0" lineColor="#4CAF50"/>
+        </box>
+    </style>
+    <style name="TotalStyle" mode="Opaque" backcolor="#E3F2FD" fontName="Arial" fontSize="11" isBold="true">
+        <box>
+            <topPen lineWidth="1.0" lineColor="#1565C0"/>
+        </box>
+    </style>
+    <style name="GrandTotalStyle" mode="Opaque" backcolor="#1565C0" forecolor="#FFFFFF" fontName="Arial" fontSize="12" isBold="true">
+        <box>
+            <topPen lineWidth="1.5" lineColor="#1565C0"/>
+            <bottomPen lineWidth="1.5" lineColor="#1565C0"/>
+        </box>
+    </style>
+    <style name="StudentInfoLabel" forecolor="#1565C0" fontName="Arial" fontSize="10" isBold="true"/>
+    <style name="StudentInfoValue" fontName="Arial" fontSize="10"/>
+
+    <!-- Parameters -->
+    <parameter name="studentID" class="java.lang.Long"/>
+    <parameter name="year" class="java.lang.Long"/>
+    <parameter name="Logo" class="java.awt.image.BufferedImage"/>
+    <parameter name="SchoolName" class="java.lang.String">
+        <defaultValueExpression><![CDATA["EXCELLENCE ACADEMY"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="SchoolMotto" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Nurturing Minds, Building Futures"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="SchoolContact" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Tel: (123) 456-7890 | Email: info@excellenceacademy.edu"]]></defaultValueExpression>
+    </parameter>
+
+    <!-- Query String -->
+    <queryString language="SQL">
+        <![CDATA[
+WITH fee_components AS (
+    SELECT
+        c.description AS component_description,
+        c.fee_status AS component_fee_status,
+        t.term_name,
+        t.id AS term_id,
+        CAST(c.amount AS DECIMAL(10,2)) AS component_amount,
+        fs.name AS fee_structure_name,
+        fs.total_amount AS fee_structure_total,
+        fs.year AS fee_structure_year,
+        g.name AS grade_name,
+        s.admission_number AS student_admission_number,
+        s.first_name AS student_first_name,
+        s.last_name AS student_last_name,
+        NULL AS transport_route,
+        NULL AS transport_amount,
+        'ACADEMIC' AS component_type
+    FROM student s
+    JOIN grade g ON s.grade_id = g.id
+    JOIN fee_structure fs ON fs.grade_id = g.id
+    JOIN component c ON fs.id = c.fee_structure_id
+    JOIN term t ON t.id = c.term_id
+    WHERE s.id = $P{studentID}
+      AND fs.year = $P{year}
+      AND c.fee_status = 'MANDATORY'
+      AND c.description NOT LIKE '%Transport%'
+),
+transport_components AS (
+    SELECT
+        'Transport - ' + trp.route + ' (' + s.transport_options + ')' AS component_description,
+        'OPTIONAL' AS component_fee_status,
+        t.term_name,
+        t.id AS term_id,
+        CASE
+            WHEN fso.route_id IS NOT NULL THEN
+                CASE
+                    WHEN s.transport_options = 'ONE_WAY' THEN CAST(trp.one_way_price AS DECIMAL(10,2))
+                    WHEN s.transport_options = 'TWO_WAY' THEN CAST(trp.two_way_price AS DECIMAL(10,2))
+                    ELSE CAST(0 AS DECIMAL(10,2))
+                END
+            ELSE CAST(0 AS DECIMAL(10,2))
+        END AS component_amount,
+        fs.name AS fee_structure_name,
+        fs.total_amount AS fee_structure_total,
+        fs.year AS fee_structure_year,
+        g.name AS grade_name,
+        s.admission_number AS student_admission_number,
+        s.first_name AS student_first_name,
+        s.last_name AS student_last_name,
+        trp.route AS transport_route,
+        CASE
+            WHEN s.transport_options = 'ONE_WAY' THEN trp.one_way_price
+            WHEN s.transport_options = 'TWO_WAY' THEN trp.two_way_price
+            ELSE NULL
+        END AS transport_amount,
+        'TRANSPORT' AS component_type
+    FROM student s
+    JOIN grade g ON s.grade_id = g.id
+    JOIN fee_structure fs ON fs.grade_id = g.id
+    CROSS JOIN term t
+    CROSS JOIN transport_routes_price trp
+    LEFT JOIN fee_structure_selected_optionals fso ON (
+        fso.student_id = s.id
+        AND fso.route_id = trp.id
+        AND fso.term_id = t.id
+        AND fso.fee_structure_id = fs.id
+    )
+    WHERE s.id = $P{studentID}
+      AND fs.year = $P{year}
+      AND s.transport_route_id = trp.id
+      AND s.transport_options IS NOT NULL
+      AND s.transport_options <> 'NONE'
+      AND EXISTS (
+          SELECT 1
+          FROM fee_structure_selected_optionals fso_check
+          WHERE fso_check.student_id = s.id
+            AND fso_check.route_id = trp.id
+      )
+),
+optional_components AS (
+    SELECT
+        c.description AS component_description,
+        c.fee_status AS component_fee_status,
+        t.term_name,
+        t.id AS term_id,
+        CASE WHEN fso.component_id IS NOT NULL
+             THEN CAST(c.amount AS DECIMAL(10,2))
+             ELSE CAST(0 AS DECIMAL(10,2))
+        END AS component_amount,
+        fs.name AS fee_structure_name,
+        fs.total_amount AS fee_structure_total,
+        fs.year AS fee_structure_year,
+        g.name AS grade_name,
+        s.admission_number AS student_admission_number,
+        s.first_name AS student_first_name,
+        s.last_name AS student_last_name,
+        NULL AS transport_route,
+        NULL AS transport_amount,
+        'OPTIONAL' AS component_type
+    FROM student s
+    JOIN grade g ON s.grade_id = g.id
+    JOIN fee_structure fs ON fs.grade_id = g.id
+    JOIN component c ON fs.id = c.fee_structure_id
+    JOIN term t ON t.id = c.term_id
+    LEFT JOIN fee_structure_selected_optionals fso ON (
+        fso.student_id = s.id
+        AND fso.component_id = c.id
+        AND fso.term_id = t.id
+        AND fso.fee_structure_id = fs.id
+        AND fso.route_id IS NULL
+    )
+    WHERE s.id = $P{studentID}
+      AND fs.year = $P{year}
+      AND c.fee_status = 'OPTIONAL'
+      AND c.description NOT LIKE '%Transport%'
+      AND fso.component_id IS NOT NULL
+),
+all_components AS (
+    SELECT * FROM fee_components
+    UNION ALL
+    SELECT * FROM transport_components
+    UNION ALL
+    SELECT * FROM optional_components
+),
+term_discounts AS (
+    SELECT
+        t.term_name,
+        t.id AS term_id,
+        COALESCE(SUM(sph.discount_amount), 0) AS discount_amount,
+        STRING_AGG(sph.discount_description, '; ') WITHIN GROUP (ORDER BY sph.id) AS discount_descriptions
+    FROM term t
+    LEFT JOIN student_payment_history sph ON (
+        sph.term_id = t.id
+        AND sph.student_id = $P{studentID}
+        AND sph.year = $P{year}
+        AND sph.discount_amount > 0
+    )
+    GROUP BY t.term_name, t.id
+),
+component_amounts AS (
+    SELECT
+        ac.component_description,
+        ac.component_fee_status,
+        MAX(CASE WHEN ac.term_name = 'Term 1' THEN ac.component_amount END) AS term1_amount,
+        MAX(CASE WHEN ac.term_name = 'Term 2' THEN ac.component_amount END) AS term2_amount,
+        MAX(CASE WHEN ac.term_name = 'Term 3' THEN ac.component_amount END) AS term3_amount,
+        MAX(ac.fee_structure_name) AS fee_structure_name,
+        MAX(ac.fee_structure_total) AS fee_structure_total,
+        MAX(ac.fee_structure_year) AS fee_structure_year,
+        MAX(ac.grade_name) AS grade_name,
+        MAX(ac.student_admission_number) AS student_id,
+        MAX(ac.student_first_name) AS student_first_name,
+        MAX(ac.student_last_name) AS student_last_name
+    FROM all_components ac
+    GROUP BY ac.component_description, ac.component_fee_status
+),
+term_totals AS (
+    SELECT
+        SUM(ISNULL(term1_amount,0)) AS sum_term1,
+        SUM(ISNULL(term2_amount,0)) AS sum_term2,
+        SUM(ISNULL(term3_amount,0)) AS sum_term3
+    FROM component_amounts
+),
+discount_totals AS (
+    SELECT
+        MAX(CASE WHEN term_name = 'Term 1' THEN discount_amount ELSE 0 END) AS term1_discount,
+        MAX(CASE WHEN term_name = 'Term 2' THEN discount_amount ELSE 0 END) AS term2_discount,
+        MAX(CASE WHEN term_name = 'Term 3' THEN discount_amount ELSE 0 END) AS term3_discount,
+        MAX(CASE WHEN term_name = 'Term 1' THEN discount_descriptions END) AS term1_discount_desc,
+        MAX(CASE WHEN term_name = 'Term 2' THEN discount_descriptions END) AS term2_discount_desc,
+        MAX(CASE WHEN term_name = 'Term 3' THEN discount_descriptions END) AS term3_discount_desc
+    FROM term_discounts
+)
+SELECT
+    component_description,
+    component_fee_status,
+    term1_amount,
+    term2_amount,
+    term3_amount,
+    fee_structure_name,
+    fee_structure_total,
+    fee_structure_year,
+    grade_name,
+    student_id,
+    student_first_name,
+    student_last_name,
+    NULL AS is_total_row,
+    NULL AS total_label,
+    NULL AS discount_description
+FROM component_amounts
+UNION ALL
+SELECT
+    NULL, NULL,
+    sum_term1, sum_term2, sum_term3,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    1, 'SUBTOTAL', NULL
+FROM term_totals
+UNION ALL
+SELECT
+    NULL, NULL,
+    -term1_discount, -term2_discount, -term3_discount,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    2, 'DISCOUNTS',
+    CASE
+        WHEN term1_discount_desc IS NOT NULL OR term2_discount_desc IS NOT NULL OR term3_discount_desc IS NOT NULL THEN
+            'T1: ' + ISNULL(term1_discount_desc,'') +
+            ' | T2: ' + ISNULL(term2_discount_desc,'') +
+            ' | T3: ' + ISNULL(term3_discount_desc,'')
+        ELSE NULL
+    END
+FROM discount_totals
+WHERE term1_discount > 0 OR term2_discount > 0 OR term3_discount > 0
+UNION ALL
+SELECT
+    NULL, NULL,
+    (tt.sum_term1 - dt.term1_discount),
+    (tt.sum_term2 - dt.term2_discount),
+    (tt.sum_term3 - dt.term3_discount),
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    3, 'TERM TOTALS', NULL
+FROM term_totals tt, discount_totals dt
+UNION ALL
+SELECT
+    NULL, NULL,
+    NULL, NULL,
+    ( (tt.sum_term1 - dt.term1_discount)
+    + (tt.sum_term2 - dt.term2_discount)
+    + (tt.sum_term3 - dt.term3_discount) ),
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    4, 'ANNUAL TOTAL', NULL
+FROM term_totals tt, discount_totals dt
+        ]]>
+    </queryString>
+
+    <!-- Fields -->
+    <field name="component_description" class="java.lang.String"/>
+    <field name="component_fee_status" class="java.lang.String"/>
+    <field name="term1_amount" class="java.math.BigDecimal"/>
+    <field name="term2_amount" class="java.math.BigDecimal"/>
+    <field name="term3_amount" class="java.math.BigDecimal"/>
+    <field name="fee_structure_name" class="java.lang.String"/>
+    <field name="fee_structure_total" class="java.lang.String"/>
+    <field name="fee_structure_year" class="java.lang.String"/>
+    <field name="grade_name" class="java.lang.String"/>
+    <field name="student_id" class="java.lang.String"/>
+    <field name="student_first_name" class="java.lang.String"/>
+    <field name="student_last_name" class="java.lang.String"/>
+    <field name="is_total_row" class="java.lang.Integer"/>
+    <field name="total_label" class="java.lang.String"/>
+    <field name="discount_description" class="java.lang.String"/>
+
+    <!-- Background -->
+    <background>
+        <band height="802" splitType="Stretch">
+            <rectangle>
+                <reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E3F2FD">
+                    <printWhenExpression><![CDATA[false]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.0" lineStyle="Dashed"/>
+                </graphicElement>
+            </rectangle>
+        </band>
+    </background>
+
+    <!-- Title Section -->
+    <title>
+        <band height="220" splitType="Stretch">
+            <!-- Header Background -->
+            <rectangle>
+                <reportElement mode="Opaque" x="0" y="0" width="555" height="100" backcolor="#1565C0"/>
+                <graphicElement>
+                    <pen lineWidth="0.0"/>
+                </graphicElement>
+            </rectangle>
+
+            <!-- School Logo -->
+            <image scaleImage="RetainShape">
+                <reportElement x="20" y="15" width="70" height="70"/>
+                <imageExpression><![CDATA[$P{Logo}]]></imageExpression>
+            </image>
+
+            <!-- School Name -->
+            <textField>
+                <reportElement x="100" y="15" width="435" height="30" forecolor="#FFFFFF"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="20" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression>
+            </textField>
+
+            <!-- Report Title -->
+            <staticText>
+                <reportElement x="100" y="45" width="435" height="25" forecolor="#E3F2FD"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="16" isBold="true"/>
+                </textElement>
+                <text><![CDATA[STUDENT FEE STRUCTURE]]></text>
+            </staticText>
+
+            <!-- School Motto and Contact -->
+            <textField>
+                <reportElement x="100" y="70" width="435" height="20" forecolor="#BBDEFB"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isItalic="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{SchoolMotto} + " | " + $P{SchoolContact}]]></textFieldExpression>
+            </textField>
+
+            <!-- Report Subheader -->
+            <rectangle radius="0">
+                <reportElement mode="Opaque" x="0" y="100" width="555" height="25" backcolor="#E3F2FD"/>
+            </rectangle>
+
+            <textField>
+                <reportElement x="20" y="100" width="300" height="25" forecolor="#1565C0"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["FEE STRUCTURE FOR ACADEMIC YEAR " + ($P{year} != null ? $P{year}.toString() : "N/A")]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement x="340" y="100" width="195" height="25" forecolor="#1565C0"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Generated: " + new java.text.SimpleDateFormat("MMMM dd, yyyy").format(new java.util.Date())]]></textFieldExpression>
+            </textField>
+
+            <!-- Student Information Box -->
+            <rectangle radius="10">
+                <reportElement mode="Opaque" x="20" y="135" width="515" height="75" backcolor="#F5F5F5"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#BBDEFB"/>
+                </graphicElement>
+            </rectangle>
+
+            <!-- Student Details -->
+            <staticText>
+                <reportElement style="StudentInfoLabel" x="30" y="145" width="100" height="15"/>
+                <text><![CDATA[Student Name:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="StudentInfoValue" x="130" y="145" width="140" height="15"/>
+                <textFieldExpression><![CDATA[$F{student_first_name} + " " + $F{student_last_name}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="StudentInfoLabel" x="280" y="145" width="100" height="15"/>
+                <text><![CDATA[Student ID:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="StudentInfoValue" x="380" y="145" width="140" height="15"/>
+                <textFieldExpression><![CDATA[$F{student_id}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="StudentInfoLabel" x="30" y="165" width="100" height="15"/>
+                <text><![CDATA[Grade/Class:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="StudentInfoValue" x="130" y="165" width="140" height="15"/>
+                <textFieldExpression><![CDATA[$F{grade_name}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="StudentInfoLabel" x="280" y="165" width="100" height="15"/>
+                <text><![CDATA[Fee Structure:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="StudentInfoValue" x="380" y="165" width="140" height="15"/>
+                <textFieldExpression><![CDATA[$F{fee_structure_name}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="StudentInfoLabel" x="30" y="185" width="100" height="15"/>
+                <text><![CDATA[Academic Year:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="StudentInfoValue" x="130" y="185" width="140" height="15"/>
+                <textFieldExpression><![CDATA[$F{fee_structure_year}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement style="StudentInfoLabel" x="280" y="185" width="100" height="15"/>
+                <text><![CDATA[Issue Date:]]></text>
+            </staticText>
+            <textField pattern="MMMMM dd, yyyy">
+                <reportElement style="StudentInfoValue" x="380" y="185" width="140" height="15"/>
+                <textFieldExpression><![CDATA[new java.util.Date()]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <!-- Column Header -->
+    <columnHeader>
+        <band height="30" splitType="Stretch">
+            <staticText>
+                <reportElement style="TableHeader" x="20" y="5" width="30" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <text><![CDATA[#]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="50" y="5" width="165" height="20"/>
+                <textElement textAlignment="Left" verticalAlignment="Middle">
+                    <paragraph leftIndent="5"/>
+                </textElement>
+                <text><![CDATA[FEE COMPONENT]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="215" y="5" width="90" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <text><![CDATA[CATEGORY]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="305" y="5" width="80" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <text><![CDATA[TERM 1]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="385" y="5" width="80" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <text><![CDATA[TERM 2]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="TableHeader" x="465" y="5" width="80" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <text><![CDATA[TERM 3]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <!-- Detail Section -->
+    <detail>
+        <band height="25" splitType="Stretch">
+            <!-- Regular Component Rows -->
+            <textField>
+                <reportElement style="DetailStyle" x="20" y="0" width="30" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} == null]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DetailStyle" x="50" y="0" width="165" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} == null]]></printWhenExpression>
+                </reportElement>
+                <textElement verticalAlignment="Middle">
+                    <paragraph leftIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{component_description}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DetailStyle" x="215" y="0" width="90" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} == null]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{component_fee_status}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DetailStyle" x="305" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} == null]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term1_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DetailStyle" x="385" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} == null]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term2_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DetailStyle" x="465" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} == null]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term3_amount}]]></textFieldExpression>
+            </textField>
+
+            <!-- Subtotal Row -->
+            <textField>
+                <reportElement style="SubtotalStyle" x="20" y="0" width="275" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 1]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{total_label}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="SubtotalStyle" x="305" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 1]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term1_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="SubtotalStyle" x="385" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 1]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term2_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="SubtotalStyle" x="465" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 1]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term3_amount}]]></textFieldExpression>
+            </textField>
+
+            <!-- Discounts Row -->
+            <textField>
+                <reportElement style="DiscountStyle" x="20" y="0" width="275" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 2]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{total_label}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DiscountStyle" x="305" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 2]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term1_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DiscountStyle" x="385" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 2]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term2_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="DiscountStyle" x="465" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 2]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term3_amount}]]></textFieldExpression>
+            </textField>
+
+            <!-- Discount Description -->
+            <textField isStretchWithOverflow="true">
+                <reportElement style="DiscountStyle" x="50" y="0" width="505" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 2 && $F{discount_description} != null]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Left" verticalAlignment="Middle">
+                    <paragraph leftIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Applied discounts: " + $F{discount_description}]]></textFieldExpression>
+            </textField>
+
+            <!-- Term Totals Row -->
+            <textField>
+                <reportElement style="TotalStyle" x="20" y="0" width="275" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 3]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{total_label}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="TotalStyle" x="305" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 3]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term1_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="TotalStyle" x="385" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 3]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term2_amount}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="TotalStyle" x="465" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 3]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term3_amount}]]></textFieldExpression>
+            </textField>
+
+            <!-- Annual Total Row -->
+            <textField>
+                <reportElement style="GrandTotalStyle" x="20" y="0" width="275" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 4]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{total_label}]]></textFieldExpression>
+            </textField>
+
+            <textField>
+                <reportElement style="GrandTotalStyle" x="465" y="0" width="80" height="25">
+                    <printWhenExpression><![CDATA[$F{is_total_row} != null && $F{is_total_row} == 4]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <paragraph rightIndent="5"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{term3_amount}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <!-- Summary Section -->
+    <summary>
+        <band height="50" splitType="Stretch">
+            <staticText>
+                <reportElement x="20" y="10" width="515" height="15" forecolor="#546E7A"/>
+                <textElement textAlignment="Center">
+                    <font size="9" isItalic="true"/>
+                </textElement>
+                <text><![CDATA[This is an automated fee structure report. Please contact the accounts office for any discrepancies.]]></text>
+            </staticText>
+
+            <textField pattern="EEEEE MMMMM dd, yyyy 'at' HH:mm">
+                <reportElement x="20" y="25" width="515" height="15" forecolor="#546E7A"/>
+                <textElement textAlignment="Center">
+                    <font size="8"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Report generated on " + new java.util.Date()]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+</jasperReport>

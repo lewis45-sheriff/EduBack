@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+			  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+			  xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+			  name="term_performance_report"
+			  language="java"
+			  pageWidth="595"
+			  pageHeight="842"
+			  columnWidth="555"
+			  leftMargin="20"
+			  rightMargin="20"
+			  topMargin="20"
+			  bottomMargin="20"
+			  uuid="d4fc3af2-a975-4157-a65e-c3a0eb6e7dd5">
+
+	<!-- Report Unit Properties -->
+	<property name="com.jaspersoft.studio.unit." value="pixel"/>
+	<property name="com.jaspersoft.studio.data.sql.tables" value=""/>
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="edu_tech"/>
+
+	<!-- Enhanced School-Themed Styles -->
+	<style name="TitleStyle" fontName="Arial" fontSize="22" isBold="true" forecolor="#1565C0"/>
+	<style name="SubTitleStyle" fontName="Arial" fontSize="14" forecolor="#546E7A"/>
+	<style name="SectionHeader" fontName="Arial" fontSize="12" isBold="true" forecolor="#1565C0"/>
+	<style name="TableHeader" mode="Opaque" backcolor="#1565C0" forecolor="#FFFFFF"
+		   fontName="Arial" fontSize="11" isBold="true" isItalic="false">
+		<box>
+			<pen lineWidth="0.5" lineColor="#FFFFFF"/>
+			<bottomPen lineWidth="0.5" lineColor="#BBDEFB"/>
+		</box>
+	</style>
+	<style name="DetailStyle" fontName="Arial" fontSize="10">
+		<box>
+			<pen lineWidth="0.5" lineColor="#E3F2FD"/>
+		</box>
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+			<style mode="Opaque" backcolor="#F5F5F5"/>
+		</conditionalStyle>
+	</style>
+	<style name="StudentInfoLabel" fontName="Arial" fontSize="10" isBold="true" forecolor="#1565C0"/>
+	<style name="StudentInfoValue" fontName="Arial" fontSize="10"/>
+	<style name="TotalStyle" fontName="Arial" fontSize="12" isBold="true" forecolor="#1565C0">
+		<box>
+			<topPen lineWidth="1.0" lineColor="#1565C0"/>
+		</box>
+	</style>
+
+	<!-- Parameters -->
+	<parameter name="studentID" class="java.lang.String"/>
+	<parameter name="gradeId" class="java.lang.String"/>
+	<parameter name="termID" class="java.lang.String"/>
+	<parameter name="Logo" class="java.lang.String"/>
+	<parameter name="SchoolName" class="java.lang.String">
+		<defaultValueExpression><![CDATA["EXCELLENCE ACADEMY"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="SchoolMotto" class="java.lang.String">
+		<defaultValueExpression><![CDATA["Nurturing Minds, Building Futures"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="SchoolContact" class="java.lang.String">
+		<defaultValueExpression><![CDATA["Tel: (123) 456-7890 | Email: info@excellenceacademy.edu"]]></defaultValueExpression>
+	</parameter>
+
+	<!-- Query -->
+	<queryString language="SQL">
+		<![CDATA[
+        SELECT
+            sScore.subject_id as examSubjectId,
+            subject.subject_code as examSubjectCode,
+            subject.subject_name as examSubjectName,
+            sScore.student_id as examStudentId,
+            s.admission_number as studentAdmissionNumber,
+            CONCAT(s.first_name, ' ', s.last_name) AS studentFullName,
+            sScore.exam_score as examScore,
+            sScore.year as examYear,
+            sScore.exam_type_id as examTypeId,
+            eType.name as examTypeName,
+            sScore.grade_id as examGradeId,
+            g.name as examGradeName,
+            sScore.term_id as examTermId,
+            t.term_name as examTermName,
+            eTypeGrading.point as examScorePoint,
+            eTypeGrading.remarks as examScoreRemarks,
+            eTypeGrading.start,
+            eTypeGrading.end
+        FROM
+            students_score AS sScore
+        JOIN
+            grade AS g ON g.id = sScore.grade_id
+        JOIN
+            term AS t ON t.id = sScore.term_id
+        JOIN
+            student AS s ON sScore.student_id = s.id
+        JOIN
+            subject ON sScore.subject_id = subject.id
+        JOIN
+            exam_type AS eType ON sScore.exam_type_id = eType.id
+        JOIN
+            exam_type_grading AS eTypeGrading ON eType.id = eTypeGrading.exam_type_id
+        WHERE
+            sScore.exam_score BETWEEN eTypeGrading.start AND eTypeGrading.end
+            AND sScore.exam_type_id = eTypeGrading.exam_type_id
+            AND sScore.student_id =  $P{studentID}
+            AND sScore.grade_id =  $P{gradeId}
+            AND sScore.term_id =  $P{termID} ;
+        ]]>
+	</queryString>
+
+	<!-- Fields -->
+	<field name="studentFullName" class="java.lang.String"/>
+	<field name="examGradeName" class="java.lang.String"/>
+	<field name="examTermName" class="java.lang.String"/>
+	<field name="examYear" class="java.lang.String"/>
+	<field name="examScorePoint" class="java.lang.String"/>
+	<field name="studentAdmissionNumber" class="java.lang.String"/>
+	<field name="examSubjectName" class="java.lang.String"/>
+	<field name="examSubjectCode" class="java.lang.String"/>
+	<field name="examScore" class="java.lang.String"/>
+	<field name="examScoreRemarks" class="java.lang.String"/>
+	<field name="examTypeName" class="java.lang.String"/>
+
+	<!-- Background -->
+	<background>
+		<band height="802" splitType="Stretch">
+			<!-- Light watermark in background -->
+			<rectangle>
+				<reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E3F2FD" uuid="47c025fb-b994-4c3d-8608-1f5c601ffafb">
+					<printWhenExpression><![CDATA[false]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineWidth="0" lineStyle="Dashed"/>
+				</graphicElement>
+			</rectangle>
+		</band>
+	</background>
+
+	<!-- Title -->
+	<title>
+		<band height="180" splitType="Stretch">
+			<!-- Header Background with School Colors -->
+			<rectangle>
+				<reportElement mode="Opaque" x="0" y="0" width="555" height="100" backcolor="#1565C0" uuid="8c13e6c7-db0a-47cf-88ca-11296a96b083"/>
+				<graphicElement>
+					<pen lineWidth="0.0"/>
+				</graphicElement>
+			</rectangle>
+
+			<!-- School Logo -->
+			<image scaleImage="RetainShape">
+				<reportElement x="20" y="15" width="70" height="70" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca"/>
+				<imageExpression><![CDATA[$P{Logo}]]></imageExpression>
+			</image>
+
+			<!-- Title and School Name -->
+			<textField>
+				<reportElement style="TitleStyle" x="100" y="15" width="435" height="30" forecolor="#FFFFFF" uuid="df82786c-d711-47b7-8c30-5376c3c7ae91"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="20" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression>
+			</textField>
+
+			<staticText>
+				<reportElement style="SubTitleStyle" x="100" y="45" width="435" height="25" forecolor="#E3F2FD" uuid="3e7a68d9-abc9-47e4-b76e-a34b0932eb2b"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="16" isBold="true"/>
+				</textElement>
+				<text><![CDATA[TERM PERFORMANCE REPORT]]></text>
+			</staticText>
+
+			<!-- School Motto and Contact -->
+			<textField>
+				<reportElement style="SubTitleStyle" x="100" y="70" width="435" height="20" forecolor="#BBDEFB" uuid="47d0e4fc-cf36-4ca6-a9c6-cf550b8b3e28"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="10" isItalic="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{SchoolMotto} + " | " + $P{SchoolContact}]]></textFieldExpression>
+			</textField>
+
+			<!-- Year Info Banner -->
+			<rectangle radius="0">
+				<reportElement mode="Opaque" x="0" y="100" width="555" height="25" backcolor="#E3F2FD" uuid="1f02481e-dac2-49aa-a818-336a771cafff"/>
+			</rectangle>
+
+			<textField>
+				<reportElement x="20" y="100" width="300" height="25" forecolor="#1565C0" uuid="4883017f-04bc-4935-9245-976da0891742"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="12" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["ACADEMIC REPORT FOR " + $F{examYear}]]></textFieldExpression>
+			</textField>
+
+			<textField pattern="MMMMM dd, yyyy">
+				<reportElement x="340" y="100" width="195" height="25" forecolor="#1565C0" uuid="0eb00515-9a89-424f-9391-f2802a97e60e"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="Arial" size="10" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Generated: " + new java.text.SimpleDateFormat("MMMM dd, yyyy").format(new java.util.Date())]]></textFieldExpression>
+			</textField>
+
+			<!-- Student Information -->
+			<rectangle radius="10">
+				<reportElement mode="Opaque" x="20" y="135" width="515" height="35" backcolor="#F5F5F5" uuid="8e81313a-e62c-4b4e-bf71-ae7b37d7cfd3"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#BBDEFB"/>
+				</graphicElement>
+			</rectangle>
+
+			<!-- Left column -->
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="30" y="135" width="100" height="15" uuid="08de2dd4-ba1a-4b6e-8f97-e34df3c91b3b"/>
+				<text><![CDATA[Student Name:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="130" y="135" width="140" height="15" uuid="cc9ea4d2-a0a6-4962-91d1-a4c07ef8da2d"/>
+				<textFieldExpression><![CDATA[$F{studentFullName}]]></textFieldExpression>
+			</textField>
+
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="30" y="150" width="100" height="15" uuid="fe5d9e30-cd0e-4e6e-9ba8-ed0697589c65"/>
+				<text><![CDATA[Admission No:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="130" y="150" width="140" height="15" uuid="2a61e5f9-2e8e-41ab-b458-62b8312c0400"/>
+				<textFieldExpression><![CDATA[$F{studentAdmissionNumber}]]></textFieldExpression>
+			</textField>
+
+			<!-- Right column -->
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="280" y="135" width="100" height="15" uuid="d941ef1f-cb87-49b3-b614-1ccfcb9e6a36"/>
+				<text><![CDATA[Grade/Class:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="380" y="135" width="140" height="15" uuid="9274a88b-4024-4a83-ae9c-5167ba7209d4"/>
+				<textFieldExpression><![CDATA[$F{examGradeName}]]></textFieldExpression>
+			</textField>
+
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="280" y="150" width="100" height="15" uuid="874e76d7-c2ad-4acf-b446-ee277839bd45"/>
+				<text><![CDATA[Term:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="380" y="150" width="140" height="15" uuid="593c02d5-0090-486b-ba17-b272823b09ea"/>
+				<textFieldExpression><![CDATA[$F{examTermName}]]></textFieldExpression>
+			</textField>
+		</band>
+	</title>
+
+	<!-- Column Headers -->
+	<columnHeader>
+		<band height="30" splitType="Stretch">
+			<staticText>
+				<reportElement style="TableHeader" x="20" y="5" width="30" height="20" uuid="a7645219-1eec-4274-9a0a-bd8310be4f3e"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[#]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="50" y="5" width="140" height="20" uuid="f5b44558-e7e8-4dae-a84d-7052e52b830d"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<paragraph leftIndent="5"/>
+				</textElement>
+				<text><![CDATA[SUBJECT NAME]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="190" y="5" width="70" height="20" uuid="2d2f90ac-6a3f-48a1-8d56-f22c07faceb8"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[CODE]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="260" y="5" width="60" height="20" uuid="e6c5a69e-4fa4-459c-935e-b7a0cc2f6c02"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[SCORE]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="320" y="5" width="50" height="20" uuid="a32bc7e8-1b0e-4a4c-9fb8-7749885eba8a"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[POINT]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="370" y="5" width="164" height="20" uuid="f8a8e4a3-fb06-4f7c-9832-45c8ca31dd83"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[REMARKS]]></text>
+			</staticText>
+		</band>
+	</columnHeader>
+
+	<!-- Detail -->
+	<detail>
+		<band height="25" splitType="Stretch">
+			<textField>
+				<reportElement style="DetailStyle" x="20" y="0" width="30" height="25" uuid="88877e1c-c210-4d51-b227-583a56691b77"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="50" y="0" width="140" height="25" uuid="a31c6418-318d-475f-97ac-ee49eaac00ab"/>
+				<textElement verticalAlignment="Middle">
+					<paragraph leftIndent="5"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{examSubjectName}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="190" y="0" width="70" height="25" uuid="d2899497-459b-489f-9d2b-2e5ff311733a"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{examSubjectCode}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="260" y="0" width="60" height="25" uuid="8c0ed70d-fdad-41e1-a85d-8c635c7403a4"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{examScore}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="320" y="0" width="50" height="25" uuid="566febcf-3aea-4f3f-84f3-cc94081b98c2"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{examScorePoint}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="370" y="0" width="164" height="25" uuid="faa4b865-ac03-4199-a4a0-fa7430ef965f"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{examScoreRemarks}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+
+	<!-- Summary -->
+	<summary>
+		<band height="180" splitType="Stretch">
+			<!-- Average Performance Banner -->
+			<rectangle radius="5">
+				<reportElement mode="Opaque" x="20" y="20" width="515" height="40" backcolor="#E3F2FD" uuid="c8fe4de8-b9ca-4b5b-ad87-8c7b2db4f6b9"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#BBDEFB"/>
+				</graphicElement>
+			</rectangle>
+
+			<staticText>
+				<reportElement style="SectionHeader" x="30" y="20" width="200" height="20" uuid="87c37a00-1dae-401e-bb7d-d2e5c4d7be47"/>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[OVERALL PERFORMANCE]]></text>
+			</staticText>
+
+			<!-- Dynamically calculate average score - this would need to be adjusted based on actual data model -->
+			<textField evaluationTime="Report" pattern="#,##0.00">
+				<reportElement x="350" y="20" width="175" height="20" forecolor="#1565C0" uuid="d0f62f2c-fda4-4215-98d9-5db422a2791a"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="12" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Exam Type: " + ($F{examTypeName} != null ? $F{examTypeName} : "Term Exam")]]></textFieldExpression>
+			</textField>
+
+			<!-- Teacher Comments -->
+			<rectangle radius="10">
+				<reportElement mode="Opaque" x="20" y="80" width="515" height="80" backcolor="#F5F5F5" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2aff21"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#BBDEFB"/>
+				</graphicElement>
+			</rectangle>
+
+			<staticText>
+				<reportElement style="SectionHeader" x="30" y="80" width="200" height="20" uuid="3c91ebce-9332-46af-8225-ecfa8b0cb1e1"/>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[TEACHER'S COMMENTS:]]></text>
+			</staticText>
+
+			<!-- Signature Section -->
+			<rectangle radius="0">
+				<reportElement mode="Opaque" x="0" y="170" width="555" height="10" backcolor="#1565C0" uuid="39f69da2-48da-443a-bd4f-df6ad5a7e2e8"/>
+			</rectangle>
+		</band>
+	</summary>
+</jasperReport>

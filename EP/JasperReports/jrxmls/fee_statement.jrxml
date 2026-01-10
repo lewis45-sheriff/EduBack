@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="enhanced_fee_statement" pageWidth="595" pageHeight="842" whenNoDataType="NoPages" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="e7f9a5a4-8f2a-4f67-9e2f-123456789abc">
+    <property name="com.jaspersoft.studio.unit" value="pixel"/>
+    <property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+    <style name="TitleStyle" forecolor="#1565C0" fontName="Arial" fontSize="22" isBold="true"/>
+    <style name="SubTitleStyle" forecolor="#546E7A" fontName="Arial" fontSize="14"/>
+    <style name="SectionHeader" forecolor="#1565C0" fontName="Arial" fontSize="12" isBold="true"/>
+    <style name="TableHeader" mode="Opaque" forecolor="#FFFFFF" backcolor="#1565C0" fontName="Arial" fontSize="11" isBold="true">
+        <box>
+            <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+            <bottomPen lineWidth="0.5" lineColor="#BBDEFB"/>
+        </box>
+    </style>
+    <style name="DetailStyle" fontName="Arial" fontSize="10">
+        <box>
+            <bottomPen lineWidth="0.5" lineColor="#E3F2FD"/>
+        </box>
+        <conditionalStyle>
+            <conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+            <style mode="Opaque" backcolor="#F5F5F5"/>
+        </conditionalStyle>
+    </style>
+    <style name="TotalStyle" fontName="Arial" fontSize="11" isBold="true">
+        <box>
+            <topPen lineWidth="1.0" lineColor="#1565C0"/>
+        </box>
+    </style>
+    <style name="StudentInfoLabel" forecolor="#1565C0" fontName="Arial" fontSize="10" isBold="true"/>
+    <style name="StudentInfoValue" fontName="Arial" fontSize="10"/>
+
+    <parameter name="studentID" class="java.lang.Long"/>
+    <parameter name="termID" class="java.lang.String"/>
+    <parameter name="year" class="java.lang.Long"/>
+    <parameter name="Logo" class="java.awt.image.BufferedImage"/>
+    <parameter name="SchoolName" class="java.lang.String">
+        <defaultValueExpression><![CDATA["EXCELLENCE ACADEMY"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="SchoolMotto" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Nurturing Minds, Building Futures"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="SchoolContact" class="java.lang.String">
+        <defaultValueExpression><![CDATA["Tel: (123) 456-7890 | Email: info@excellenceacademy.edu"]]></defaultValueExpression>
+    </parameter>
+
+    <!-- Modified query to work with your entities -->
+    <queryString language="SQL">
+        <![CDATA[
+        SELECT
+            ft.student_id AS studentId,
+            ft.student_name AS sName,
+            ft.admission_number AS admNo,
+            ft.reference AS rNo,
+            ft.transaction_date AS tDate,
+            ft.amount AS Amount,
+            ft.payment_method AS paymentMode,
+            f.total_fee_amount AS currFee,
+            f.paid_amount AS totalPaid,
+            f.balance AS totalBalance,
+            f.term AS currTerm,
+            f.year AS currTermYear,
+            -- Calculate previous term balance
+            (SELECT COALESCE(SUM(f2.balance), 0)
+             FROM finance f2
+             WHERE f2.student_id = ft.student_id
+               AND f2.term != f.term
+               AND f2.year <= f.year
+            ) AS balanceForward
+        FROM finance_transactions ft
+        JOIN finance f ON ft.student_id = f.student_id
+            AND ft.term = f.term
+            AND ft.year = f.year
+        WHERE ft.student_id = $P{studentID}
+          AND ft.term = $P{termID}
+          AND ft.year = $P{year}
+          AND ft.transaction_type = 'INCOME' -- Only show income transactions (payments)
+        ORDER BY ft.transaction_date
+        ]]>
+    </queryString>
+
+    <field name="sName" class="java.lang.String"/>
+    <field name="admNo" class="java.lang.String"/>
+    <field name="currFee" class="java.math.BigDecimal"/>
+    <field name="currTerm" class="java.lang.String"/>
+    <field name="currTermYear" class="java.lang.Integer"/>
+    <field name="rNo" class="java.lang.String"/>
+    <field name="tDate" class="java.sql.Date"/>
+    <field name="Amount" class="java.math.BigDecimal"/>
+    <field name="totalPaid" class="java.math.BigDecimal"/>
+    <field name="totalBalance" class="java.math.BigDecimal"/>
+    <field name="balanceForward" class="java.math.BigDecimal"/>
+    <field name="paymentMode" class="java.lang.String"/>
+
+    <variable name="RunningTotal" class="java.math.BigDecimal" calculation="Sum">
+        <variableExpression><![CDATA[$F{Amount}]]></variableExpression>
+        <initialValueExpression><![CDATA[new java.math.BigDecimal("0")]]></initialValueExpression>
+    </variable>
+
+    <background>
+        <band height="802" splitType="Stretch">
+            <rectangle>
+                <reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E3F2FD" uuid="47c025fb-b994-4c3d-8608-1f5c601ffafb">
+                    <printWhenExpression><![CDATA[false]]></printWhenExpression>
+                </reportElement>
+            </rectangle>
+        </band>
+    </background>
+
+    <title>
+        <band height="220" splitType="Stretch">
+            <rectangle>
+                <reportElement mode="Opaque" x="0" y="0" width="555" height="100" backcolor="#1565C0" uuid="8c13e6c7-db0a-47cf-88ca-11296a96b083"/>
+            </rectangle>
+            <image scaleImage="RetainShape">
+                <reportElement x="20" y="15" width="70" height="70" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca">
+                    <printWhenExpression><![CDATA[$P{Logo} != null]]></printWhenExpression>
+                </reportElement>
+                <imageExpression><![CDATA[$P{Logo}]]></imageExpression>
+            </image>
+            <textField>
+                <reportElement x="100" y="15" width="435" height="30" forecolor="#FFFFFF" uuid="df82786c-d711-47b7-8c30-5376c3c7ae91"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="20" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="100" y="45" width="435" height="25" forecolor="#E3F2FD" uuid="3e7a68d9-abc9-47e4-b76e-a34b0932eb2b"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="16" isBold="true"/>
+                </textElement>
+                <text><![CDATA[STUDENT FEE STATEMENT]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="100" y="70" width="435" height="20" forecolor="#BBDEFB" uuid="47d0e4fc-cf36-4ca6-a9c6-cf550b8b3e28"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isItalic="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{SchoolMotto} + " | " + $P{SchoolContact}]]></textFieldExpression>
+            </textField>
+
+            <rectangle radius="0">
+                <reportElement mode="Opaque" x="0" y="100" width="555" height="25" backcolor="#E3F2FD" uuid="1f02481e-dac2-49aa-a818-336a771cafff"/>
+            </rectangle>
+            <textField>
+                <reportElement x="20" y="100" width="300" height="25" forecolor="#1565C0" uuid="4883017f-04bc-4935-9245-976da0891742"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["STATEMENT FOR " + ($F{currTerm} != null ? $F{currTerm}.toUpperCase() : "") + " " + ($F{currTermYear} != null ? $F{currTermYear} : "")]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="340" y="100" width="195" height="25" forecolor="#1565C0" uuid="0eb00515-9a89-424f-9391-f2802a97e60e"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Generated: " + new java.text.SimpleDateFormat("MMMM dd, yyyy").format(new java.util.Date())]]></textFieldExpression>
+            </textField>
+
+            <!-- Student Info Box - Removed Parent/Guardian -->
+            <rectangle radius="10">
+                <reportElement mode="Opaque" x="20" y="135" width="515" height="60" backcolor="#F5F5F5" uuid="8e81313a-e62c-4b4e-bf71-ae7b37d7cfd3"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#BBDEFB"/>
+                </graphicElement>
+            </rectangle>
+
+            <staticText>
+                <reportElement x="30" y="145" width="100" height="15" forecolor="#1565C0" uuid="08de2dd4-ba1a-4b6e-8f97-e34df3c91b3b"/>
+                <textElement>
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Student Name:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="130" y="145" width="140" height="15" uuid="cc9ea4d2-a0a6-4962-91d1-a4c07ef8da2d"/>
+                <textElement>
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{sName}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="280" y="145" width="100" height="15" forecolor="#1565C0" uuid="70c3ba6a-c548-4a6f-a54d-2f85cfd551db"/>
+                <textElement>
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Admission No:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="380" y="145" width="140" height="15" uuid="7d61640a-d37c-48ce-9526-b3b8b32033c3"/>
+                <textElement>
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{admNo}]]></textFieldExpression>
+            </textField>
+
+            <!-- Add Student ID since we have it -->
+            <staticText>
+                <reportElement x="30" y="165" width="100" height="15" forecolor="#1565C0" uuid="e2e0a04b-f023-4d66-af8d-e6f74c98f6dc"/>
+                <textElement>
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Student ID:]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="130" y="165" width="140" height="15" uuid="1af82825-5bc8-4543-b1b7-84dcef13e3f1"/>
+                <textElement>
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{studentID}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="280" y="165" width="100" height="15" forecolor="#1565C0" uuid="83fb8229-a3c3-4d91-8bf9-57841f0e2c17"/>
+                <textElement>
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Academic Year:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="380" y="165" width="140" height="15" uuid="5a47c1bf-8e7a-410e-9778-93e2d8b4270c"/>
+                <textElement>
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{currTermYear}]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <pageHeader>
+        <band height="70" splitType="Stretch">
+            <rectangle radius="5">
+                <reportElement mode="Opaque" x="20" y="10" width="515" height="50" backcolor="#E3F2FD" uuid="0cf379c0-79d0-4962-8a11-13c65403f0a3"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#BBDEFB"/>
+                </graphicElement>
+            </rectangle>
+
+            <staticText>
+                <reportElement x="30" y="15" width="140" height="20" forecolor="#1565C0" uuid="8aa7e538-6b85-4c3c-801d-6d2a79e1d3a8"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Term Fee Summary]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement x="30" y="35" width="100" height="20" forecolor="#1565C0" uuid="2a98b5b9-2cde-4d80-9de7-16e8e6fdbe1a"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Current Term Fee:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00" isBlankWhenNull="true">
+                <reportElement x="130" y="35" width="80" height="20" uuid="42ab0a66-f718-43e7-a3ca-a8fcb97e5ffc"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{currFee}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="220" y="35" width="100" height="20" forecolor="#1565C0" uuid="5c1b8e9e-04d1-4aff-aa55-c4f2a2abefd3"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Balance Forward:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00" isBlankWhenNull="true">
+                <reportElement x="320" y="35" width="80" height="20" uuid="6dbcd2d7-8c58-467c-bb12-ad24bad3a70a"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{balanceForward}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="410" y="35" width="40" height="20" forecolor="#1565C0" uuid="5d9b0a61-2e82-4982-bc9c-f61e79ac3b2c"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Term:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="450" y="35" width="80" height="20" uuid="b15e8d5f-77c6-4c82-a05a-2efebbff9101"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[($F{currTerm} != null ? $F{currTerm} : "") + " " + ($F{currTermYear} != null ? $F{currTermYear} : "")]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageHeader>
+
+    <columnHeader>
+        <band height="50" splitType="Stretch">
+            <rectangle>
+                <reportElement mode="Opaque" x="20" y="0" width="515" height="30" backcolor="#F5F5F5" uuid="9ac04b85-6a7d-47af-b7a7-b27d7f8b6fee"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="30" y="5" width="200" height="20" forecolor="#1565C0" uuid="5f79918c-9f61-4c9a-b61d-26c5f52e28d4"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="14" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Payment History]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement mode="Opaque" x="20" y="30" width="100" height="20" forecolor="#FFFFFF" backcolor="#1565C0" uuid="a7645219-1eec-4274-9a0a-bd8310be4f3e"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Receipt No.]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="120" y="30" width="100" height="20" forecolor="#FFFFFF" backcolor="#1565C0" uuid="f5b44558-e7e8-4dae-a84d-7052e52b830d"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Date]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="220" y="30" width="100" height="20" forecolor="#FFFFFF" backcolor="#1565C0" uuid="e6feb5d2-07ff-478c-959d-cd8be68ced50"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Mode]]></text>
+            </staticText>
+            <staticText>
+                <reportElement mode="Opaque" x="320" y="30" width="100" height="20" forecolor="#FFFFFF" backcolor="#1565C0" uuid="e6c5a69e-4fa4-459c-935e-b7a0cc2f6c02"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Amount]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="25" splitType="Stretch">
+            <textField isBlankWhenNull="true">
+                <reportElement x="20" y="0" width="100" height="25" uuid="bf07b36f-43ac-4d58-9fa4-79aed64db8e1"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{rNo}]]></textFieldExpression>
+            </textField>
+            <textField pattern="MMM dd, yyyy" isBlankWhenNull="true">
+                <reportElement x="120" y="0" width="100" height="25" uuid="e1cfcb60-e18b-43ca-9ce5-d6a8af8f2bca"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{tDate}]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="220" y="0" width="100" height="25" uuid="e6feb5d2-07ff-478c-959d-cd8be68ced51"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{paymentMode}]]></textFieldExpression>
+            </textField>
+            <textField pattern="#,##0.00" isBlankWhenNull="true">
+                <reportElement x="320" y="0" width="100" height="25" uuid="f4d7b9fb-75e3-4b03-891c-1b8b9edabf37"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{Amount}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="40" splitType="Stretch">
+            <line>
+                <reportElement x="20" y="5" width="515" height="1" forecolor="#BBDEFB" uuid="f8733be3-fe39-4470-8baa-11d0f6b3a994"/>
+            </line>
+            <textField>
+                <reportElement x="20" y="10" width="180" height="20" uuid="0a7923da-c8e4-44f1-8cb4-6d8df88a0c58"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="8"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Page " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="200" y="10" width="155" height="20" uuid="b2a4d7b3-7f31-4a22-9b09-98cc20a5e193"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="8" isItalic="true"/>
+                </textElement>
+                <text><![CDATA[This is an electronic statement]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="355" y="10" width="180" height="20" uuid="57696ee9-1cf8-458d-89b9-1ef5d5ac2c24"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="8"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Generated on " + new java.text.SimpleDateFormat("MMMM dd, yyyy HH:mm").format(new java.util.Date())]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+
+    <summary>
+        <band height="230" splitType="Stretch">
+            <rectangle radius="10">
+                <reportElement mode="Opaque" x="20" y="10" width="515" height="140" backcolor="#F5F5F5" uuid="ecde9afa-d4cd-435a-8fc5-6f1a22787852"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#BBDEFB"/>
+                </graphicElement>
+            </rectangle>
+
+            <staticText>
+                <reportElement x="30" y="20" width="200" height="20" forecolor="#1565C0" uuid="bfb1f49f-6ba4-4549-a8a7-9b4c8501b03e"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="14" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Balance Summary]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement x="30" y="50" width="180" height="20" forecolor="#1565C0" uuid="5f381834-3f08-48f9-8dba-67a1a35e7365"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Current Term Fee:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="210" y="50" width="100" height="20" uuid="f96d43a0-43e1-4e73-b253-1fe7ab15c5ea"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{currFee}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="320" y="50" width="130" height="20" forecolor="#1565C0" uuid="a489205b-5b81-41aa-990a-fc3da33df07e"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Total Paid This Term:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="450" y="50" width="85" height="20" uuid="e546f198-c808-4fb6-9547-8c240cb2dd6c"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalPaid}]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="30" y="75" width="485" height="1" forecolor="#BBDEFB" uuid="cce8c53f-fdfe-4749-9917-0a382c18cf02"/>
+            </line>
+
+            <staticText>
+                <reportElement x="30" y="80" width="180" height="20" forecolor="#1565C0" uuid="56b0e586-cd5a-496c-bbc9-8b7c34f32cf7"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Balance Forward (Previous Terms):]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="210" y="80" width="100" height="20" uuid="01bcec7f-f0e4-4862-a4e8-62bbd5ad20e8"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{balanceForward}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="320" y="80" width="130" height="20" forecolor="#1565C0" uuid="3c01ec79-a4eb-4929-b58e-4f5c9f69ed37"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Term Balance:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="450" y="80" width="85" height="20" uuid="4456bd54-0914-4048-b6c4-4f31b45b6c06"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="11" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{totalBalance}]]></textFieldExpression>
+            </textField>
+
+            <line>
+                <reportElement x="30" y="105" width="485" height="1" forecolor="#1565C0" uuid="c8756a36-22dd-4aa3-ba6a-37baaf118e3c"/>
+                <graphicElement>
+                    <pen lineWidth="1.0"/>
+                </graphicElement>
+            </line>
+
+            <staticText>
+                <reportElement x="30" y="110" width="180" height="25" forecolor="#1565C0" uuid="2b8f7f12-2947-436c-8223-126eea9fd42e"/>
+                <textElement verticalAlignment="Middle">
+                    <font fontName="Arial" size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[TOTAL OUTSTANDING BALANCE:]]></text>
+            </staticText>
+            <textField pattern="#,##0.00">
+                <reportElement x="450" y="110" width="85" height="25" forecolor="#D32F2F" uuid="5b154f8b-a82e-4825-9e1c-2781810f1e3e"/>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Arial" size="14" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{balanceForward}.add($F{totalBalance})]]></textFieldExpression>
+            </textField>
+
+            <rectangle radius="5">
+                <reportElement mode="Opaque" x="20" y="160" width="515" height="40" backcolor="#E3F2FD" uuid="f5a9c0a1-3bd8-46cb-9c0e-6b2fb25e01d0"/>
+                <graphicElement>
+                    <pen lineWidth="0.5" lineColor="#BBDEFB"/>
+                </graphicElement>
+            </rectangle>
+            <textField>
+                <reportElement x="30" y="170" width="495" height="20" uuid="324c1b73-8302-4a7c-b15e-2ab7b294ca84"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isBold="true" isItalic="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["For payment inquiries, please contact the accounts office."]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+
+    <noData>
+        <band height="200">
+            <textField>
+                <reportElement x="50" y="80" width="455" height="40" forecolor="#546E7A" uuid="2e7b20b3-f9d5-4b53-8c21-cfcb486b9e30"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="16" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["No payment records found for the selected period"]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="50" y="130" width="455" height="20" forecolor="#78909C" uuid="8e491831-7f85-403d-98ea-9630e102fa7d"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Arial" size="10" isItalic="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Student ID: " + $P{studentID} + " | Term: " + $P{termID} + " | Year: " + $P{year}]]></textFieldExpression>
+            </textField>
+        </band>
+    </noData>
+</jasperReport>

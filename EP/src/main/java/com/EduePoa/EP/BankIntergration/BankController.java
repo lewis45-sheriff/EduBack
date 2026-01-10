@@ -25,4 +25,13 @@ public class BankController {
         var response = bankService.getTransactions();
         return  ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Bank callback service is running");
+    }
+    @PostMapping("/reconcile-transaction")
+    ResponseEntity<?>reconcileTransaction(@RequestParam String  bankTransactionId, @RequestParam Long studentId){
+        var response  = bankService.reconcileTransaction(bankTransactionId,studentId);
+        return  ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 }

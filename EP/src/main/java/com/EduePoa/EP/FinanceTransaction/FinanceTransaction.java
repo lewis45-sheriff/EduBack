@@ -1,5 +1,6 @@
 package com.EduePoa.EP.FinanceTransaction;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -60,6 +61,13 @@ public class FinanceTransaction {
     private Year year;
     @Column(name = "invoice_id")
     private Long invoiceId;
+    @Enumerated(EnumType.STRING)
+    private Term term;
+    @Column(name = "opening_balance", precision = 10, scale = 2)
+    private BigDecimal openingBalance;
+
+    @Column(name = "closing_balance", precision = 10, scale = 2)
+    private BigDecimal closingBalance;
 
     @PrePersist
     protected void onCreate() {
@@ -83,6 +91,6 @@ public class FinanceTransaction {
     }
 
     public enum PaymentMethod {
-        CASH, MPESA, BANK, CHEQUE
+        CASH, MPESA, BANK, CHEQUE,OTHER,PAYPAL,EQUITEL,CARD
     }
 }

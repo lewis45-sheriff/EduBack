@@ -1,10 +1,12 @@
 package com.EduePoa.EP.FinanceTransaction;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.Year;
 import java.util.List;
 
 public interface FinanceTransactionRepository  extends JpaRepository<FinanceTransaction,Long> {
@@ -25,5 +27,28 @@ public interface FinanceTransactionRepository  extends JpaRepository<FinanceTran
             @Param("type") FinanceTransaction.TransactionType type,
             @Param("year") int year
     );
+//    @Query("SELECT COALESCE(SUM(ft.amount), 0) FROM FinanceTransaction ft " +
+//            "WHERE ft.studentId = :studentId " +
+//            "AND ft.transactionType = 'INCOME' " +
+//            "AND ft.term = :term " +
+//            "AND ft.year = :year")
+//    BigDecimal sumAmountByStudentAndTerm(
+//            @Param("studentId") Long studentId,
+//            @Param("transactionType") FinanceTransaction.TransactionType transactionType,
+//            @Param("term") Term term,
+//            @Param("year") Year year
+//    );
+//
+//    @Query("SELECT COALESCE(SUM(ft.amount), 0) FROM FinanceTransaction ft " +
+//            "WHERE ft.studentId = :studentId " +
+//            "AND ft.transactionType = 'INCOME' " +
+//            "AND ft.year < :year " +
+//            "AND ft.term < :term " +
+//            "ORDER BY ft.year DESC, ft.term DESC")
+//    BigDecimal findBalanceForward(
+//            @Param("studentId") Long studentId,
+//            @Param("year") Year year,
+//            @Param("term") Term term
+//    );
 
 }

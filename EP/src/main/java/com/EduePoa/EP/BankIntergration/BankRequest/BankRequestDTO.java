@@ -2,51 +2,92 @@ package com.EduePoa.EP.BankIntergration.BankRequest;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+
+import java.math.BigDecimal;
 
 @Setter
 @Getter
-@RequiredArgsConstructor
 public class BankRequestDTO {
 
-    @JsonProperty("MSISDN")
-    private String msisdn;
+    @JsonProperty("callbackType")
+    private String callbackType;
 
-    @JsonProperty("AccountNumber")
-    private String accountNumber;
+    @JsonProperty("customer")
+    private CustomerInfo customer;
 
-    @JsonProperty("TransID")
-    private String transId;
+    @JsonProperty("transaction")
+    private TransactionInfo transaction;
 
-    @JsonProperty("TransTime")
-    private String transTime;
+    @JsonProperty("bank")
+    private BankInfo bank;
 
-    @JsonProperty("TransAmount")
-    private String transAmount;
+    @Setter
+    @Getter
+    public static class CustomerInfo {
+        @JsonProperty("name")
+        private String name;
 
-    @JsonProperty("BusinessShortCode")
-    private String businessShortCode;
+        @JsonProperty("mobileNumber")
+        private String mobileNumber;
 
-    @JsonProperty("BillRefNumber")
-    private String billRefNumber;
+        @JsonProperty("reference")
+        private String reference;
+    }
 
-    @JsonProperty("InvoiceNumber")
-    private String invoiceNumber;
+    @Setter
+    @Getter
+    public static class TransactionInfo {
+        @JsonProperty("date")
+        private String date;
 
-    @JsonProperty("ThirdPartyTransID")
-    private String thirdPartyTransId;
+        @JsonProperty("reference")
+        private String reference;
 
-    @JsonProperty("TransactionType")
-    private String transactionType;
+        @JsonProperty("paymentMode")
+        private String paymentMode;
 
-    @JsonProperty("FirstName")
-    private String firstName;
+        @JsonProperty("amount")
+        private BigDecimal amount;
 
-    @JsonProperty("MiddleName")
-    private String middleName;
+        @JsonProperty("currency")
+        private String currency;
 
-    @JsonProperty("LastName")
-    private String lastName;
+        @JsonProperty("billNumber")
+        private String billNumber;
 
+        @JsonProperty("servedBy")
+        private String servedBy;
+
+        @JsonProperty("additionalInfo")
+        private String additionalInfo;
+
+        @JsonProperty("orderAmount")
+        private BigDecimal orderAmount;
+
+        @JsonProperty("serviceCharge")
+        private BigDecimal serviceCharge;
+
+        @JsonProperty("orderCurrency")
+        private String orderCurrency;
+
+        @JsonProperty("status")
+        private String status;
+
+        @JsonProperty("remarks")
+        private String remarks;
+    }
+
+    @Setter
+    @Getter
+    public static class BankInfo {
+        @JsonProperty("reference")
+        private String reference;
+
+        @JsonProperty("transactionType")
+        private String transactionType;
+
+        @JsonProperty("account")
+        private String account;
+    }
 }
