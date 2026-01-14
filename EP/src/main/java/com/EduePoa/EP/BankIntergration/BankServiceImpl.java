@@ -692,10 +692,49 @@ public class BankServiceImpl implements BankService {
 
     private BankResponseDTO convertToDTO(Bank bank) {
         BankResponseDTO dto = new BankResponseDTO();
-        // Map entity fields to DTO
-        // Implement based on your BankResponseDTO structure
+
+        dto.setId(bank.getId());
+
+        // Transaction details
+        dto.setTransType(bank.getTransactionType());
+        dto.setTransId(bank.getTransactionReference());
+        dto.setFtRef(bank.getBankReference());
+        dto.setTransTime(bank.getTransactionDate());
+        dto.setTransAmount(
+                bank.getAmount() != null ? bank.getAmount().toPlainString() : null
+        );
+
+        // Business / billing details
+        dto.setBusinessShortCode(bank.getServedBy()); // closest equivalent
+        dto.setBillRefNumber(bank.getBillNumber());
+        dto.setNarrative(bank.getNarrative());
+        dto.setTranParticulars(bank.getAdditionalInfo());
+        dto.setAccountNumber(bank.getAccountNumber());
+
+        // Customer details
+        dto.setMobile(bank.getMobileNumber());
+        dto.setCustomerName(bank.getCustomerName());
+
+        // Status
+        dto.setStatusCode(bank.getStatus());
+        dto.setStatusDescription(bank.getRemarks());
+
+        // Student details (avoid exposing full entity)
+        if (bank.getStudent() != null) {
+            dto.setStudentId(bank.getStudent().getId());
+            dto.setStudentName(
+                    String.format(
+                            "%s %s",
+                            bank.getStudent().getFirstName(),
+                            bank.getStudent().getLastName()
+                    ).trim()
+            );
+            dto.setStudentAdmissionNumber(bank.getStudent().getAdmissionNumber());
+        }
+
         return dto;
     }
+
 
     private List<BankResponseDTO> convertToDTOList(List<Bank> banks) {
         return banks.stream()
