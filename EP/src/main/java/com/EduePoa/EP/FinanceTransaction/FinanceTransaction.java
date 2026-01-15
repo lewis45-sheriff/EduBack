@@ -69,22 +69,22 @@ public class FinanceTransaction {
     @Column(name = "closing_balance", precision = 10, scale = 2)
     private BigDecimal closingBalance;
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        if (reference == null || reference.isEmpty()) {
-            reference = generateReference();
-        }
-    }
+//    @PrePersist
+//    protected void onCreate() {
+//        createdAt = LocalDateTime.now();
+//        if (reference == null || reference.isEmpty()) {
+//            reference = generateReference();
+//        }
+//    }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 
-    private String generateReference() {
-        return "TXN" + System.currentTimeMillis();
-    }
+//    private String generateReference() {
+//        return "TXN" + System.currentTimeMillis();
+//    }
 
     public enum TransactionType {
         INCOME, EXPENSE

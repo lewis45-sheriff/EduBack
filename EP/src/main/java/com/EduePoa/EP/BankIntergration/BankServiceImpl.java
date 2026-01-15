@@ -150,9 +150,7 @@ public class BankServiceImpl implements BankService {
             CreateTransactionDTO transactionDTO = createTransactionDTO(bankRequestDTO, invoice, currentTerm, currentYear);
 
             // Call the existing createTransaction method
-            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(
-                    student.getId(),
-                    transactionDTO
+            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(student.getId(), transactionDTO
             );
 
             if (transactionResponse.getStatusCode() != HttpStatus.CREATED.value()) {
