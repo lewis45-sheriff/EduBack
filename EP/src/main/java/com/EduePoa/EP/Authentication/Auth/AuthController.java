@@ -5,6 +5,8 @@ import com.EduePoa.EP.Authentication.Auth.Request.LoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.RequestOTP;
 import com.EduePoa.EP.Authentication.Auth.Request.ResetPassword;
 import com.EduePoa.EP.Authentication.Auth.Request.ValidateOtp;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,8 +22,8 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/login")
-    ResponseEntity<?>login(@RequestBody LoginRequest loginRequest){
-        var response = authService.login(loginRequest);
+    ResponseEntity<?>login(@RequestBody LoginRequest loginRequest, HttpServletResponse httpResponse, HttpServletRequest httpRequest){
+        var response = authService.login(loginRequest,httpResponse,httpRequest);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
     @PostMapping("validate-otp")
@@ -37,6 +39,11 @@ public class AuthController {
     @PostMapping("/reset-password")
     ResponseEntity<?>resetPassword(@RequestBody ResetPassword requestOTP){
         var response = authService.resetPassword(requestOTP);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @PostMapping("/log-out")
+    ResponseEntity<?>logOut(HttpServletResponse httpResponse, HttpServletRequest httpRequest){
+        var response = authService.logOut(httpResponse,httpRequest);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 }

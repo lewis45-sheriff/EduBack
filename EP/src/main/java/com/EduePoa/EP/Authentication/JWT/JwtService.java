@@ -164,5 +164,9 @@ public class JwtService {
         Object principal = authentication.getPrincipal();
         return (principal instanceof UserDetails) ? ((UserDetails) principal).getUsername() : principal.toString();
     }
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username != null && username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
 
 }
