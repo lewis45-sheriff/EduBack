@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Finance;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Responses.StudentBalanceDTO;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
@@ -9,7 +10,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Year;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -65,5 +70,49 @@ public class FinanceServiceImpl implements FinanceService{
         }
         return response;
     }
+    @Override
+    public CustomResponse<?> getStudentsWithBalancePerStudent(Long studentId) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            Term currentTerm = Term.getCurrentTerm();
+            if (currentTerm == null) {
+                response.setMessage("No active term found.");
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setEntity(null);
+                return response;
+            }
+
+            Year currentYear = Year.now();
+            Optional<Finance> finances;
+
+            if (studentId != null) {
+                finances = financeRepository.findByStudentIdAndTermAndYear(studentId, currentTerm, currentYear);
+            } else {
+                finances = financeRepository.findByTermAndYear(currentTerm, currentYear);
+            }
+
+            // Map results to a DTO or a simple structure
+            List<Map<String, Object>> balances = finances.stream().map(f -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("studentId", f.getStudentId());
+                map.put("totalFee", f.getTotalFeeAmount());
+                map.put("paid", f.getPaidAmount());
+                map.put("balance", f.getBalance());
+                map.put("term", f.getTerm());
+                map.put("year", f.getYear());
+                return map;
+            }).toList();
+
+            response.setEntity(balances);
+            response.setMessage("Balances retrieved successfully.");
+            response.setStatusCode(HttpStatus.OK.value());
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
 
 }

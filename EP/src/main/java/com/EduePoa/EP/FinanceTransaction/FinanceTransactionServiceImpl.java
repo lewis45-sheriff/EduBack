@@ -22,6 +22,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -306,7 +308,13 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
     private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO, Student student) {
         FinanceTransaction transaction = new FinanceTransaction();
         transaction.setStudentId(studentId);
-        transaction.setStudentName(student.getFirstName());
+//        transaction.setStudentName(
+//                Stream.of(student.getFirstName(), student.getLastName())
+//                        .filter(Objects::nonNull)
+//                        .collect(Collectors.joining(" "))
+//        );
+        transaction.setStudentName(student.getFirstName() + " " + student.getLastName());
+
         transaction.setAdmissionNumber(student.getAdmissionNumber());
         transaction.setTransactionType(createTransactionDTO.getTransactionType());
         transaction.setCategory(createTransactionDTO.getCategory());

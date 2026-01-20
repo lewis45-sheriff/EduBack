@@ -46,4 +46,5 @@ public class AuthController {
         var response = authService.logOut(httpResponse,httpRequest);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+
 }

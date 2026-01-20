@@ -134,11 +134,7 @@ public class AuthService {
             cookieService.createRefreshTokenCookie(httpResponse, refreshToken);
 
             // Set authentication in SecurityContext
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    user,
-                    jwtToken,
-                    user.getAuthorities()
-            );
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, jwtToken, user.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
             log.debug("Set authentication for user: {}", user.getUsername());
 
@@ -157,11 +153,8 @@ public class AuthService {
 
 
             response.setEntity(authResponse);
-            response.setMessage("Login successful. OTP sent to your email.");
+            response.setMessage("Login successful.");
             response.setStatusCode(HttpStatus.OK.value());
-
-            log.info("Login successful for user: {}", user.getEmail());
-
         } catch (AuthenticationException e) {
             log.error("Authentication failed: {}", e.getMessage());
             response.setMessage("Invalid email or password");

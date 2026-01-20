@@ -13,4 +13,6 @@ public interface FinanceRepository extends JpaRepository<Finance,Long> {
     Optional<Finance> findByStudentId(Long studentId);
     Optional<Finance> findByStudentIdAndTermAndYear(Long studentId, Term term, Year year);
     List<Finance> findByBalanceNot(BigDecimal balance);
+    Optional<Finance> findByTermAndYear(Term term, Year year);
+
 }
