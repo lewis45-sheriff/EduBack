@@ -6,13 +6,21 @@ import com.EduePoa.EP.Transport.AssignTransport.AssignTransport;
 import com.EduePoa.EP.Transport.AssignTransport.AssignTransportRepository;
 import com.EduePoa.EP.Transport.AssignTransport.Request.AssignTransportRequestDTO;
 import com.EduePoa.EP.Transport.AssignTransport.Response.AssignTransportResponseDTO;
+import com.EduePoa.EP.Transport.AssignTransport.Response.StudentTransportDTO;
 import com.EduePoa.EP.Transport.Request.TransportRequestDTO;
 import com.EduePoa.EP.Transport.Responses.TransportResponseDTO;
+import com.EduePoa.EP.Transport.TransportTransactions.Requests.TransportTransactionRequestDTO;
+import com.EduePoa.EP.Transport.TransportTransactions.Responses.TransportTransactionResponseDTO;
+import com.EduePoa.EP.Transport.TransportTransactions.TransportTransactions;
+import com.EduePoa.EP.Transport.TransportTransactions.TransportTransactionsRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -21,6 +29,7 @@ public class TransportServiceImpl implements  TransportService {
     private final TransportRepository transportRepository;
     private final StudentRepository studentRepository;
     private final AssignTransportRepository assignTransportRepository;
+    private final TransportTransactionsRepository transportTransactionsRepository;
 
     @Override
     public CustomResponse<?> create(TransportRequestDTO transportRequestDTO) {
@@ -243,6 +252,143 @@ public class TransportServiceImpl implements  TransportService {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
         return response;
+    }
+
+    @Override
+    public CustomResponse<?> studentTransport() {
+        CustomResponse<List<StudentTransportDTO>> response = new CustomResponse<>();
+        try {
+
+            List<AssignTransport> assignments = assignTransportRepository.findAll();
+
+            List<StudentTransportDTO> data = assignments.stream().map(at ->
+                    StudentTransportDTO.builder()
+                            .studentId(at.getStudent().getId())
+                            .admissionNumber(at.getStudent().getAdmissionNumber())
+                            .fullName(
+                                    at.getStudent().getFirstName() + " " +
+                                            at.getStudent().getLastName()
+                            )
+                            .pickupLocation(at.getPickupLocation())
+                            .transportType(at.getTransportType())
+                            .vehicleName(at.getVehicle().getVehicleNumber())
+                            .build()
+            ).toList();
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Students with transport retrieved successfully");
+            response.setEntity(data);
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> createTransportTransaction(Long studentId,TransportTransactionRequestDTO transportTransactionRequestDTO) {
+
+        CustomResponse<TransportTransactions> response = new CustomResponse<>();
+
+        try {
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found"));
+
+           
+            Transport transport = transportRepository.findById(transportTransactionRequestDTO.getTransportId())
+                    .orElseThrow(() -> new RuntimeException("Transport not found"));
+
+
+            TransportTransactions transaction = getTransportTransactions(transportTransactionRequestDTO, student, transport);
+
+
+            TransportTransactions savedTransaction = transportTransactionsRepository.save(transaction);
+
+            response.setEntity(savedTransaction);
+            response.setMessage("Transport transaction created successfully");
+            response.setStatusCode(HttpStatus.CREATED.value());
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+
+        return response;
+    }
+    @Override
+    public CustomResponse<?> getAllTransportTransactions() {
+
+        CustomResponse<List<TransportTransactionResponseDTO>> response = new CustomResponse<>();
+
+        try {
+
+            List<TransportTransactions> transactions =
+                    transportTransactionsRepository.findAll();
+
+            if (transactions.isEmpty()) {
+                response.setEntity(Collections.emptyList());
+                response.setMessage("No transport transactions found");
+                response.setStatusCode(HttpStatus.OK.value());
+                return response;
+            }
+
+            List<TransportTransactionResponseDTO> dtoList = new ArrayList<>();
+
+            for (TransportTransactions transaction : transactions) {
+
+                TransportTransactionResponseDTO dto =
+                        new TransportTransactionResponseDTO();
+
+                dto.setId(transaction.getId());
+                dto.setAmount(transaction.getAmount());
+                dto.setPaymentMethod(transaction.getPaymentMethod());
+                dto.setTerm(transaction.getTerm());
+                dto.setYear(transaction.getYear());
+                dto.setTransportType(transaction.getTransportType());
+
+
+                Student student = transaction.getStudent();
+                dto.setStudentFullName(
+                        student.getFirstName() + " " + student.getLastName()
+                );
+
+
+                Transport transport = transaction.getTransport();
+                dto.setTransportName(transport.getVehicleNumber());
+                // change to getVehicleName() if that's what you use
+
+                dtoList.add(dto);
+            }
+
+            response.setEntity(dtoList);
+            response.setMessage("Transport transactions retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (RuntimeException e) {
+
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+
+        return response;
+    }
+
+
+    @NotNull
+    private static TransportTransactions getTransportTransactions(TransportTransactionRequestDTO transportTransactionRequestDTO, Student student, Transport transport) {
+        TransportTransactions transaction = new TransportTransactions();
+        transaction.setAmount(transportTransactionRequestDTO.getAmount());
+        transaction.setPaymentMethod(transportTransactionRequestDTO.getPaymentMethod());
+        transaction.setTerm(transportTransactionRequestDTO.getTerm());
+        transaction.setYear(transportTransactionRequestDTO.getYear());
+        transaction.setTransportType(transportTransactionRequestDTO.getTransportType());
+        transaction.setStudent(student);
+        transaction.setTransport(transport);
+        return transaction;
     }
 
 

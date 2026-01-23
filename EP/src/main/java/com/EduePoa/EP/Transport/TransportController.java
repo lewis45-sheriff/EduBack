@@ -3,6 +3,7 @@ package com.EduePoa.EP.Transport;
 import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
 import com.EduePoa.EP.Transport.AssignTransport.Request.AssignTransportRequestDTO;
 import com.EduePoa.EP.Transport.Request.TransportRequestDTO;
+import com.EduePoa.EP.Transport.TransportTransactions.Requests.TransportTransactionRequestDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +54,22 @@ public class TransportController {
         var response = transportService.deleteAssignments(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("students-transport")
+    ResponseEntity<?> studentTransport(){
+        var response = transportService.studentTransport();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @PostMapping("create-transport-transaction/{studentId}")
+    ResponseEntity<?> createTransportTransaction(@PathVariable Long studentId,@RequestBody TransportTransactionRequestDTO transportTransactionRequestDTO){
+        var response = transportService.createTransportTransaction(studentId,transportTransactionRequestDTO);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @GetMapping("transactions/all")
+    ResponseEntity<?> getAllTransportTransactions(){
+        var response = transportService.getAllTransportTransactions();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 

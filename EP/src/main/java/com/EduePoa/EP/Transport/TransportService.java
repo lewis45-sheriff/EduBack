@@ -2,6 +2,7 @@ package com.EduePoa.EP.Transport;
 
 import com.EduePoa.EP.Transport.AssignTransport.Request.AssignTransportRequestDTO;
 import com.EduePoa.EP.Transport.Request.TransportRequestDTO;
+import com.EduePoa.EP.Transport.TransportTransactions.Requests.TransportTransactionRequestDTO;
 import com.EduePoa.EP.Utils.CustomResponse;
 
 public interface TransportService {
@@ -18,4 +19,7 @@ public interface TransportService {
     CustomResponse<?>assign(AssignTransportRequestDTO request);
     CustomResponse<?>assignments();
     CustomResponse<?>deleteAssignments(Long id);
+    CustomResponse<?>studentTransport();
+    CustomResponse<?>createTransportTransaction(Long id,TransportTransactionRequestDTO transportTransactionRequestDTO);
+    CustomResponse<?>getAllTransportTransactions();
 }
