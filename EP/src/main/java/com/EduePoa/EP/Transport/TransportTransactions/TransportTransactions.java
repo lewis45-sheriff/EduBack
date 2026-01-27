@@ -8,6 +8,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "transport_transactions")
@@ -45,4 +48,21 @@ public class TransportTransactions {
     @JsonIgnore
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime transactionTime;
+    @Column(nullable = false)
+    private String status;
+    @Column(nullable = false)
+    private Double expectedFee;
+
+    @Column(nullable = false)
+    private Double totalPaidBeforeThis;
+
+    @Column(nullable = false)
+    private Double totalPaidAfterThis;
+
+    @Column(nullable = false)
+    private Double arrearsAfterThis;
+
 }

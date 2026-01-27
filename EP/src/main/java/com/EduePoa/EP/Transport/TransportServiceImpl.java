@@ -9,22 +9,24 @@ import com.EduePoa.EP.Transport.AssignTransport.Response.AssignTransportResponse
 import com.EduePoa.EP.Transport.AssignTransport.Response.StudentTransportDTO;
 import com.EduePoa.EP.Transport.Request.TransportRequestDTO;
 import com.EduePoa.EP.Transport.Responses.TransportResponseDTO;
+import com.EduePoa.EP.Transport.Responses.TransportUtilization;
 import com.EduePoa.EP.Transport.TransportTransactions.Requests.TransportTransactionRequestDTO;
 import com.EduePoa.EP.Transport.TransportTransactions.Responses.TransportTransactionResponseDTO;
 import com.EduePoa.EP.Transport.TransportTransactions.TransportTransactions;
 import com.EduePoa.EP.Transport.TransportTransactions.TransportTransactionsRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TransportServiceImpl implements  TransportService {
     private final TransportRepository transportRepository;
     private final StudentRepository studentRepository;
@@ -286,31 +288,171 @@ public class TransportServiceImpl implements  TransportService {
         }
         return response;
     }
-
     @Override
-    public CustomResponse<?> createTransportTransaction(Long studentId,TransportTransactionRequestDTO transportTransactionRequestDTO) {
-
-        CustomResponse<TransportTransactions> response = new CustomResponse<>();
+    public CustomResponse<?> createTransportTransaction(Long studentId, TransportTransactionRequestDTO transportTransactionRequestDTO) {
+        CustomResponse<Map<String, Object>> response = new CustomResponse<>();
 
         try {
+            log.info("Creating transaction for studentId: {}, transportId: {}",
+                    studentId, transportTransactionRequestDTO.getVehicleId());
+
             Student student = studentRepository.findById(studentId)
                     .orElseThrow(() -> new RuntimeException("Student not found"));
 
-           
-            Transport transport = transportRepository.findById(transportTransactionRequestDTO.getTransportId())
+            Transport transport = transportRepository.findById(transportTransactionRequestDTO.getVehicleId())
                     .orElseThrow(() -> new RuntimeException("Transport not found"));
 
+            // Get the expected fee based on transport type
+            Double expectedFee = getExpectedFee(transport, transportTransactionRequestDTO.getTransportType());
 
-            TransportTransactions transaction = getTransportTransactions(transportTransactionRequestDTO, student, transport);
+            if (expectedFee == null || expectedFee == 0.0) {
+                response.setEntity(null);
+                response.setMessage("Transport fee not configured for " + transportTransactionRequestDTO.getTransportType());
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
 
+            // Get the latest arrears from the database (most accurate)
+            Double latestArrears = transportTransactionsRepository.getLatestArrears(
+                    studentId,
+                    transportTransactionRequestDTO.getVehicleId(),
+                    transportTransactionRequestDTO.getTerm(),
+                    transportTransactionRequestDTO.getYear(),
+                    transportTransactionRequestDTO.getTransportType()
+            );
+
+            // Calculate total paid before this transaction
+            Double totalPaidBefore;
+            if (latestArrears != null) {
+                // If there are previous transactions, calculate from the latest arrears
+                totalPaidBefore = expectedFee - latestArrears;
+            } else {
+                // No previous transactions
+                totalPaidBefore = 0.0;
+                latestArrears = expectedFee;
+            }
+
+            log.info("Expected Fee: {}, Latest Arrears: {}, Total Paid Before: {}, Attempted Payment: {}",
+                    expectedFee, latestArrears, totalPaidBefore, transportTransactionRequestDTO.getAmount());
+
+            // Check if already fully paid
+            if (latestArrears <= 0) {
+                Map<String, Object> errorDetails = new HashMap<>();
+                errorDetails.put("expectedFee", expectedFee);
+                errorDetails.put("totalPaid", totalPaidBefore);
+                errorDetails.put("totalArrears", 0.0);
+                errorDetails.put("attemptedPayment", transportTransactionRequestDTO.getAmount());
+                errorDetails.put("message", "Transport fee is already fully paid.");
+
+                response.setEntity(errorDetails);
+                response.setMessage("Payment rejected: Transport fee already fully paid");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
+
+            // Check for overpayment - reject if payment exceeds remaining balance
+            if (transportTransactionRequestDTO.getAmount() > latestArrears) {
+                Map<String, Object> errorDetails = new HashMap<>();
+                errorDetails.put("expectedFee", expectedFee);
+                errorDetails.put("totalPaid", totalPaidBefore);
+                errorDetails.put("totalArrears", latestArrears);
+                errorDetails.put("attemptedPayment", transportTransactionRequestDTO.getAmount());
+                errorDetails.put("maximumAllowedPayment", latestArrears);
+                errorDetails.put("message", String.format(
+                        "Payment amount (%.2f) exceeds remaining balance (%.2f). Maximum allowed payment is %.2f",
+                        transportTransactionRequestDTO.getAmount(),
+                        latestArrears,
+                        latestArrears
+                ));
+
+                response.setEntity(errorDetails);
+                response.setMessage("Overpayment not allowed");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
+
+            // Validate payment amount is positive
+            if (transportTransactionRequestDTO.getAmount() <= 0) {
+                response.setEntity(null);
+                response.setMessage("Payment amount must be greater than zero");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
+
+            // Calculate new totals after this payment
+            Double totalPaidAfter = totalPaidBefore + transportTransactionRequestDTO.getAmount();
+            Double arrearsAfter = expectedFee - totalPaidAfter;
+
+            // Determine payment status
+            String paymentStatus;
+            if (Math.abs(arrearsAfter) < 0.01) { // Handle floating point precision
+                paymentStatus = "COMPLETED";
+                arrearsAfter = 0.0;
+            } else {
+                paymentStatus = "PARTIAL";
+            }
+
+            // Create and save transaction with all calculated values
+            TransportTransactions transaction = getTransportTransactions(
+                    transportTransactionRequestDTO,
+                    student,
+                    transport,
+                    expectedFee,
+                    totalPaidBefore,
+                    totalPaidAfter,
+                    arrearsAfter
+            );
+
+            transaction.setStatus(paymentStatus);
+
+            log.info("Transaction before save - Student ID: {}, Transport ID: {}, Status: {}, Arrears After: {}",
+                    transaction.getStudent().getId(),
+                    transaction.getTransport().getId(),
+                    transaction.getStatus(),
+                    transaction.getArrearsAfterThis());
 
             TransportTransactions savedTransaction = transportTransactionsRepository.save(transaction);
 
-            response.setEntity(savedTransaction);
-            response.setMessage("Transport transaction created successfully");
+            // Prepare response payload
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("transaction", savedTransaction);
+            responseData.put("transactionId", savedTransaction.getId());
+            responseData.put("studentId", student.getId());
+            responseData.put("studentName", student.getFirstName() + " " + student.getLastName());
+            responseData.put("admissionNumber", student.getAdmissionNumber());
+            responseData.put("vehicleNumber", transport.getVehicleNumber());
+            responseData.put("route", transport.getRoute());
+            responseData.put("transportType", transportTransactionRequestDTO.getTransportType());
+            responseData.put("term", transportTransactionRequestDTO.getTerm());
+            responseData.put("year", transportTransactionRequestDTO.getYear());
+            responseData.put("expectedFee", expectedFee);
+            responseData.put("currentPayment", transportTransactionRequestDTO.getAmount());
+            responseData.put("totalPaidBefore", totalPaidBefore);
+            responseData.put("totalPaidAfter", totalPaidAfter);
+            responseData.put("arrearsAfter", arrearsAfter);
+            responseData.put("paymentStatus", paymentStatus);
+            responseData.put("transactionTime", savedTransaction.getTransactionTime());
+
+            String successMessage;
+            if (paymentStatus.equals("COMPLETED")) {
+                successMessage = String.format(
+                        "Payment of %.2f processed successfully. Transport fee fully paid!",
+                        transportTransactionRequestDTO.getAmount()
+                );
+            } else {
+                successMessage = String.format(
+                        "Payment of %.2f processed successfully. Remaining balance: %.2f",
+                        transportTransactionRequestDTO.getAmount(),
+                        arrearsAfter
+                );
+            }
+
+            response.setEntity(responseData);
+            response.setMessage(successMessage);
             response.setStatusCode(HttpStatus.CREATED.value());
 
         } catch (RuntimeException e) {
+            log.error("Error creating transport transaction", e);
             response.setEntity(null);
             response.setMessage(e.getMessage());
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -318,63 +460,203 @@ public class TransportServiceImpl implements  TransportService {
 
         return response;
     }
+    private Double getExpectedFee(Transport transport, String transportType) {
+        if (transportType == null) {
+            return 0.0;
+        }
+
+        String normalized = transportType.trim().toUpperCase();
+
+        if (normalized.contains("ONE") || normalized.equals("ONE_WAY")) {
+            return transport.getRoutePriceOneWay();
+        } else if (normalized.contains("TWO") || normalized.equals("TWO_WAY")) {
+            return transport.getRoutePriceTwoWay();
+        }
+
+        return 0.0;
+    }
     @Override
     public CustomResponse<?> getAllTransportTransactions() {
-
         CustomResponse<List<TransportTransactionResponseDTO>> response = new CustomResponse<>();
 
         try {
+            log.info("Fetching all transport transactions");
 
-            List<TransportTransactions> transactions =
-                    transportTransactionsRepository.findAll();
+            List<TransportTransactions> transactions = transportTransactionsRepository.findAll();
 
             if (transactions.isEmpty()) {
+                log.info("No transport transactions found in the database");
                 response.setEntity(Collections.emptyList());
                 response.setMessage("No transport transactions found");
                 response.setStatusCode(HttpStatus.OK.value());
                 return response;
             }
 
-            List<TransportTransactionResponseDTO> dtoList = new ArrayList<>();
+            log.info("Found {} transport transaction(s)", transactions.size());
 
-            for (TransportTransactions transaction : transactions) {
-
-                TransportTransactionResponseDTO dto =
-                        new TransportTransactionResponseDTO();
-
-                dto.setId(transaction.getId());
-                dto.setAmount(transaction.getAmount());
-                dto.setPaymentMethod(transaction.getPaymentMethod());
-                dto.setTerm(transaction.getTerm());
-                dto.setYear(transaction.getYear());
-                dto.setTransportType(transaction.getTransportType());
-
-
-                Student student = transaction.getStudent();
-                dto.setStudentFullName(
-                        student.getFirstName() + " " + student.getLastName()
-                );
-
-
-                Transport transport = transaction.getTransport();
-                dto.setTransportName(transport.getVehicleNumber());
-                // change to getVehicleName() if that's what you use
-
-                dtoList.add(dto);
-            }
+            List<TransportTransactionResponseDTO> dtoList = transactions.stream()
+                    .map(this::getTransportTransactionResponseDTO)
+                    .collect(Collectors.toList());
 
             response.setEntity(dtoList);
-            response.setMessage("Transport transactions retrieved successfully");
+            response.setMessage(String.format("Successfully retrieved %d transport transaction(s)", dtoList.size()));
             response.setStatusCode(HttpStatus.OK.value());
 
-        } catch (RuntimeException e) {
+            log.info("Successfully retrieved {} transport transactions", dtoList.size());
 
+        } catch (Exception e) {
+            log.error("Error retrieving transport transactions: {}", e.getMessage(), e);
             response.setEntity(null);
-            response.setMessage(e.getMessage());
+            response.setMessage("Failed to retrieve transport transactions: " + e.getMessage());
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
         return response;
+    }
+
+    @NotNull
+    private TransportTransactionResponseDTO getTransportTransactionResponseDTO(TransportTransactions transaction) {
+        TransportTransactionResponseDTO dto = new TransportTransactionResponseDTO();
+
+        dto.setId(transaction.getId());
+        dto.setAmount(transaction.getAmount());
+        dto.setPaymentMethod(transaction.getPaymentMethod());
+        dto.setTerm(transaction.getTerm());
+        dto.setYear(transaction.getYear());
+        dto.setTransportType(transaction.getTransportType());
+        dto.setTransactionTime(transaction.getTransactionTime());
+        dto.setStatus(transaction.getStatus());
+
+        // Student information
+        Student student = transaction.getStudent();
+        dto.setStudentFullName(student.getFirstName() + " " + student.getLastName());
+
+        // Transport information
+        Transport transport = transaction.getTransport();
+        dto.setTransportName(transport.getVehicleNumber());
+
+        // Financial information - fetched from persisted fields for accuracy
+        dto.setExpectedFee(transaction.getExpectedFee());
+        dto.setTotalPaid(transaction.getTotalPaidAfterThis());
+        dto.setTotalArrears(transaction.getArrearsAfterThis());
+
+        return dto;
+    }
+
+    @Override
+    public CustomResponse<?> getUtilizationSummary() {
+        CustomResponse<List<TransportUtilization>> response = new CustomResponse<>();
+        try {
+            List<Transport> allVehicles = transportRepository.findAll();
+            List<TransportUtilization> utilizationList = new ArrayList<>();
+
+            for (Transport vehicle : allVehicles) {
+                // Get assigned students count for this vehicle
+                long assignedStudents = assignTransportRepository.countByVehicle(vehicle);
+
+                // Calculate utilization percentage
+                double utilizationPercentage = vehicle.getCapacity() > 0
+                        ? (assignedStudents * 100.0) / vehicle.getCapacity()
+                        : 0.0;
+
+                // Get all transport transactions for this vehicle
+                List<TransportTransactions> transactions = transportTransactionsRepository.findByTransport(vehicle);
+
+                // Calculate expected revenue (sum of all assigned students' fees)
+                double expectedRevenue = 0.0;
+
+                List<AssignTransport> assignments = assignTransportRepository.findByVehicle(vehicle);
+
+
+
+                for (AssignTransport assignment : assignments) {
+                    String transportType = assignment.getTransportType();
+                    System.out.println("Assignment ID: " + assignment.getId() +
+                            ", Transport Type: '" + transportType + "'");
+
+                    if (transportType == null) {
+                        System.out.println("  -> Transport type is NULL, skipping");
+                        continue;
+                    }
+
+                    String normalizedType = transportType.trim().toUpperCase();
+
+                    if (normalizedType.contains("ONE") || normalizedType.equals("ONE_WAY") || normalizedType.equals("ONEWAY")) {
+                        double price = vehicle.getRoutePriceOneWay() != null ? vehicle.getRoutePriceOneWay() : 0.0;
+                        System.out.println("  -> Matched ONE_WAY, Price: " + price);
+                        expectedRevenue += price;
+                    } else if (normalizedType.contains("TWO") || normalizedType.equals("TWO_WAY") || normalizedType.equals("TWOWAY")) {
+                        double price = vehicle.getRoutePriceTwoWay() != null ? vehicle.getRoutePriceTwoWay() : 0.0;
+                        System.out.println("  -> Matched TWO_WAY, Price: " + price);
+                        expectedRevenue += price;
+                    } else {
+                        System.out.println("  -> NO MATCH for transport type: '" + transportType + "'");
+                    }
+                }
+
+
+
+                // Calculate collected revenue (sum of all payments made)
+                double collectedRevenue = transactions.stream()
+                        .mapToDouble(TransportTransactions::getAmount)
+                        .sum();
+
+                // Calculate pending revenue
+                double pendingRevenue = expectedRevenue - collectedRevenue;
+
+                TransportUtilization utilization = TransportUtilization.builder()
+                        .vehicleId(vehicle.getId().intValue())
+                        .vehicleNumber(vehicle.getVehicleNumber())
+                        .route(vehicle.getRoute())
+                        .capacity(vehicle.getCapacity())
+                        .assignedStudents((int) assignedStudents)
+                        .utilizationPercentage(Math.round(utilizationPercentage * 100.0) / 100.0)
+                        .expectedRevenue(Math.round(expectedRevenue * 100.0) / 100.0)
+                        .collectedRevenue(Math.round(collectedRevenue * 100.0) / 100.0)
+                        .pendingRevenue(Math.round(pendingRevenue * 100.0) / 100.0)
+                        .build();
+
+                utilizationList.add(utilization);
+            }
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Utilization summary retrieved successfully");
+            response.setEntity(utilizationList);
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @NotNull
+    private static TransportTransactions getTransportTransactions(
+            TransportTransactionRequestDTO transportTransactionRequestDTO,
+            Student student,
+            Transport transport,
+            Double expectedFee,
+            Double totalPaidBefore,
+            Double totalPaidAfter,
+            Double arrearsAfter) {
+
+        TransportTransactions transaction = new TransportTransactions();
+        transaction.setAmount(transportTransactionRequestDTO.getAmount());
+        transaction.setPaymentMethod(transportTransactionRequestDTO.getPaymentMethod());
+        transaction.setTerm(transportTransactionRequestDTO.getTerm());
+        transaction.setYear(transportTransactionRequestDTO.getYear());
+        transaction.setTransportType(transportTransactionRequestDTO.getTransportType());
+        transaction.setStudent(student);
+        transaction.setTransport(transport);
+
+        // Set the new fields
+        transaction.setExpectedFee(expectedFee);
+        transaction.setTotalPaidBeforeThis(totalPaidBefore);
+        transaction.setTotalPaidAfterThis(totalPaidAfter);
+        transaction.setArrearsAfterThis(arrearsAfter);
+
+        return transaction;
     }
 
 
@@ -387,6 +669,7 @@ public class TransportServiceImpl implements  TransportService {
         transaction.setYear(transportTransactionRequestDTO.getYear());
         transaction.setTransportType(transportTransactionRequestDTO.getTransportType());
         transaction.setStudent(student);
+
         transaction.setTransport(transport);
         return transaction;
     }

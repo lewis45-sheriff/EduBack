@@ -69,6 +69,11 @@ public class TransportController {
         var response = transportService.getAllTransportTransactions();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("utilization/summary")
+    ResponseEntity<?> getUtilizationSummary(){
+        var response = transportService.getUtilizationSummary();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 
 

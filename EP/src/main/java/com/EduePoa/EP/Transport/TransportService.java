@@ -22,4 +22,5 @@ public interface TransportService {
     CustomResponse<?>studentTransport();
     CustomResponse<?>createTransportTransaction(Long id,TransportTransactionRequestDTO transportTransactionRequestDTO);
     CustomResponse<?>getAllTransportTransactions();
+    CustomResponse<?>getUtilizationSummary();
 }

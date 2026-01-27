@@ -9,6 +9,6 @@ public class TransportTransactionRequestDTO {
     private String paymentMethod;
     private Term term;
     private Integer year;
-    private Long transportId;
+    private Long vehicleId;
     private String transportType;
 }
