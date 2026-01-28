@@ -66,10 +66,10 @@ public class AuthService {
                 user.setPasswordReset(true);
                 userRepository.save(user);
 
-                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-                response.setMessage("Password reset required. Please reset your password to continue.");
-                response.setEntity(null);
-                return response;
+//                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+//                response.setMessage("Password reset required. Please reset your password to continue.");
+//                response.setEntity(null);
+//                return response;
             }
 
             // Check if user account is active

@@ -304,6 +304,50 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         return response;
     }
 
+    @Override
+    public CustomResponse<?> getStudentPayment(Long studentId) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            // Fetch all income transactions for the student
+            List<FinanceTransaction> transactions = financeTransactionRepository
+                    .findByStudentIdAndTransactionTypeOrderByTransactionDateAsc(
+                            studentId,
+                            FinanceTransaction.TransactionType.INCOME
+                    );
+
+            if (transactions.isEmpty()) {
+                response.setEntity(BigDecimal.ZERO);
+                response.setMessage("No payment records found for student");
+                response.setStatusCode(HttpStatus.OK.value());
+                return response;
+            }
+
+            // Calculate cumulative amount
+            BigDecimal cumulativePaid = transactions.stream()
+                    .map(FinanceTransaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Create response with detailed info
+            Map<String, Object> paymentSummary = new HashMap<>();
+            paymentSummary.put("studentId", studentId);
+            paymentSummary.put("studentName", transactions.get(0).getStudentName());
+            paymentSummary.put("admissionNumber", transactions.get(0).getAdmissionNumber());
+            paymentSummary.put("cumulativePaid", cumulativePaid);
+            paymentSummary.put("totalTransactions", transactions.size());
+            paymentSummary.put("transactions", transactions);
+
+            response.setEntity(paymentSummary);
+            response.setMessage("Student payment retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
 
     private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO, Student student) {
         FinanceTransaction transaction = new FinanceTransaction();

@@ -29,8 +29,9 @@ public class BankController {
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Bank callback service is running");
     }
-    @PostMapping("/reconcile-transaction")
-    ResponseEntity<?>reconcileTransaction(@RequestParam String  bankTransactionId, @RequestParam Long studentId){
+
+    @PostMapping("/reconcile-transaction/{bankTransactionId}/{studentId}")
+    ResponseEntity<?>reconcileTransaction(@PathVariable String  bankTransactionId, @PathVariable Long studentId){
         var response  = bankService.reconcileTransaction(bankTransactionId,studentId);
         return  ResponseEntity.status(response.getStatusCode()).body(response);
     }
