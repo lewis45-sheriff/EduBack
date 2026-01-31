@@ -10,6 +10,7 @@ import com.EduePoa.EP.Authentication.Config.TokenBlacklistService;
 import com.EduePoa.EP.Authentication.Email.EmailService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.Authentication.JWT.JwtService;
+import com.EduePoa.EP.Authentication.Role.Response.PermissionDTO;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
@@ -33,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -65,11 +67,6 @@ public class AuthService {
             if (user.getPassword() == null || user.getPassword().trim().isEmpty() || Boolean.TRUE.equals(user.getPasswordReset())) {
                 user.setPasswordReset(true);
                 userRepository.save(user);
-
-//                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-//                response.setMessage("Password reset required. Please reset your password to continue.");
-//                response.setEntity(null);
-//                return response;
             }
 
             // Check if user account is active
@@ -138,6 +135,14 @@ public class AuthService {
             SecurityContextHolder.getContext().setAuthentication(authentication);
             log.debug("Set authentication for user: {}", user.getUsername());
 
+            //  Map user's role permissions to PermissionDTO list
+            List<PermissionDTO> permissionDTOs = user.getRole().getRolePermissions().stream()
+                    .map(rp -> new PermissionDTO(
+                            rp.getPermission().name(),
+                            rp.getPermission().getPermission(),
+                            rp.getPermission().getDescription()
+                    ))
+                    .collect(Collectors.toList());
 
             // Build AuthResponse (tokens are in cookies, not in response body)
             AuthResponse authResponse = AuthResponse.builder()
@@ -149,12 +154,14 @@ public class AuthService {
                     .role(user.getRole().getName())
                     .phoneNumber(user.getPhoneNumber())
                     .passwordReset(user.getPasswordReset())
+                    .role(user.getRole().getName())
+                    .permissions(permissionDTOs)
                     .build();
-
 
             response.setEntity(authResponse);
             response.setMessage("Login successful.");
             response.setStatusCode(HttpStatus.OK.value());
+
         } catch (AuthenticationException e) {
             log.error("Authentication failed: {}", e.getMessage());
             response.setMessage("Invalid email or password");
@@ -231,12 +238,12 @@ public class AuthService {
             }
 
             // Verify old password
-            if (!passwordEncoder.matches(resetPassword.getOldPassword(), user.getPassword())) {
-                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-                response.setMessage("Old password is incorrect");
-                response.setEntity(null);
-                return response;
-            }
+//            if (!passwordEncoder.matches(resetPassword.getOldPassword(), user.getPassword())) {
+//                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+//                response.setMessage("Old password is incorrect");
+//                response.setEntity(null);
+//                return response;
+//            }
 
             // Encode and set new password
             String encodedNewPassword = passwordEncoder.encode(resetPassword.getNewPassword());

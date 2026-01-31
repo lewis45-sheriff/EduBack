@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Authentication.Auth.Response;
 
+import com.EduePoa.EP.Authentication.Role.Response.PermissionDTO;
 import lombok.Builder;
 import lombok.Data;
 
@@ -20,6 +21,7 @@ public class AuthResponse {
     private String phoneNumber;
     private Boolean passwordReset;
     private String role;
+    private List<PermissionDTO> permissions;
 
 
 }

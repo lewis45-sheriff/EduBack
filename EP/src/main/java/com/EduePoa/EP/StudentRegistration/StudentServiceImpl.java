@@ -524,6 +524,39 @@ public class StudentServiceImpl implements  StudentService{
         }
     }
 
+    @Override
+    public CustomResponse<?> getPerGrade(Long id) {
+        CustomResponse<List<StudentResponseDTO>> response = new CustomResponse<>();
+        try {
+            List<Student> students = studentRepository.findByGradeId(id);
+
+            if (students.isEmpty()) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setEntity(null);
+                response.setMessage("No students found for this grade");
+                return response;
+            }
+
+            List<StudentResponseDTO> studentDTOs = students.stream()
+                    .map(this::convertToResponseDTO)
+                    .collect(Collectors.toList());
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(studentDTOs);
+            response.setMessage("Students retrieved successfully");
+
+            log.info("Retrieved {} students for grade ID {}", studentDTOs.size(), id);
+
+        } catch (Exception e) {
+            log.error("Error retrieving students for grade ID {}: {}", id, e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("Failed to retrieve students per grade");
+        }
+        return response;
+    }
+
+
     private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
         StringBuilder csvContent = new StringBuilder();
 

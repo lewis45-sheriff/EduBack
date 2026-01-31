@@ -7,4 +7,5 @@ public interface GradeService {
     CustomResponse<?>getAllGrades();
     CustomResponse<?>delete(Long id);
 
+
 }

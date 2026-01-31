@@ -57,6 +57,11 @@ public class StudentController {
             @RequestParam(defaultValue = "excel") String type) {
         return studentService.generateBulkUploadTemplate(type);
     }
+    @GetMapping("get-per-grade/{id}")
+    public ResponseEntity<?> getPerGrade(@PathVariable Long id) {
+        var response = studentService.getPerGrade(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 
 

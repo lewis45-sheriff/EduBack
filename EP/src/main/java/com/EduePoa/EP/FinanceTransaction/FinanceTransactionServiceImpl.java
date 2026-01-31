@@ -82,13 +82,9 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             }
 
             // Get Finance record for student (should be for current term)
-            Finance finance = financeRepository.findByStudentIdAndTermAndYear(
-                            studentId,
-                            currentTerm,
-                            currentYear)
+            Finance finance = financeRepository.findByStudentIdAndTermAndYear(studentId, currentTerm, currentYear)
                     .orElseThrow(() -> new RuntimeException(
-                            "No finance record found for student in current term. Please create an invoice first."
-                    ));
+                            "No finance record found for student in current term. Please create an invoice first."));
 
             // Get the current balance before this transaction (from the latest transaction or finance record)
             BigDecimal previousBalance = finance.getBalance();

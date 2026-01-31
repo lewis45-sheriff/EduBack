@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.sql.Timestamp;  // ✅ CORRECT import (not java.security.Timestamp)
+import java.util.List;
 
 @Data
 public class RoleResponse {
@@ -13,6 +14,8 @@ public class RoleResponse {
 
     @JsonFormat(pattern = "dd-MMM-yyyy HH:mm:ss")
     private Timestamp createdOn;
+    private List<PermissionDTO> permissions;
+
 
     @JsonFormat(pattern = "dd-MMM-yyyy HH:mm:ss")
     private Timestamp updatedOn;

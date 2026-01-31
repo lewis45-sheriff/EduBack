@@ -21,7 +21,11 @@ public class RoleController {
     ResponseEntity<?>getAllRoles(){
         var response = roleService.getAllRoles();
         return ResponseEntity.status(response.getStatusCode()).body(response);
-
+    }
+    @GetMapping("get-all-permissions")
+    ResponseEntity<?>getAllPermissions(){
+        var response = roleService.getAllPermissions();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
 }

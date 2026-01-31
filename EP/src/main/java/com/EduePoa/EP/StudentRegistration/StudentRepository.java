@@ -30,5 +30,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     Optional<Student> findByAdmissionNumber(String admissionNumber);
 
     List<Student> findByAdmissionDateBetween(java.time.LocalDate startDate, java.time.LocalDate endDate);
+    List<Student> findByGradeId(Long gradeId);
+
 
 }
