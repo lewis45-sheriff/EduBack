@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -27,20 +28,55 @@ public class RoleService {
     @Autowired
     private AuditService auditService;
 
-
+    @Transactional // Add this annotation
     public void createRole(@NonNull String name) {
         try {
             Role role = new Role();
             role.setName(name);
             role.setEnabledFlag('Y');
+            role.setDeletedFlag('N'); //  Add this too
             role.setStatus(Status.ACTIVE);
+
+            //  Initialize the collection
+            role.setRolePermissions(new HashSet<>());
+
+            //  Add all permissions to the role BEFORE saving
+            for (Permissions permission : Permissions.values()) {
+                RolePermission rolePermission = new RolePermission(role, permission);
+                role.getRolePermissions().add(rolePermission);
+            }
+
             role = roleRepository.save(role);
 
-            log.info("Role created: {}", role);
+
+
+            log.info("Role created: {} with {} permissions", role.getName(), role.getRolePermissions().size());
         } catch (DataIntegrityViolationException e) {
             log.error("Database constraint error while creating role: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error occurred while creating role: {}", e.getMessage());
+            e.printStackTrace(); //  Add this to see the full error
+        }
+    }
+    @Transactional
+    public void updateRolePermissions(Role role) {
+        try {
+            role.getRolePermissions().clear();
+            roleRepository.save(role);
+
+            role.setRolePermissions(new HashSet<>());
+
+            for (Permissions permission : Permissions.values()) {
+                RolePermission rolePermission = new RolePermission(role, permission);
+                role.getRolePermissions().add(rolePermission);
+            }
+
+            roleRepository.save(role);
+
+            log.info("Updated role: {} with {} permissions", role.getName(), role.getRolePermissions().size());
+        } catch (Exception e) {
+            log.error("Error updating role permissions: {}", e.getMessage());
+            e.printStackTrace();
         }
     }
     public CustomResponse<RoleResponse> newRole(RoleRequest roleRequest) {

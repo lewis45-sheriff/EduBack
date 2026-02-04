@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Slf4j
 @Component
@@ -34,14 +35,16 @@ public class CreateAdmin implements ApplicationRunner {
     }
 
     void addAdminRole() {
-        if (roleRepository.findByName("ROLE_ADMIN").isEmpty()) {
-             log.info("Creating ROLE_ADMIN role on " + LocalDateTime.now());
+        Optional<Role> existingRole = roleRepository.findByName("ROLE_ADMIN");
+
+        if (existingRole.isEmpty()) {
+            log.info("Creating ROLE_ADMIN role on " + LocalDateTime.now());
             roleService.createRole("ROLE_ADMIN");
         } else {
-            log.info("ROLE_ADMIN role already exists.");
+            log.info("ROLE_ADMIN role already exists. Updating permissions...");
+            roleService.updateRolePermissions(existingRole.get());
         }
     }
-
     void addParentsRole() {
         if (roleRepository.findByName("ROLE_PARENT").isEmpty()) {
             log.info("Creating ROLE_PARENT role on " + LocalDateTime.now());

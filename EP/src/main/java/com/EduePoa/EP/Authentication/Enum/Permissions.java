@@ -1,5 +1,8 @@
 package com.EduePoa.EP.Authentication.Enum;
 
+import lombok.Getter;
+
+@Getter
 public enum Permissions {
     // User & Role Management
     USER_CREATE("user:create", "Create new users (Staff, Admins)"),
@@ -69,14 +72,6 @@ public enum Permissions {
     Permissions(String permission, String description) {
         this.permission = permission;
         this.description = description;
-    }
-
-    public String getPermission() {
-        return permission;
-    }
-
-    public String getDescription() {
-        return description;
     }
 
     // Helper method to get permission by string value

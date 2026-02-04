@@ -51,7 +51,7 @@ public class Role {
     private Status status;
 
     // Helper method to add permission
-    public void addPermission(Permissions permission) {
+    public void  addPermission(Permissions permission) {
         RolePermission rolePermission = new RolePermission(this, permission);
         rolePermissions.add(rolePermission);
     }
