@@ -1,0 +1,61 @@
+name: Deploy Spring Boot Docker App to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            # Navigate to your app folder
+            cd /opt/apps/backend/EduPoa/EP
+
+            # Pull latest code
+            git pull origin main
+
+            # Stop and remove existing container
+            docker stop edupoa-backend || true
+            docker rm edupoa-backend || true
+
+            # Remove old Docker image
+            docker rmi -f edupoa-backend:latest || true
+
+            # Build new Docker image
+            docker build -t edupoa-backend:latest .
+
+            # Run the container with environment variables
+            docker run -d \
+              --name edupoa-backend \
+              -p 8085:8085 \
+              --restart unless-stopped \
+              -e SPRING_PROFILES_ACTIVE=prod \
+              -e SPRING_DATASOURCE_URL=${{ secrets.DB_URL }} \
+              -e SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USERNAME }} \
+              -e SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }} \
+              -e MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }} \
+              -e MPESA_APP_SECRET=${{ secrets.MPESA_APP_SECRET }} \
+              edupoa-backend:latest
+
+            # Clean up unused images and volumes
+            docker image prune -f
+            docker volume prune -f
+
+            # Show running containers
+            docker ps
+
+            echo "Deployment completed successfully!"
