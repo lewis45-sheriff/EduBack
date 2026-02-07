@@ -1,5 +1,6 @@
 package com.EduePoa.EP.FeeStructure;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeComponents.FeeComponents;
 import com.EduePoa.EP.FeeComponents.FeeComponentsRepository;
@@ -32,7 +33,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
     private final GradeRepository gradeRepository;
     private final FeeComponentsRepository feeComponentsRepository;
     private final FeeComponentConfigRepository feeComponentConfigRepository;
-
+    private final AuditService auditService;
 
     @Override
     public CustomResponse<?> create(FeeStructureRequestDTO request) {
@@ -40,7 +41,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         CustomResponse<FeeStructure> response = new CustomResponse<>();
 
         try {
-            //  Validate Grade
+            // Validate Grade
             Optional<Grade> grade = gradeRepository.findByName(request.getGrade());
             if (grade.isEmpty()) {
                 response.setMessage("Grade not found: " + request.getGrade());
@@ -49,7 +50,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                 return response;
             }
 
-            //  Create FeeStructure entity
+            // Create FeeStructure entity
             int currentYear = LocalDate.now().getYear();
 
             // After validating grade, check for existing fee structure
@@ -73,7 +74,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                 feeStructure.setIsRejected('N');
             }
 
-            //  Process terms and fee items
+            // Process terms and fee items
             List<FeeComponentConfig> allComponents = new ArrayList<>();
             double totalFeeAmount = 0.0;
 
@@ -112,6 +113,8 @@ public class FeeStructureServiceImpl implements FeeStructureService {
             // 5. Prepare response
             response.setMessage("Fee Structure created successfully");
             response.setStatusCode(HttpStatus.CREATED.value());
+            auditService.log("FEE_STRUCTURE", "Created fee structure for grade:", request.getGrade(),
+                    "with total amount:", String.valueOf(totalFeeAmount));
             response.setEntity(feeStructure);
 
         } catch (Exception e) {
@@ -129,7 +132,8 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         CustomResponse<Object> response = new CustomResponse<>();
         try {
             // Fetch all non-deleted fee structures with their components
-            List<FeeStructure> feeStructures = feeStructureRepository.findByIsDeletedAndDeletedOrderByDatePostedDesc('N', 'N');
+            List<FeeStructure> feeStructures = feeStructureRepository
+                    .findByIsDeletedAndDeletedOrderByDatePostedDesc('N', 'N');
 
             if (feeStructures.isEmpty()) {
                 response.setEntity(new ArrayList<>());
@@ -146,6 +150,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
             response.setEntity(responseList);
             response.setMessage("Fee structures retrieved successfully");
             response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FEE_STRUCTURE", "Retrieved", String.valueOf(responseList.size()), "fee structures");
 
         } catch (Exception e) {
             response.setEntity(null);
@@ -154,6 +159,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getFeeStructureById(Long id) {
         CustomResponse<FeeStructureResponseDTO> response = new CustomResponse<>();
@@ -172,17 +178,19 @@ public class FeeStructureServiceImpl implements FeeStructureService {
             FeeStructureResponseDTO dto = convertToResponseDTO(feeStructure);
 
             // Set additional fields that might be specific to this endpoint
-//            dto.setName(feeStructure.getName());
-//            dto.setYear(feeStructure.getYear());
-//            dto.setTotalAmount(feeStructure.getTotalAmount());
-//            dto.setDatePosted(feeStructure.getDatePosted());
-//            dto.setIsApproved(feeStructure.getIsApproved());
-//            dto.setIsRejected(feeStructure.getIsRejected());
-//            dto.setApprovedAt(feeStructure.getApprovedAt());
+            // dto.setName(feeStructure.getName());
+            // dto.setYear(feeStructure.getYear());
+            // dto.setTotalAmount(feeStructure.getTotalAmount());
+            // dto.setDatePosted(feeStructure.getDatePosted());
+            // dto.setIsApproved(feeStructure.getIsApproved());
+            // dto.setIsRejected(feeStructure.getIsRejected());
+            // dto.setApprovedAt(feeStructure.getApprovedAt());
 
             response.setMessage("Fee structure retrieved successfully");
             response.setEntity(dto);
             response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FEE_STRUCTURE", "Retrieved fee structure with ID:", String.valueOf(id), "for grade:",
+                    dto.getGrade());
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -222,6 +230,5 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         }
         return feeItems;
     }
-
 
 }

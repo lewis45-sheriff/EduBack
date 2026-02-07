@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Authentication.Role;
 
+import com.EduePoa.EP.Authentication.Role.Request.RoleEditRequest;
 import com.EduePoa.EP.Authentication.Role.Request.RoleRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,11 @@ public class RoleController {
     @GetMapping("get-all-permissions")
     ResponseEntity<?>getAllPermissions(){
         var response = roleService.getAllPermissions();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @PutMapping("edit-role")
+    ResponseEntity<?>editRole(@RequestBody RoleEditRequest roleRequest){
+        var response = roleService.editRole(roleRequest);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 

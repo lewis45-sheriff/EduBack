@@ -3,6 +3,7 @@ package com.EduePoa.EP.Authentication.Role;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Permissions;
 import com.EduePoa.EP.Authentication.Enum.Status;
+import com.EduePoa.EP.Authentication.Role.Request.RoleEditRequest;
 import com.EduePoa.EP.Authentication.Role.Request.RoleRequest;
 import com.EduePoa.EP.Authentication.Role.Response.PermissionDTO;
 import com.EduePoa.EP.Authentication.Role.Response.RoleResponse;
@@ -34,13 +35,13 @@ public class RoleService {
             Role role = new Role();
             role.setName(name);
             role.setEnabledFlag('Y');
-            role.setDeletedFlag('N'); //  Add this too
+            role.setDeletedFlag('N'); // Add this too
             role.setStatus(Status.ACTIVE);
 
-            //  Initialize the collection
+            // Initialize the collection
             role.setRolePermissions(new HashSet<>());
 
-            //  Add all permissions to the role BEFORE saving
+            // Add all permissions to the role BEFORE saving
             for (Permissions permission : Permissions.values()) {
                 RolePermission rolePermission = new RolePermission(role, permission);
                 role.getRolePermissions().add(rolePermission);
@@ -48,16 +49,115 @@ public class RoleService {
 
             role = roleRepository.save(role);
 
-
-
             log.info("Role created: {} with {} permissions", role.getName(), role.getRolePermissions().size());
         } catch (DataIntegrityViolationException e) {
             log.error("Database constraint error while creating role: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error occurred while creating role: {}", e.getMessage());
-            e.printStackTrace(); //  Add this to see the full error
+            e.printStackTrace(); // Add this to see the full error
         }
     }
+
+    @Transactional
+    public CustomResponse<RoleResponse> editRole(RoleEditRequest roleRequest) {
+        CustomResponse<RoleResponse> response = new CustomResponse<>();
+        try {
+            // Validate that role ID is provided
+            if (roleRequest.getId() == null) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Role ID is required for editing");
+                response.setEntity(null);
+                return response;
+            }
+
+            // Find the existing role
+            Optional<Role> existingRoleOpt = roleRepository.findById(roleRequest.getId());
+            if (existingRoleOpt.isEmpty()) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setMessage("Role not found with ID: " + roleRequest.getId());
+                response.setEntity(null);
+                auditService.log("ROLE_MANAGEMENT", "Attempted to edit non-existent role with ID:",
+                        String.valueOf(roleRequest.getId()));
+                return response;
+            }
+
+            Role role = existingRoleOpt.get();
+
+            // Check if the new name conflicts with another existing role
+            if (roleRequest.getName() != null && !roleRequest.getName().equals(role.getName())) {
+                Optional<Role> roleWithSameName = roleRepository.findByName(roleRequest.getName());
+                if (roleWithSameName.isPresent() && !roleWithSameName.get().getId().equals(role.getId())) {
+                    response.setStatusCode(HttpStatus.CONFLICT.value());
+                    response.setMessage("Another role with the same name already exists");
+                    response.setEntity(null);
+                    auditService.log("ROLE_MANAGEMENT", "Attempted to rename role to duplicate name:",
+                            roleRequest.getName());
+                    return response;
+                }
+                role.setName(roleRequest.getName());
+            }
+
+            // Update permissions if provided
+            if (roleRequest.getPermissions() != null) {
+                // Clear existing permissions
+                role.getRolePermissions().clear();
+
+                // Add new permissions
+                for (String permissionStr : roleRequest.getPermissions()) {
+                    try {
+                        Permissions permission = Permissions.fromString(permissionStr);
+                        role.addPermission(permission);
+                    } catch (IllegalArgumentException e) {
+                        response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                        response.setMessage("Invalid permission: " + permissionStr);
+                        response.setEntity(null);
+                        return response;
+                    }
+                }
+            }
+
+            Role savedRole = roleRepository.save(role);
+
+            // Map to RoleResponse DTO
+            RoleResponse roleResponse = new RoleResponse();
+            roleResponse.setId(savedRole.getId());
+            roleResponse.setName(savedRole.getName());
+            roleResponse.setCreatedOn(savedRole.getCreatedOn());
+            roleResponse.setUpdatedOn(savedRole.getUpdatedOn());
+            roleResponse.setEnabledFlag(savedRole.getEnabledFlag());
+            roleResponse.setDeletedFlag(savedRole.getDeletedFlag());
+            roleResponse.setStatus(savedRole.getStatus());
+
+            // Map permissions
+            List<PermissionDTO> permissionDTOs = savedRole.getRolePermissions().stream()
+                    .map(rp -> {
+                        PermissionDTO dto = new PermissionDTO();
+                        dto.setName(rp.getPermission().name());
+                        dto.setPermission(rp.getPermission().getPermission());
+                        dto.setDescription(rp.getPermission().getDescription());
+                        return dto;
+                    })
+                    .collect(Collectors.toList());
+            roleResponse.setPermissions(permissionDTOs);
+
+            response.setEntity(roleResponse);
+            response.setMessage("Role updated successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+            auditService.log("ROLE_MANAGEMENT", "Updated role:", savedRole.getName(),
+                    "with ID:", String.valueOf(savedRole.getId()),
+                    "and", String.valueOf(permissionDTOs.size()), "permissions");
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage("Error updating role: " + e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            auditService.log("ROLE_MANAGEMENT", "Error updating role:", String.valueOf(roleRequest.getId()),
+                    e.getMessage());
+        }
+        return response;
+    }
+
     @Transactional
     public void updateRolePermissions(Role role) {
         try {
@@ -79,6 +179,7 @@ public class RoleService {
             e.printStackTrace();
         }
     }
+
     public CustomResponse<RoleResponse> newRole(RoleRequest roleRequest) {
         CustomResponse<RoleResponse> response = new CustomResponse<>();
 
@@ -192,8 +293,7 @@ public class RoleService {
             response.setMessage(
                     roleResponses.isEmpty()
                             ? "No roles found."
-                            : "Roles retrieved successfully."
-            );
+                            : "Roles retrieved successfully.");
 
             // Log the operation
             auditService.log("ROLE_MANAGEMENT", "Retrieved", String.valueOf(roleResponses.size()), "roles");
@@ -208,7 +308,8 @@ public class RoleService {
         }
         return response;
     }
-    CustomResponse<?> getAllPermissions(){
+
+    CustomResponse<?> getAllPermissions() {
         CustomResponse<Object> response = new CustomResponse<>();
         try {
             List<Map<String, String>> permissionsList = new ArrayList<>();
@@ -232,7 +333,5 @@ public class RoleService {
         }
         return response;
     }
-
-
 
 }

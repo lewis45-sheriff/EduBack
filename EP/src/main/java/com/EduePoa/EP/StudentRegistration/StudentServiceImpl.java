@@ -1,5 +1,6 @@
 package com.EduePoa.EP.StudentRegistration;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
@@ -49,11 +50,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class StudentServiceImpl implements  StudentService{
+public class StudentServiceImpl implements StudentService {
     private final StudentRepository studentRepository;
     private final GradeRepository gradeRepository;
     private final FeeStructureRepository feeStructureRepository;
-
+    private final AuditService auditService;
 
     @Override
 
@@ -66,7 +67,8 @@ public class StudentServiceImpl implements  StudentService{
             }
 
             // Validate required fields
-            if (studentRequestDTO.getAdmissionNumber() == null || studentRequestDTO.getAdmissionNumber().trim().isEmpty()) {
+            if (studentRequestDTO.getAdmissionNumber() == null
+                    || studentRequestDTO.getAdmissionNumber().trim().isEmpty()) {
                 throw new RuntimeException("Admission number is required");
             }
             if (studentRequestDTO.getFirstName() == null || studentRequestDTO.getFirstName().trim().isEmpty()) {
@@ -87,14 +89,17 @@ public class StudentServiceImpl implements  StudentService{
 
             // Check if admission number already exists
             if (studentRepository.existsByAdmissionNumber(studentRequestDTO.getAdmissionNumber().trim())) {
-                throw new RuntimeException("Student with admission number " + studentRequestDTO.getAdmissionNumber() + " already exists");
+                throw new RuntimeException(
+                        "Student with admission number " + studentRequestDTO.getAdmissionNumber() + " already exists");
             }
 
             // Fetch Grade entity
             Grade grade = gradeRepository.findById(studentRequestDTO.getGrade())
-                    .orElseThrow(() -> new RuntimeException("Grade not found with ID: " + studentRequestDTO.getGrade()));
+                    .orElseThrow(
+                            () -> new RuntimeException("Grade not found with ID: " + studentRequestDTO.getGrade()));
 
-            // Get FeeStructure by grade (assuming you have a method to get fee structure by grade)
+            // Get FeeStructure by grade (assuming you have a method to get fee structure by
+            // grade)
             FeeStructure feeStructure = feeStructureRepository.findByGrade(grade)
                     .orElseThrow(() -> new RuntimeException("Fee structure not found for grade: " + grade.getName()));
 
@@ -120,11 +125,12 @@ public class StudentServiceImpl implements  StudentService{
             }
 
             // Handle parent assignment if parent ID is provided
-//            if (studentRequestDTO.getParentId() != null) {
-//                User parent = userRepository.findById(studentRequestDTO.getParentId())
-//                        .orElseThrow(() -> new RuntimeException("Parent not found with ID: " + studentRequestDTO.getParentId()));
-//                student.setParent(parent);
-//            }
+            // if (studentRequestDTO.getParentId() != null) {
+            // User parent = userRepository.findById(studentRequestDTO.getParentId())
+            // .orElseThrow(() -> new RuntimeException("Parent not found with ID: " +
+            // studentRequestDTO.getParentId()));
+            // student.setParent(parent);
+            // }
 
             // Save the student
             Student savedStudent = studentRepository.save(student);
@@ -139,6 +145,8 @@ public class StudentServiceImpl implements  StudentService{
 
             // Log the successful creation
             log.info("Student created successfully with admission number: {}", savedStudent.getAdmissionNumber());
+            auditService.log("STUDENT_MANAGEMENT", "Created student:", savedStudent.getFirstName(),
+                    savedStudent.getLastName(), "with admission number:", savedStudent.getAdmissionNumber());
 
         } catch (DataIntegrityViolationException e) {
             log.error("Data integrity violation while creating student: {}", e.getMessage());
@@ -158,6 +166,7 @@ public class StudentServiceImpl implements  StudentService{
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getAllStudents() {
         CustomResponse<List<StudentResponseDTO>> response = new CustomResponse<>();
@@ -173,6 +182,7 @@ public class StudentServiceImpl implements  StudentService{
             response.setMessage("Students retrieved successfully");
 
             log.info("Retrieved {} students", studentDTOs.size());
+            auditService.log("STUDENT_MANAGEMENT", "Retrieved", String.valueOf(studentDTOs.size()), "students");
 
         } catch (Exception e) {
             log.error("Error retrieving all students: {}", e.getMessage(), e);
@@ -182,6 +192,7 @@ public class StudentServiceImpl implements  StudentService{
         }
         return response;
     }
+
     @Override
     public CustomResponse<StudentResponseDTO> getStudentById(Long studentId) {
         CustomResponse<StudentResponseDTO> response = new CustomResponse<>();
@@ -200,6 +211,7 @@ public class StudentServiceImpl implements  StudentService{
             response.setMessage("Student retrieved successfully");
 
             log.info("Retrieved student with ID: {}", studentId);
+            auditService.log("STUDENT_MANAGEMENT", "Retrieved student with ID:", String.valueOf(studentId));
 
         } catch (RuntimeException e) {
             log.error("Runtime error retrieving student by ID {}: {}", studentId, e.getMessage());
@@ -355,16 +367,14 @@ public class StudentServiceImpl implements  StudentService{
                         uploadResponse.getErrors().add(new BulkUploadError(
                                 rowNumber,
                                 studentDTO.getAdmissionNumber(),
-                                studentResponse.getMessage()
-                        ));
+                                studentResponse.getMessage()));
                     }
                 } catch (Exception e) {
                     uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
                     uploadResponse.getErrors().add(new BulkUploadError(
                             rowNumber,
                             studentDTO.getAdmissionNumber(),
-                            e.getMessage()
-                    ));
+                            e.getMessage()));
                     log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
                 }
             }
@@ -378,6 +388,9 @@ public class StudentServiceImpl implements  StudentService{
                     uploadResponse.getTotalRecords(),
                     uploadResponse.getSuccessCount(),
                     uploadResponse.getFailureCount());
+            auditService.log("STUDENT_MANAGEMENT", "Bulk upload completed. Success:",
+                    String.valueOf(uploadResponse.getSuccessCount()), "Failed:",
+                    String.valueOf(uploadResponse.getFailureCount()));
 
         } catch (RuntimeException e) {
             log.error("Runtime exception during bulk upload: {}", e.getMessage());
@@ -441,7 +454,8 @@ public class StudentServiceImpl implements  StudentService{
             // Process data rows
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
-                if (row == null) continue;
+                if (row == null)
+                    continue;
 
                 StudentRequestDTO dto = new StudentRequestDTO();
                 dto.setAdmissionNumber(getCellValueAsString(row.getCell(columnMap.get("admissionnumber"))));
@@ -468,7 +482,8 @@ public class StudentServiceImpl implements  StudentService{
     }
 
     private String getCellValueAsString(Cell cell) {
-        if (cell == null) return null;
+        if (cell == null)
+            return null;
 
         switch (cell.getCellType()) {
             case STRING:
@@ -488,7 +503,8 @@ public class StudentServiceImpl implements  StudentService{
     }
 
     private LocalDate getCellValueAsDate(Cell cell) {
-        if (cell == null) return null;
+        if (cell == null)
+            return null;
 
         if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
             return cell.getLocalDateTimeCellValue().toLocalDate();
@@ -499,7 +515,8 @@ public class StudentServiceImpl implements  StudentService{
     }
 
     private Long getCellValueAsLong(Cell cell) {
-        if (cell == null) return null;
+        if (cell == null)
+            return null;
 
         if (cell.getCellType() == CellType.NUMERIC) {
             return (long) cell.getNumericCellValue();
@@ -508,6 +525,7 @@ public class StudentServiceImpl implements  StudentService{
         }
         return null;
     }
+
     @Override
     public ResponseEntity<Resource> generateBulkUploadTemplate(String fileType) {
         try {
@@ -546,6 +564,8 @@ public class StudentServiceImpl implements  StudentService{
             response.setMessage("Students retrieved successfully");
 
             log.info("Retrieved {} students for grade ID {}", studentDTOs.size(), id);
+            auditService.log("STUDENT_MANAGEMENT", "Retrieved", String.valueOf(studentDTOs.size()),
+                    "students for grade ID:", String.valueOf(id));
 
         } catch (Exception e) {
             log.error("Error retrieving students for grade ID {}: {}", id, e.getMessage(), e);
@@ -555,7 +575,6 @@ public class StudentServiceImpl implements  StudentService{
         }
         return response;
     }
-
 
     private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
         StringBuilder csvContent = new StringBuilder();
@@ -705,9 +724,9 @@ public class StudentServiceImpl implements  StudentService{
 
         // Add sample data
         Object[][] sampleData = {
-                {"STU001", "John", "Doe", LocalDate.of(2010, 5, 15), "2024-01-10", 1L, "Male", ""},
-                {"STU002", "Jane", "Smith", LocalDate.of(2011, 8, 22), "2024-01-10", 1L, "Female", ""},
-                {"STU003", "Michael", "Johnson", LocalDate.of(2010, 12, 3), "2024-01-10", 2L, "Male", ""}
+                { "STU001", "John", "Doe", LocalDate.of(2010, 5, 15), "2024-01-10", 1L, "Male", "" },
+                { "STU002", "Jane", "Smith", LocalDate.of(2011, 8, 22), "2024-01-10", 1L, "Female", "" },
+                { "STU003", "Michael", "Johnson", LocalDate.of(2010, 12, 3), "2024-01-10", 2L, "Male", "" }
         };
 
         for (int i = 0; i < sampleData.length; i++) {
@@ -734,8 +753,7 @@ public class StudentServiceImpl implements  StudentService{
         // Add data validation for gender column
         DataValidationHelper validationHelper = sheet.getDataValidationHelper();
         DataValidationConstraint constraint = validationHelper.createExplicitListConstraint(
-                new String[]{"Male", "Female"}
-        );
+                new String[] { "Male", "Female" });
         CellRangeAddressList addressList = new CellRangeAddressList(1, 1000, 6, 6);
         DataValidation dataValidation = validationHelper.createValidation(constraint, addressList);
         dataValidation.setShowErrorBox(true);
@@ -754,11 +772,11 @@ public class StudentServiceImpl implements  StudentService{
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_bulk_upload_template.xlsx")
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .contentLength(resource.contentLength())
                 .body(resource);
     }
-
 
     private FeeStructureResponseDTO convertToResponseDTO(FeeStructure feeStructure) {
         FeeStructureResponseDTO dto = new FeeStructureResponseDTO();
@@ -800,24 +818,25 @@ public class StudentServiceImpl implements  StudentService{
         dto.setAdmissionDate(String.valueOf(student.getAdmissionDate()));
         dto.setGradeName(student.getGradeName());
         dto.setStatus(String.valueOf(student.getStatus()));
-//        dto.setAcademicYear(student.getAcademicYear());
+        // dto.setAcademicYear(student.getAcademicYear());
         dto.setStudentImage(student.getStudentImage());
-//        dto.setIsLocked(student.getIs_lockedFlag() == 'Y');
-//        dto.setOnLastGrade(student.getOnLastGrade() == 'Y');
+        // dto.setIsLocked(student.getIs_lockedFlag() == 'Y');
+        // dto.setOnLastGrade(student.getOnLastGrade() == 'Y');
 
         // Add related entity information
         if (student.getGrade() != null) {
             dto.setGradeName(student.getGrade().getName());
         }
 
-//        if (student.getParent() != null) {
-//            dto.setParentId(student.getParent().getId());
-//            dto.setParentName(student.getParent().getFirstName() + " " + student.getParent().getLastName());
-//        }
+        // if (student.getParent() != null) {
+        // dto.setParentId(student.getParent().getId());
+        // dto.setParentName(student.getParent().getFirstName() + " " +
+        // student.getParent().getLastName());
+        // }
 
-//        if (student.getFeeStructure() != null) {
-//            dto.setFeeStructureId(student.getFeeStructure().getId());
-//        }
+        // if (student.getFeeStructure() != null) {
+        // dto.setFeeStructureId(student.getFeeStructure().getId());
+        // }
 
         return dto;
     }
@@ -832,7 +851,7 @@ public class StudentServiceImpl implements  StudentService{
         responseDTO.setAdmissionDate(String.valueOf(savedStudent.getAdmissionDate()));
         responseDTO.setGradeName(savedStudent.getGradeName());
         responseDTO.setStatus(String.valueOf(savedStudent.getStatus()));
-//            responseDTO.setAcademicYear(savedStudent.getAcademicYear());
+        // responseDTO.setAcademicYear(savedStudent.getAcademicYear());
         responseDTO.setStudentImage(savedStudent.getStudentImage());
         return responseDTO;
     }
@@ -850,21 +869,22 @@ public class StudentServiceImpl implements  StudentService{
     }
 
     // Helper method to generate admission number if not provided
-//    private String generateAdmissionNumber() {
-//        String prefix = "STD";
-//        String year = String.valueOf(LocalDate.now().getYear());
-//
-//        // Get the last admission number for this year
-//        String lastAdmissionNumber = studentRepository.findLastAdmissionNumberForYear(year);
-//
-//        int nextNumber = 1;
-//        if (lastAdmissionNumber != null && lastAdmissionNumber.contains(year)) {
-//            String numberPart = lastAdmissionNumber.substring(lastAdmissionNumber.lastIndexOf(year) + 4);
-//            nextNumber = Integer.parseInt(numberPart) + 1;
-//        }
-//
-//        return String.format("%s%s%04d", prefix, year, nextNumber);
-//    }
-
+    // private String generateAdmissionNumber() {
+    // String prefix = "STD";
+    // String year = String.valueOf(LocalDate.now().getYear());
+    //
+    // // Get the last admission number for this year
+    // String lastAdmissionNumber =
+    // studentRepository.findLastAdmissionNumberForYear(year);
+    //
+    // int nextNumber = 1;
+    // if (lastAdmissionNumber != null && lastAdmissionNumber.contains(year)) {
+    // String numberPart =
+    // lastAdmissionNumber.substring(lastAdmissionNumber.lastIndexOf(year) + 4);
+    // nextNumber = Integer.parseInt(numberPart) + 1;
+    // }
+    //
+    // return String.format("%s%s%04d", prefix, year, nextNumber);
+    // }
 
 }

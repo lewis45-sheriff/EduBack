@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Transport;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
 import com.EduePoa.EP.Transport.AssignTransport.AssignTransport;
@@ -27,11 +28,12 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TransportServiceImpl implements  TransportService {
+public class TransportServiceImpl implements TransportService {
     private final TransportRepository transportRepository;
     private final StudentRepository studentRepository;
     private final AssignTransportRepository assignTransportRepository;
     private final TransportTransactionsRepository transportTransactionsRepository;
+    private final AuditService auditService;
 
     @Override
     public CustomResponse<?> create(TransportRequestDTO transportRequestDTO) {
@@ -62,6 +64,8 @@ public class TransportServiceImpl implements  TransportService {
             response.setEntity(mapToResponse(saved));
             response.setMessage("Transport created successfully");
             response.setStatusCode(HttpStatus.CREATED.value());
+            auditService.log("TRANSPORT", "Created transport vehicle:", saved.getVehicleNumber(), "with ID:",
+                    String.valueOf(saved.getId()));
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -70,6 +74,7 @@ public class TransportServiceImpl implements  TransportService {
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getById(Long id) {
         CustomResponse<TransportResponseDTO> response = new CustomResponse<>();
@@ -89,6 +94,7 @@ public class TransportServiceImpl implements  TransportService {
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getAll() {
         CustomResponse<List<TransportResponseDTO>> response = new CustomResponse<>();
@@ -110,6 +116,7 @@ public class TransportServiceImpl implements  TransportService {
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> update(Long id, TransportRequestDTO transportRequestDTO) {
         CustomResponse<TransportResponseDTO> response = new CustomResponse<>();
@@ -132,6 +139,8 @@ public class TransportServiceImpl implements  TransportService {
             response.setEntity(mapToResponse(updated));
             response.setMessage("Transport updated successfully");
             response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("TRANSPORT", "Updated transport vehicle:", updated.getVehicleNumber(), "with ID:",
+                    String.valueOf(id));
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.NOT_FOUND.value());
@@ -140,6 +149,7 @@ public class TransportServiceImpl implements  TransportService {
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> delete(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
@@ -154,6 +164,7 @@ public class TransportServiceImpl implements  TransportService {
             response.setMessage("Transport deactivated successfully");
             response.setStatusCode(HttpStatus.OK.value());
             response.setEntity(null);
+            auditService.log("TRANSPORT", "Deactivated transport vehicle with ID:", String.valueOf(id));
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.NOT_FOUND.value());
@@ -168,20 +179,20 @@ public class TransportServiceImpl implements  TransportService {
         CustomResponse<AssignTransport> response = new CustomResponse<>();
 
         try {
-            //  Validate Student
+            // Validate Student
             Student student = studentRepository.findById(request.getStudentId())
                     .orElseThrow(() -> new RuntimeException("Student not found"));
 
-            //  Prevent duplicate assignment
+            // Prevent duplicate assignment
             if (assignTransportRepository.findByStudent(student).isPresent()) {
                 throw new RuntimeException("Student already has an assigned vehicle");
             }
 
-            //  Validate Vehicle
+            // Validate Vehicle
             Transport vehicle = transportRepository.findById(request.getVehicleId())
                     .orElseThrow(() -> new RuntimeException("Vehicle not found"));
 
-            //  Build Entity
+            // Build Entity
             AssignTransport assignTransport = AssignTransport.builder()
                     .student(student)
                     .vehicle(vehicle)
@@ -189,13 +200,15 @@ public class TransportServiceImpl implements  TransportService {
                     .transportType(request.getTransportType())
                     .build();
 
-            //  Save
+            // Save
             AssignTransport saved = assignTransportRepository.save(assignTransport);
 
             // Success Response
             response.setEntity(saved);
             response.setMessage("Transport assigned to student successfully");
             response.setStatusCode(HttpStatus.CREATED.value());
+            auditService.log("TRANSPORT", "Assigned transport to student ID:", String.valueOf(request.getStudentId()),
+                    "vehicle ID:", String.valueOf(request.getVehicleId()));
 
         } catch (RuntimeException e) {
             response.setEntity(null);
@@ -205,7 +218,6 @@ public class TransportServiceImpl implements  TransportService {
 
         return response;
     }
-
 
     @Override
     public CustomResponse<?> assignments() {
@@ -221,14 +233,13 @@ public class TransportServiceImpl implements  TransportService {
                             .studentName(
                                     at.getStudent().getFirstName()
                                             .concat(" ")
-                                            .concat(at.getStudent().getLastName())
-                            )
+                                            .concat(at.getStudent().getLastName()))
                             .vehicleId(at.getVehicle().getId())
                             .vehiclePlateNumber(at.getVehicle().getVehicleNumber())
                             .pickupLocation(at.getPickupLocation())
                             .transportType(at.getTransportType())
-                            .build()
-                    ).toList();
+                            .build())
+                    .toList();
 
             response.setEntity(dtoList);
             response.setMessage("Transport assignments retrieved successfully");
@@ -263,19 +274,16 @@ public class TransportServiceImpl implements  TransportService {
 
             List<AssignTransport> assignments = assignTransportRepository.findAll();
 
-            List<StudentTransportDTO> data = assignments.stream().map(at ->
-                    StudentTransportDTO.builder()
-                            .studentId(at.getStudent().getId())
-                            .admissionNumber(at.getStudent().getAdmissionNumber())
-                            .fullName(
-                                    at.getStudent().getFirstName() + " " +
-                                            at.getStudent().getLastName()
-                            )
-                            .pickupLocation(at.getPickupLocation())
-                            .transportType(at.getTransportType())
-                            .vehicleName(at.getVehicle().getVehicleNumber())
-                            .build()
-            ).toList();
+            List<StudentTransportDTO> data = assignments.stream().map(at -> StudentTransportDTO.builder()
+                    .studentId(at.getStudent().getId())
+                    .admissionNumber(at.getStudent().getAdmissionNumber())
+                    .fullName(
+                            at.getStudent().getFirstName() + " " +
+                                    at.getStudent().getLastName())
+                    .pickupLocation(at.getPickupLocation())
+                    .transportType(at.getTransportType())
+                    .vehicleName(at.getVehicle().getVehicleNumber())
+                    .build()).toList();
 
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Students with transport retrieved successfully");
@@ -288,8 +296,10 @@ public class TransportServiceImpl implements  TransportService {
         }
         return response;
     }
+
     @Override
-    public CustomResponse<?> createTransportTransaction(Long studentId, TransportTransactionRequestDTO transportTransactionRequestDTO) {
+    public CustomResponse<?> createTransportTransaction(Long studentId,
+            TransportTransactionRequestDTO transportTransactionRequestDTO) {
         CustomResponse<Map<String, Object>> response = new CustomResponse<>();
 
         try {
@@ -307,7 +317,8 @@ public class TransportServiceImpl implements  TransportService {
 
             if (expectedFee == null || expectedFee == 0.0) {
                 response.setEntity(null);
-                response.setMessage("Transport fee not configured for " + transportTransactionRequestDTO.getTransportType());
+                response.setMessage(
+                        "Transport fee not configured for " + transportTransactionRequestDTO.getTransportType());
                 response.setStatusCode(HttpStatus.BAD_REQUEST.value());
                 return response;
             }
@@ -318,8 +329,7 @@ public class TransportServiceImpl implements  TransportService {
                     transportTransactionRequestDTO.getVehicleId(),
                     transportTransactionRequestDTO.getTerm(),
                     transportTransactionRequestDTO.getYear(),
-                    transportTransactionRequestDTO.getTransportType()
-            );
+                    transportTransactionRequestDTO.getTransportType());
 
             // Calculate total paid before this transaction
             Double totalPaidBefore;
@@ -362,8 +372,7 @@ public class TransportServiceImpl implements  TransportService {
                         "Payment amount (%.2f) exceeds remaining balance (%.2f). Maximum allowed payment is %.2f",
                         transportTransactionRequestDTO.getAmount(),
                         latestArrears,
-                        latestArrears
-                ));
+                        latestArrears));
 
                 response.setEntity(errorDetails);
                 response.setMessage("Overpayment not allowed");
@@ -400,8 +409,7 @@ public class TransportServiceImpl implements  TransportService {
                     expectedFee,
                     totalPaidBefore,
                     totalPaidAfter,
-                    arrearsAfter
-            );
+                    arrearsAfter);
 
             transaction.setStatus(paymentStatus);
 
@@ -437,19 +445,19 @@ public class TransportServiceImpl implements  TransportService {
             if (paymentStatus.equals("COMPLETED")) {
                 successMessage = String.format(
                         "Payment of %.2f processed successfully. Transport fee fully paid!",
-                        transportTransactionRequestDTO.getAmount()
-                );
+                        transportTransactionRequestDTO.getAmount());
             } else {
                 successMessage = String.format(
                         "Payment of %.2f processed successfully. Remaining balance: %.2f",
                         transportTransactionRequestDTO.getAmount(),
-                        arrearsAfter
-                );
+                        arrearsAfter);
             }
 
             response.setEntity(responseData);
             response.setMessage(successMessage);
             response.setStatusCode(HttpStatus.CREATED.value());
+            auditService.log("TRANSPORT_TRANSACTION", "Created transaction for student ID:", String.valueOf(studentId),
+                    "amount:", String.valueOf(transportTransactionRequestDTO.getAmount()), "status:", paymentStatus);
 
         } catch (RuntimeException e) {
             log.error("Error creating transport transaction", e);
@@ -460,6 +468,7 @@ public class TransportServiceImpl implements  TransportService {
 
         return response;
     }
+
     private Double getExpectedFee(Transport transport, String transportType) {
         if (transportType == null) {
             return 0.0;
@@ -475,6 +484,7 @@ public class TransportServiceImpl implements  TransportService {
 
         return 0.0;
     }
+
     @Override
     public CustomResponse<?> getAllTransportTransactions() {
         CustomResponse<List<TransportTransactionResponseDTO>> response = new CustomResponse<>();
@@ -567,8 +577,6 @@ public class TransportServiceImpl implements  TransportService {
 
                 List<AssignTransport> assignments = assignTransportRepository.findByVehicle(vehicle);
 
-
-
                 for (AssignTransport assignment : assignments) {
                     String transportType = assignment.getTransportType();
                     System.out.println("Assignment ID: " + assignment.getId() +
@@ -581,11 +589,13 @@ public class TransportServiceImpl implements  TransportService {
 
                     String normalizedType = transportType.trim().toUpperCase();
 
-                    if (normalizedType.contains("ONE") || normalizedType.equals("ONE_WAY") || normalizedType.equals("ONEWAY")) {
+                    if (normalizedType.contains("ONE") || normalizedType.equals("ONE_WAY")
+                            || normalizedType.equals("ONEWAY")) {
                         double price = vehicle.getRoutePriceOneWay() != null ? vehicle.getRoutePriceOneWay() : 0.0;
                         System.out.println("  -> Matched ONE_WAY, Price: " + price);
                         expectedRevenue += price;
-                    } else if (normalizedType.contains("TWO") || normalizedType.equals("TWO_WAY") || normalizedType.equals("TWOWAY")) {
+                    } else if (normalizedType.contains("TWO") || normalizedType.equals("TWO_WAY")
+                            || normalizedType.equals("TWOWAY")) {
                         double price = vehicle.getRoutePriceTwoWay() != null ? vehicle.getRoutePriceTwoWay() : 0.0;
                         System.out.println("  -> Matched TWO_WAY, Price: " + price);
                         expectedRevenue += price;
@@ -593,8 +603,6 @@ public class TransportServiceImpl implements  TransportService {
                         System.out.println("  -> NO MATCH for transport type: '" + transportType + "'");
                     }
                 }
-
-
 
                 // Calculate collected revenue (sum of all payments made)
                 double collectedRevenue = transactions.stream()
@@ -659,9 +667,9 @@ public class TransportServiceImpl implements  TransportService {
         return transaction;
     }
 
-
     @NotNull
-    private static TransportTransactions getTransportTransactions(TransportTransactionRequestDTO transportTransactionRequestDTO, Student student, Transport transport) {
+    private static TransportTransactions getTransportTransactions(
+            TransportTransactionRequestDTO transportTransactionRequestDTO, Student student, Transport transport) {
         TransportTransactions transaction = new TransportTransactions();
         transaction.setAmount(transportTransactionRequestDTO.getAmount());
         transaction.setPaymentMethod(transportTransactionRequestDTO.getPaymentMethod());
@@ -673,7 +681,6 @@ public class TransportServiceImpl implements  TransportService {
         transaction.setTransport(transport);
         return transaction;
     }
-
 
     private TransportResponseDTO mapToResponse(Transport transport) {
         return TransportResponseDTO.builder()
@@ -689,8 +696,5 @@ public class TransportServiceImpl implements  TransportService {
                 .status(transport.getStatus())
                 .build();
     }
-
-
-
 
 }

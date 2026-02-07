@@ -1,5 +1,6 @@
 package com.EduePoa.EP.FinanceTransaction;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Finance;
 import com.EduePoa.EP.Finance.FinanceRepository;
@@ -32,6 +33,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
     private final FinanceRepository financeRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final StudentInvoicesRepository studentInvoicesRepository;
+    private final AuditService auditService;
 
     @Override
     @Transactional
@@ -56,8 +58,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             if (!currentYear.equals(createTransactionDTO.getYear())) {
                 throw new RuntimeException(
                         "Transactions can only be created for the current year ("
-                                + currentYear + "). Requested year: " + createTransactionDTO.getYear()
-                );
+                                + currentYear + "). Requested year: " + createTransactionDTO.getYear());
             }
 
             // Validate student exists
@@ -66,7 +67,8 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
             // Validate and get the specific invoice
             StudentInvoices invoice = studentInvoicesRepository.findById(createTransactionDTO.getInvoiceId())
-                    .orElseThrow(() -> new RuntimeException("Invoice not found with ID: " + createTransactionDTO.getInvoiceId()));
+                    .orElseThrow(() -> new RuntimeException(
+                            "Invoice not found with ID: " + createTransactionDTO.getInvoiceId()));
 
             // Verify the invoice belongs to this student
             if (!invoice.getStudent().getId().equals(studentId)) {
@@ -77,8 +79,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             if (invoice.getTerm() != currentTerm ||
                     !currentYear.equals(invoice.getAcademicYear())) {
                 throw new RuntimeException(
-                        "Invoice is not for the current term and year. Cannot process transaction."
-                );
+                        "Invoice is not for the current term and year. Cannot process transaction.");
             }
 
             // Get Finance record for student (should be for current term)
@@ -86,7 +87,8 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
                     .orElseThrow(() -> new RuntimeException(
                             "No finance record found for student in current term. Please create an invoice first."));
 
-            // Get the current balance before this transaction (from the latest transaction or finance record)
+            // Get the current balance before this transaction (from the latest transaction
+            // or finance record)
             BigDecimal previousBalance = finance.getBalance();
 
             // Create the transaction with invoice reference
@@ -161,6 +163,9 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage("Transaction created and invoice updated successfully");
             response.setEntity(responseData);
+            auditService.log("FINANCE_TRANSACTION", "Created transaction for student ID:", String.valueOf(studentId),
+                    "amount:", createTransactionDTO.getAmount().toString(), "type:",
+                    createTransactionDTO.getTransactionType().name());
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -169,6 +174,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getTransactions() {
         CustomResponse<List<FinanceTransaction>> response = new CustomResponse<>();
@@ -183,6 +189,8 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
                 response.setStatusCode(HttpStatus.OK.value());
                 response.setMessage("Transactions retrieved successfully");
                 response.setEntity(transactions);
+                auditService.log("FINANCE_TRANSACTION", "Retrieved", String.valueOf(transactions.size()),
+                        "transactions");
             }
 
         } catch (RuntimeException e) {
@@ -210,12 +218,12 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getById(Long id) {
         CustomResponse<FinanceTransaction> response = new CustomResponse<>();
         try {
-            Optional<FinanceTransaction> optionalFinanceTransaction =
-                    financeTransactionRepository.findById(id);
+            Optional<FinanceTransaction> optionalFinanceTransaction = financeTransactionRepository.findById(id);
 
             if (optionalFinanceTransaction.isEmpty()) {
                 response.setStatusCode(HttpStatus.NOT_FOUND.value());
@@ -259,15 +267,14 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             }
 
             // Convert to MonthlyFeeDTO list
-            String[] monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+            String[] monthNames = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
             List<MonthlyFeeDTO> monthlyFees = new ArrayList<>();
             for (int i = 1; i <= 12; i++) {
                 monthlyFees.add(new MonthlyFeeDTO(
                         monthNames[i - 1],
-                        monthlyIncomeMap.get(i)
-                ));
+                        monthlyIncomeMap.get(i)));
             }
 
             // Calculate totals
@@ -276,8 +283,10 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             BigDecimal totalExpense = financeTransactionRepository
                     .sumByTransactionTypeAndYear(FinanceTransaction.TransactionType.EXPENSE, currentYear);
 
-            if (totalIncome == null) totalIncome = BigDecimal.ZERO;
-            if (totalExpense == null) totalExpense = BigDecimal.ZERO;
+            if (totalIncome == null)
+                totalIncome = BigDecimal.ZERO;
+            if (totalExpense == null)
+                totalExpense = BigDecimal.ZERO;
 
             BigDecimal netBalance = totalIncome.subtract(totalExpense);
 
@@ -291,6 +300,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             response.setEntity(statistics);
             response.setMessage("Statistics retrieved successfully");
             response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FINANCE_TRANSACTION", "Retrieved statistics for year:", String.valueOf(currentYear));
 
         } catch (Exception e) {
             response.setMessage("Error retrieving statistics: " + e.getMessage());
@@ -308,8 +318,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             List<FinanceTransaction> transactions = financeTransactionRepository
                     .findByStudentIdAndTransactionTypeOrderByTransactionDateAsc(
                             studentId,
-                            FinanceTransaction.TransactionType.INCOME
-                    );
+                            FinanceTransaction.TransactionType.INCOME);
 
             if (transactions.isEmpty()) {
                 response.setEntity(BigDecimal.ZERO);
@@ -344,15 +353,15 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         return response;
     }
 
-
-    private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO, Student student) {
+    private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO,
+            Student student) {
         FinanceTransaction transaction = new FinanceTransaction();
         transaction.setStudentId(studentId);
-//        transaction.setStudentName(
-//                Stream.of(student.getFirstName(), student.getLastName())
-//                        .filter(Objects::nonNull)
-//                        .collect(Collectors.joining(" "))
-//        );
+        // transaction.setStudentName(
+        // Stream.of(student.getFirstName(), student.getLastName())
+        // .filter(Objects::nonNull)
+        // .collect(Collectors.joining(" "))
+        // );
         transaction.setStudentName(student.getFirstName() + " " + student.getLastName());
 
         transaction.setAdmissionNumber(student.getAdmissionNumber());

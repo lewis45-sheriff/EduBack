@@ -1,5 +1,6 @@
 package com.EduePoa.EP.BankIntergration;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.BankIntergration.BankRequest.BankRequestDTO;
 import com.EduePoa.EP.BankIntergration.BankResponse.BankResponseDTO;
@@ -42,6 +43,7 @@ public class BankServiceImpl implements BankService {
     private final FinanceTransactionRepository financeTransactionRepository;
     private final StudentInvoicesRepository studentInvoicesRepository;
     private final FinanceTransactionService financeTransactionService;
+    private final AuditService auditService;
 
     @Override
     @Transactional
@@ -50,12 +52,12 @@ public class BankServiceImpl implements BankService {
 
         try {
             // Validate callback structure
-//            if (!isValidCallback(bankRequestDTO)) {
-//                response.setMessage("Invalid callback structure");
-//                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-//                response.setEntity(null);
-//                return response;
-//            }
+            // if (!isValidCallback(bankRequestDTO)) {
+            // response.setMessage("Invalid callback structure");
+            // response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            // response.setEntity(null);
+            // return response;
+            // }
 
             String transactionRef = bankRequestDTO.getTransaction().getReference();
 
@@ -66,8 +68,6 @@ public class BankServiceImpl implements BankService {
                 response.setEntity(null);
                 return response;
             }
-
-
 
             // Validate transaction status
             if (!"SUCCESS".equalsIgnoreCase(bankRequestDTO.getTransaction().getStatus())) {
@@ -105,8 +105,7 @@ public class BankServiceImpl implements BankService {
                 log.warn("Student not found for identifier: {}. Transaction: {}", studentIdentifier, transactionRef);
                 response.setMessage(String.format(
                         "Payment received but student not found. Contact admin with reference: %s",
-                        transactionRef
-                ));
+                        transactionRef));
                 response.setStatusCode(HttpStatus.ACCEPTED.value());
                 response.setEntity(unlinkedBank);
                 return response;
@@ -132,8 +131,7 @@ public class BankServiceImpl implements BankService {
                 log.warn("No invoice found for student: {} in current term", student.getAdmissionNumber());
                 response.setMessage(String.format(
                         "Payment received but no invoice found for current term. Contact admin with reference: %s",
-                        transactionRef
-                ));
+                        transactionRef));
                 response.setStatusCode(HttpStatus.ACCEPTED.value());
                 response.setEntity(unlinkedBank);
                 return response;
@@ -147,15 +145,17 @@ public class BankServiceImpl implements BankService {
                     student.getAdmissionNumber(), transactionRef);
 
             // Create transaction DTO
-            CreateTransactionDTO transactionDTO = createTransactionDTO(bankRequestDTO, invoice, currentTerm, currentYear);
+            CreateTransactionDTO transactionDTO = createTransactionDTO(bankRequestDTO, invoice, currentTerm,
+                    currentYear);
 
             // Call the existing createTransaction method
-            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(student.getId(), transactionDTO
-            );
+            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(student.getId(),
+                    transactionDTO);
 
             if (transactionResponse.getStatusCode() != HttpStatus.CREATED.value()) {
                 log.error("Failed to create finance transaction: {}", transactionResponse.getMessage());
-                response.setMessage("Payment saved but failed to update finance records: " + transactionResponse.getMessage());
+                response.setMessage(
+                        "Payment saved but failed to update finance records: " + transactionResponse.getMessage());
                 response.setStatusCode(HttpStatus.PARTIAL_CONTENT.value());
                 response.setEntity(bank);
                 return response;
@@ -169,10 +169,12 @@ public class BankServiceImpl implements BankService {
 
             response.setMessage(String.format(
                     "Payment processed successfully. New balance: KES %.2f",
-                    updatedFinance.getBalance()
-            ));
+                    updatedFinance.getBalance()));
             response.setStatusCode(HttpStatus.OK.value());
             response.setEntity(bank);
+            auditService.log("BANK", "Processed bank transaction:", transactionRef, "for student:",
+                    student.getAdmissionNumber(), "amount:",
+                    String.valueOf(bankRequestDTO.getTransaction().getAmount()));
 
         } catch (IllegalArgumentException e) {
             log.error("Validation error: {}", e.getMessage(), e);
@@ -188,10 +190,11 @@ public class BankServiceImpl implements BankService {
 
         return response;
     }
+
     private CreateTransactionDTO createTransactionDTO(BankRequestDTO bankRequestDTO,
-                                                      StudentInvoices invoice,
-                                                      Term currentTerm,
-                                                      Year currentYear) {
+            StudentInvoices invoice,
+            Term currentTerm,
+            Year currentYear) {
         CreateTransactionDTO transactionDTO = new CreateTransactionDTO();
 
         transactionDTO.setTransactionType(FinanceTransaction.TransactionType.INCOME);
@@ -208,8 +211,7 @@ public class BankServiceImpl implements BankService {
                 "%s payment - Ref: %s from %s",
                 bankRequestDTO.getTransaction().getPaymentMode(),
                 bankRequestDTO.getTransaction().getReference(),
-                bankRequestDTO.getCustomer().getMobileNumber()
-        );
+                bankRequestDTO.getCustomer().getMobileNumber());
         transactionDTO.setDescription(description);
 
         return transactionDTO;
@@ -233,6 +235,7 @@ public class BankServiceImpl implements BankService {
         }
         return response;
     }
+
     @Override
     @Transactional
     public CustomResponse<?> reconcileTransaction(String bankTransactionId, Long studentId) {
@@ -241,7 +244,8 @@ public class BankServiceImpl implements BankService {
         try {
             // Get the bank transaction
             Bank bankTransaction = bankRepository.findById(Long.valueOf(bankTransactionId))
-                    .orElseThrow(() -> new RuntimeException("Bank transaction not found with ID: " + bankTransactionId));
+                    .orElseThrow(
+                            () -> new RuntimeException("Bank transaction not found with ID: " + bankTransactionId));
 
             // Verify bank transaction is not already linked
             if (bankTransaction.getStudent() != null) {
@@ -266,7 +270,8 @@ public class BankServiceImpl implements BankService {
                     .findByStudentAndTermAndAcademicYear(student, currentTerm, currentYear);
 
             if (invoiceOpt.isEmpty()) {
-                throw new RuntimeException("No invoice found for student in current term. Please create an invoice first.");
+                throw new RuntimeException(
+                        "No invoice found for student in current term. Please create an invoice first.");
             }
 
             StudentInvoices invoice = invoiceOpt.get();
@@ -287,12 +292,12 @@ public class BankServiceImpl implements BankService {
                     "Reconciled %s payment - Ref: %s from %s",
                     bankTransaction.getPaymentMode(),
                     bankTransaction.getTransactionReference(),
-                    bankTransaction.getMobileNumber()
-            );
+                    bankTransaction.getMobileNumber());
             transactionDTO.setDescription(description);
 
             // Call the existing createTransaction method from FinanceTransactionService
-            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(studentId, transactionDTO);
+            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(studentId,
+                    transactionDTO);
 
             if (transactionResponse.getStatusCode() != HttpStatus.CREATED.value()) {
                 throw new RuntimeException("Failed to create transaction: " + transactionResponse.getMessage());
@@ -304,8 +309,7 @@ public class BankServiceImpl implements BankService {
                     "Reconciled school fee payment for %s - %s %s",
                     student.getAdmissionNumber(),
                     student.getFirstName(),
-                    student.getLastName()
-            ));
+                    student.getLastName()));
             Bank updatedBankTransaction = bankRepository.save(bankTransaction);
 
             // Prepare response
@@ -316,6 +320,8 @@ public class BankServiceImpl implements BankService {
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Transaction reconciled successfully");
             response.setEntity(responseData);
+            auditService.log("BANK", "Reconciled transaction:", bankTransactionId, "with student:",
+                    student.getAdmissionNumber(), "amount:", String.valueOf(bankTransaction.getAmount()));
 
         } catch (RuntimeException e) {
             log.error("Error reconciling transaction: {}", e.getMessage(), e);
@@ -326,189 +332,206 @@ public class BankServiceImpl implements BankService {
 
         return response;
     }
-//
-//    @Override
-//    public CustomResponse<?> getTransactionsWithPagination(int page, int size) {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-//            Page<Bank> transactionsPage = bankRepository.findAll(pageRequest);
-//
-//            List<BankResponseDTO> dtos = convertToDTOList(transactionsPage.getContent());
-//
-//            Map<String, Object> result = new HashMap<>();
-//            result.put("transactions", dtos);
-//            result.put("currentPage", transactionsPage.getNumber());
-//            result.put("totalItems", transactionsPage.getTotalElements());
-//            result.put("totalPages", transactionsPage.getTotalPages());
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(result);
-//            response.setMessage("Transactions retrieved successfully");
-//        } catch (Exception e) {
-//            log.error("Error retrieving paginated transactions: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving transactions: " + e.getMessage());
-//        }
-//        return response;
-//    }
+    //
+    // @Override
+    // public CustomResponse<?> getTransactionsWithPagination(int page, int size) {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // PageRequest pageRequest = PageRequest.of(page, size,
+    // Sort.by(Sort.Direction.DESC, "createdAt"));
+    // Page<Bank> transactionsPage = bankRepository.findAll(pageRequest);
+    //
+    // List<BankResponseDTO> dtos = convertToDTOList(transactionsPage.getContent());
+    //
+    // Map<String, Object> result = new HashMap<>();
+    // result.put("transactions", dtos);
+    // result.put("currentPage", transactionsPage.getNumber());
+    // result.put("totalItems", transactionsPage.getTotalElements());
+    // result.put("totalPages", transactionsPage.getTotalPages());
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(result);
+    // response.setMessage("Transactions retrieved successfully");
+    // } catch (Exception e) {
+    // log.error("Error retrieving paginated transactions: {}", e.getMessage(), e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving transactions: " + e.getMessage());
+    // }
+    // return response;
+    // }
 
-//    @Override
-//    public CustomResponse<?> getTransactionByReference(String reference) {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            Optional<Bank> transaction = bankRepository.findByTransactionReference(reference);
-//            if (transaction.isPresent()) {
-//                BankResponseDTO dto = convertToDTO(transaction.get());
-//                response.setStatusCode(HttpStatus.OK.value());
-//                response.setEntity(dto);
-//                response.setMessage("Transaction found");
-//            } else {
-//                response.setStatusCode(HttpStatus.NOT_FOUND.value());
-//                response.setEntity(null);
-//                response.setMessage("Transaction not found");
-//            }
-//        } catch (Exception e) {
-//            log.error("Error retrieving transaction by reference: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving transaction: " + e.getMessage());
-//        }
-//        return response;
-//    }
+    // @Override
+    // public CustomResponse<?> getTransactionByReference(String reference) {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // Optional<Bank> transaction =
+    // bankRepository.findByTransactionReference(reference);
+    // if (transaction.isPresent()) {
+    // BankResponseDTO dto = convertToDTO(transaction.get());
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(dto);
+    // response.setMessage("Transaction found");
+    // } else {
+    // response.setStatusCode(HttpStatus.NOT_FOUND.value());
+    // response.setEntity(null);
+    // response.setMessage("Transaction not found");
+    // }
+    // } catch (Exception e) {
+    // log.error("Error retrieving transaction by reference: {}", e.getMessage(),
+    // e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving transaction: " + e.getMessage());
+    // }
+    // return response;
+    // }
 
-//    @Override
-//    public CustomResponse<?> getTransactionsByStudentId(Long studentId) {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            List<Bank> transactions = bankRepository.findByStudentIdOrderByCreatedAtDesc(studentId);
-//            List<BankResponseDTO> dtos = convertToDTOList(transactions);
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(dtos);
-//            response.setMessage("Transactions retrieved successfully");
-//        } catch (Exception e) {
-//            log.error("Error retrieving transactions for student {}: {}", studentId, e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving transactions: " + e.getMessage());
-//        }
-//        return response;
-//    }
+    // @Override
+    // public CustomResponse<?> getTransactionsByStudentId(Long studentId) {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // List<Bank> transactions =
+    // bankRepository.findByStudentIdOrderByCreatedAtDesc(studentId);
+    // List<BankResponseDTO> dtos = convertToDTOList(transactions);
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(dtos);
+    // response.setMessage("Transactions retrieved successfully");
+    // } catch (Exception e) {
+    // log.error("Error retrieving transactions for student {}: {}", studentId,
+    // e.getMessage(), e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving transactions: " + e.getMessage());
+    // }
+    // return response;
+    // }
 
-//    @Override
-//    public CustomResponse<?> getTransactionsByAdmissionNumber(String admissionNumber) {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            List<Bank> transactions = bankRepository.findByBillNumberOrderByCreatedAtDesc(admissionNumber);
-//            List<BankResponseDTO> dtos = convertToDTOList(transactions);
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(dtos);
-//            response.setMessage("Transactions retrieved successfully");
-//        } catch (Exception e) {
-//            log.error("Error retrieving transactions for admission {}: {}", admissionNumber, e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving transactions: " + e.getMessage());
-//        }
-//        return response;
-//    }
-//
-//    @Override
-//    public CustomResponse<?> getTransactionsByDateRange(String startDate, String endDate) {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            List<Bank> transactions = bankRepository.findByTransactionDateBetween(startDate, endDate);
-//            List<BankResponseDTO> dtos = convertToDTOList(transactions);
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(dtos);
-//            response.setMessage("Transactions retrieved successfully");
-//        } catch (Exception e) {
-//            log.error("Error retrieving transactions by date range: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving transactions: " + e.getMessage());
-//        }
-//        return response;
-//    }
+    // @Override
+    // public CustomResponse<?> getTransactionsByAdmissionNumber(String
+    // admissionNumber) {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // List<Bank> transactions =
+    // bankRepository.findByBillNumberOrderByCreatedAtDesc(admissionNumber);
+    // List<BankResponseDTO> dtos = convertToDTOList(transactions);
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(dtos);
+    // response.setMessage("Transactions retrieved successfully");
+    // } catch (Exception e) {
+    // log.error("Error retrieving transactions for admission {}: {}",
+    // admissionNumber, e.getMessage(), e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving transactions: " + e.getMessage());
+    // }
+    // return response;
+    // }
+    //
+    // @Override
+    // public CustomResponse<?> getTransactionsByDateRange(String startDate, String
+    // endDate) {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // List<Bank> transactions =
+    // bankRepository.findByTransactionDateBetween(startDate, endDate);
+    // List<BankResponseDTO> dtos = convertToDTOList(transactions);
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(dtos);
+    // response.setMessage("Transactions retrieved successfully");
+    // } catch (Exception e) {
+    // log.error("Error retrieving transactions by date range: {}", e.getMessage(),
+    // e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving transactions: " + e.getMessage());
+    // }
+    // return response;
+    // }
 
-//    @Override
-//    public CustomResponse<?> getUnmatchedTransactions() {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            List<Bank> transactions = bankRepository.findByStudentIsNullOrderByCreatedAtDesc();
-//            List<BankResponseDTO> dtos = convertToDTOList(transactions);
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(dtos);
-//            response.setMessage("Unmatched transactions retrieved successfully");
-//        } catch (Exception e) {
-//            log.error("Error retrieving unmatched transactions: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving transactions: " + e.getMessage());
-//        }
-//        return response;
-//    }
+    // @Override
+    // public CustomResponse<?> getUnmatchedTransactions() {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // List<Bank> transactions =
+    // bankRepository.findByStudentIsNullOrderByCreatedAtDesc();
+    // List<BankResponseDTO> dtos = convertToDTOList(transactions);
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(dtos);
+    // response.setMessage("Unmatched transactions retrieved successfully");
+    // } catch (Exception e) {
+    // log.error("Error retrieving unmatched transactions: {}", e.getMessage(), e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving transactions: " + e.getMessage());
+    // }
+    // return response;
+    // }
 
-//    @Override
-//    public CustomResponse<?> getTransactionStatistics() {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            Map<String, Object> stats = new HashMap<>();
-//
-//            Long totalTransactions = bankRepository.count();
-//            Long unmatchedTransactions = bankRepository.countByStudentIsNull();
-//            Long matchedTransactions = totalTransactions - unmatchedTransactions;
-//            Long successfulTransactions = bankRepository.countByStatus("SUCCESS");
-//            Long failedTransactions = bankRepository.countByStatus("FAILED");
-//
-//            BigDecimal totalAmount = bankRepository.sumTotalAmount();
-//            BigDecimal totalUnmatchedAmount = bankRepository.sumUnmatchedAmount();
-//            BigDecimal totalSuccessfulAmount = bankRepository.sumAmountByStatus("SUCCESS");
-//
-//            stats.put("totalTransactions", totalTransactions);
-//            stats.put("matchedTransactions", matchedTransactions);
-//            stats.put("unmatchedTransactions", unmatchedTransactions);
-//            stats.put("successfulTransactions", successfulTransactions);
-//            stats.put("failedTransactions", failedTransactions);
-//            stats.put("totalAmount", totalAmount != null ? totalAmount : BigDecimal.ZERO);
-//            stats.put("totalUnmatchedAmount", totalUnmatchedAmount != null ? totalUnmatchedAmount : BigDecimal.ZERO);
-//            stats.put("totalSuccessfulAmount", totalSuccessfulAmount != null ? totalSuccessfulAmount : BigDecimal.ZERO);
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(stats);
-//            response.setMessage("Statistics retrieved successfully");
-//        } catch (Exception e) {
-//            log.error("Error retrieving transaction statistics: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error retrieving statistics: " + e.getMessage());
-//        }
-//        return response;
-//    }
-//
-//    @Override
-//    public CustomResponse<?> searchTransactions(String searchTerm) {
-//        CustomResponse<Object> response = new CustomResponse<>();
-//        try {
-//            List<Bank> transactions = bankRepository.searchByCustomerNameOrMobile(searchTerm);
-//            List<BankResponseDTO> dtos = convertToDTOList(transactions);
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(dtos);
-//            response.setMessage("Search completed successfully");
-//        } catch (Exception e) {
-//            log.error("Error searching transactions: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("Error searching transactions: " + e.getMessage());
-//        }
-//        return response;
-//    }
+    // @Override
+    // public CustomResponse<?> getTransactionStatistics() {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // Map<String, Object> stats = new HashMap<>();
+    //
+    // Long totalTransactions = bankRepository.count();
+    // Long unmatchedTransactions = bankRepository.countByStudentIsNull();
+    // Long matchedTransactions = totalTransactions - unmatchedTransactions;
+    // Long successfulTransactions = bankRepository.countByStatus("SUCCESS");
+    // Long failedTransactions = bankRepository.countByStatus("FAILED");
+    //
+    // BigDecimal totalAmount = bankRepository.sumTotalAmount();
+    // BigDecimal totalUnmatchedAmount = bankRepository.sumUnmatchedAmount();
+    // BigDecimal totalSuccessfulAmount =
+    // bankRepository.sumAmountByStatus("SUCCESS");
+    //
+    // stats.put("totalTransactions", totalTransactions);
+    // stats.put("matchedTransactions", matchedTransactions);
+    // stats.put("unmatchedTransactions", unmatchedTransactions);
+    // stats.put("successfulTransactions", successfulTransactions);
+    // stats.put("failedTransactions", failedTransactions);
+    // stats.put("totalAmount", totalAmount != null ? totalAmount :
+    // BigDecimal.ZERO);
+    // stats.put("totalUnmatchedAmount", totalUnmatchedAmount != null ?
+    // totalUnmatchedAmount : BigDecimal.ZERO);
+    // stats.put("totalSuccessfulAmount", totalSuccessfulAmount != null ?
+    // totalSuccessfulAmount : BigDecimal.ZERO);
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(stats);
+    // response.setMessage("Statistics retrieved successfully");
+    // } catch (Exception e) {
+    // log.error("Error retrieving transaction statistics: {}", e.getMessage(), e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error retrieving statistics: " + e.getMessage());
+    // }
+    // return response;
+    // }
+    //
+    // @Override
+    // public CustomResponse<?> searchTransactions(String searchTerm) {
+    // CustomResponse<Object> response = new CustomResponse<>();
+    // try {
+    // List<Bank> transactions =
+    // bankRepository.searchByCustomerNameOrMobile(searchTerm);
+    // List<BankResponseDTO> dtos = convertToDTOList(transactions);
+    //
+    // response.setStatusCode(HttpStatus.OK.value());
+    // response.setEntity(dtos);
+    // response.setMessage("Search completed successfully");
+    // } catch (Exception e) {
+    // log.error("Error searching transactions: {}", e.getMessage(), e);
+    // response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    // response.setEntity(null);
+    // response.setMessage("Error searching transactions: " + e.getMessage());
+    // }
+    // return response;
+    // }
 
     // ============= PRIVATE HELPER METHODS =============
 
@@ -569,8 +592,7 @@ public class BankServiceImpl implements BankService {
                     "School fee payment for %s - %s %s",
                     student.getAdmissionNumber(),
                     student.getFirstName(),
-                    student.getLastName()
-            ));
+                    student.getLastName()));
         } else {
             bank.setNarrative("Unmatched payment - requires manual reconciliation");
         }
@@ -583,8 +605,7 @@ public class BankServiceImpl implements BankService {
 
         if (currentTerm == null) {
             throw new IllegalStateException(
-                    "No active term found for the current date. Please contact administration."
-            );
+                    "No active term found for the current date. Please contact administration.");
         }
 
         Year academicYear = student.getAcademicYear();
@@ -592,8 +613,7 @@ public class BankServiceImpl implements BankService {
         Optional<Finance> financeOpt = financeRepository.findByStudentIdAndTermAndYear(
                 student.getId(),
                 currentTerm,
-                academicYear
-        );
+                academicYear);
 
         Finance finance;
         if (financeOpt.isPresent()) {
@@ -619,7 +639,8 @@ public class BankServiceImpl implements BankService {
             finance.setTerm(currentTerm);
             finance.setYear(academicYear);
 
-            log.info("Created new finance record for student: {}, Term: {}, Year: {}, Total fee: {}, Paid: {}, Balance: {}",
+            log.info(
+                    "Created new finance record for student: {}, Term: {}, Year: {}, Total fee: {}, Paid: {}, Balance: {}",
                     student.getAdmissionNumber(), currentTerm, academicYear, totalFee, amount, finance.getBalance());
         }
 
@@ -630,7 +651,8 @@ public class BankServiceImpl implements BankService {
     private FinanceTransaction createFinanceTransaction(Student student, BigDecimal amount, BankRequestDTO dto) {
         Term currentTerm = Term.getCurrentTerm();
         Year currentYear = Year.now();
-        Optional<StudentInvoices> optionalStudentInvoices = studentInvoicesRepository.findByStudentAndTermAndAcademicYear(student,currentTerm,currentYear);
+        Optional<StudentInvoices> optionalStudentInvoices = studentInvoicesRepository
+                .findByStudentAndTermAndAcademicYear(student, currentTerm, currentYear);
         StudentInvoices studentInvoices = optionalStudentInvoices.get();
 
         FinanceTransaction transaction = new FinanceTransaction();
@@ -648,8 +670,7 @@ public class BankServiceImpl implements BankService {
                 "%s payment - Ref: %s from %s",
                 dto.getTransaction().getPaymentMode(),
                 dto.getTransaction().getReference(),
-                dto.getCustomer().getMobileNumber()
-        );
+                dto.getCustomer().getMobileNumber());
         transaction.setDescription(description);
 
         transaction.setPaymentMethod(mapPaymentMethod(dto.getTransaction().getPaymentMode()));
@@ -699,8 +720,7 @@ public class BankServiceImpl implements BankService {
         dto.setFtRef(bank.getBankReference());
         dto.setTransTime(bank.getTransactionDate());
         dto.setTransAmount(
-                bank.getAmount() != null ? bank.getAmount().toPlainString() : null
-        );
+                bank.getAmount() != null ? bank.getAmount().toPlainString() : null);
 
         // Business / billing details
         dto.setBusinessShortCode(bank.getServedBy()); // closest equivalent
@@ -724,15 +744,12 @@ public class BankServiceImpl implements BankService {
                     String.format(
                             "%s %s",
                             bank.getStudent().getFirstName(),
-                            bank.getStudent().getLastName()
-                    ).trim()
-            );
+                            bank.getStudent().getLastName()).trim());
             dto.setStudentAdmissionNumber(bank.getStudent().getAdmissionNumber());
         }
 
         return dto;
     }
-
 
     private List<BankResponseDTO> convertToDTOList(List<Bank> banks) {
         return banks.stream()

@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Communications;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Communications.Enums.*;
@@ -38,6 +39,7 @@ public class CommunicationServiceImpl implements CommunicationService {
     private final StudentRepository studentRepository;
     private final UserRepository userRepository;
     private final GradeRepository gradeRepository;
+    private final AuditService auditService;
 
     // ==================== ANNOUNCEMENT METHODS ====================
 
@@ -66,6 +68,8 @@ public class CommunicationServiceImpl implements CommunicationService {
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage("Announcement created successfully");
             response.setEntity(mapToAnnouncementResponse(announcement));
+            auditService.log("COMMUNICATION", "Created announcement:", announcement.getTitle(), "with ID:",
+                    String.valueOf(announcement.getId()));
 
         } catch (Exception e) {
             log.error("Error creating announcement: ", e);
@@ -105,6 +109,8 @@ public class CommunicationServiceImpl implements CommunicationService {
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Announcement updated successfully");
             response.setEntity(mapToAnnouncementResponse(announcement));
+            auditService.log("COMMUNICATION", "Updated announcement:", announcement.getTitle(), "with ID:",
+                    String.valueOf(id));
 
         } catch (Exception e) {
             log.error("Error updating announcement: ", e);
@@ -128,6 +134,7 @@ public class CommunicationServiceImpl implements CommunicationService {
 
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Announcement archived successfully");
+            auditService.log("COMMUNICATION", "Archived announcement with ID:", String.valueOf(id));
 
         } catch (Exception e) {
             log.error("Error deleting announcement: ", e);
@@ -161,7 +168,8 @@ public class CommunicationServiceImpl implements CommunicationService {
     }
 
     @Override
-    public CustomResponse<?> getAllAnnouncements(AnnouncementStatus status, AnnouncementPriority priority, TargetAudience targetAudience, int page, int size) {
+    public CustomResponse<?> getAllAnnouncements(AnnouncementStatus status, AnnouncementPriority priority,
+            TargetAudience targetAudience, int page, int size) {
         CustomResponse<AnnouncementPageResponse> response = new CustomResponse<>();
         try {
             Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -240,6 +248,8 @@ public class CommunicationServiceImpl implements CommunicationService {
             response.setMessage(
                     "Message " + (request.getScheduledAt() != null ? "scheduled" : "sent") + " successfully");
             response.setEntity(mapToMessageResponse(message));
+            auditService.log("COMMUNICATION", "Sent message:", message.getSubject(), "to",
+                    String.valueOf(request.getRecipients().size()), "recipients");
 
         } catch (Exception e) {
             log.error("Error sending message: ", e);
@@ -274,8 +284,11 @@ public class CommunicationServiceImpl implements CommunicationService {
             message.setRecipients(recipients);
 
             response.setStatusCode(HttpStatus.CREATED.value());
-            response.setMessage("Bulk message " + (request.getScheduledAt() != null ? "scheduled" : "sent") + " successfully");
+            response.setMessage(
+                    "Bulk message " + (request.getScheduledAt() != null ? "scheduled" : "sent") + " successfully");
             response.setEntity(mapToMessageResponse(message));
+            auditService.log("COMMUNICATION", "Sent bulk message:", message.getSubject(), "to",
+                    String.valueOf(recipients.size()), "recipients");
 
         } catch (Exception e) {
             log.error("Error sending bulk message: ", e);
@@ -450,6 +463,7 @@ public class CommunicationServiceImpl implements CommunicationService {
 
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Scheduled message cancelled successfully");
+            auditService.log("COMMUNICATION", "Cancelled scheduled message with ID:", String.valueOf(id));
 
         } catch (Exception e) {
             log.error("Error cancelling scheduled message: ", e);

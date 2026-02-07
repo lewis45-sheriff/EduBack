@@ -6,8 +6,8 @@ import com.EduePoa.EP.Academics.Attendance.AttendnanceDetail;
 import com.EduePoa.EP.Academics.Attendance.Requests.AttendanceRequestDTO;
 import com.EduePoa.EP.Academics.Attendance.Requests.StudentAttendanceRequestDTO;
 import com.EduePoa.EP.Academics.Attendance.Responses.AttendanceResponseDTO;
-import com.EduePoa.EP.Academics.Attendance.Responses.StudentAttendanceDTO;
 import com.EduePoa.EP.Academics.Attendance.Responses.StudentAttendanceResponseDTO;
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.AttendanceStatus;
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
@@ -25,10 +25,12 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class AcademicsServiceImpl implements AcademicsService{
+public class AcademicsServiceImpl implements AcademicsService {
     private final GradeRepository gradeRepository;
     private final StudentRepository studentRepository;
     private final AttendanceRepository attendanceRepository;
+    private final AuditService auditService;
+
     @Override
     public CustomResponse<?> markAttendance(AttendanceRequestDTO attendanceRequestDTO) {
         CustomResponse<AttendanceResponseDTO> response = new CustomResponse<>();
@@ -53,7 +55,6 @@ public class AcademicsServiceImpl implements AcademicsService{
             attendance.setGrade(grade);
             attendance.setDateTime(LocalDateTime.now());
             attendance.setAttendanceDate(LocalDate.now());
-
 
             List<AttendnanceDetail> details = new ArrayList<>();
 
@@ -80,6 +81,8 @@ public class AcademicsServiceImpl implements AcademicsService{
             response.setMessage("Attendance marked successfully");
             response.setStatusCode(HttpStatus.OK.value());
             response.setEntity(dto);
+            auditService.log("ACADEMICS", "Marked attendance for grade:", grade.getName(), "ID:",
+                    String.valueOf(savedAttendance.getId()), "students:", String.valueOf(details.size()));
 
         } catch (Exception e) {
             response.setMessage(e.getMessage());
@@ -111,6 +114,7 @@ public class AcademicsServiceImpl implements AcademicsService{
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getAttendanceById(Long id) {
         CustomResponse<AttendanceResponseDTO> response = new CustomResponse<>();
@@ -132,6 +136,7 @@ public class AcademicsServiceImpl implements AcademicsService{
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> updateAttendance(Long id, AttendanceRequestDTO attendanceRequestDTO) {
         CustomResponse<AttendanceResponseDTO> response = new CustomResponse<>();
@@ -173,6 +178,8 @@ public class AcademicsServiceImpl implements AcademicsService{
             response.setMessage("Attendance updated successfully");
             response.setStatusCode(HttpStatus.OK.value());
             response.setEntity(dto);
+            auditService.log("ACADEMICS", "Updated attendance ID:", String.valueOf(id), "for grade:",
+                    attendance.getGrade().getName());
 
         } catch (Exception e) {
             response.setMessage(e.getMessage());
@@ -195,6 +202,7 @@ public class AcademicsServiceImpl implements AcademicsService{
             response.setMessage("Attendance deleted successfully");
             response.setStatusCode(HttpStatus.OK.value());
             response.setEntity(null);
+            auditService.log("ACADEMICS", "Deleted attendance with ID:", String.valueOf(id));
 
         } catch (Exception e) {
             response.setMessage(e.getMessage());
@@ -203,6 +211,7 @@ public class AcademicsServiceImpl implements AcademicsService{
         }
         return response;
     }
+
     private AttendanceResponseDTO mapToResponseDTO(Attendance attendance) {
 
         AttendanceResponseDTO dto = new AttendanceResponseDTO();
@@ -224,10 +233,5 @@ public class AcademicsServiceImpl implements AcademicsService{
 
         return dto;
     }
-
-
-
-
-
 
 }

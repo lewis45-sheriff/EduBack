@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Grade;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Grade.Requests.GradeDto;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.AllArgsConstructor;
@@ -15,8 +16,9 @@ import java.util.Set;
 @Service
 @AllArgsConstructor
 @Slf4j
-public class GradeServiceImpl implements  GradeService{
+public class GradeServiceImpl implements GradeService {
     private final GradeRepository gradeRepository;
+    private final AuditService auditService;
 
     @Override
     public CustomResponse<?> createGrade(String name, Integer start, Integer end) {
@@ -67,6 +69,8 @@ public class GradeServiceImpl implements  GradeService{
                 response.setMessage("Grades created successfully.");
                 response.setStatusCode(HttpStatus.CREATED.value());
                 response.setEntity(createdGrades);
+                auditService.log("GRADE_MANAGEMENT", "Created", String.valueOf(createdGrades.size()),
+                        "grades with base name:", name);
             } else {
                 response.setMessage("No new grades were created. All grades already exist.");
                 response.setStatusCode(HttpStatus.OK.value());
@@ -90,7 +94,6 @@ public class GradeServiceImpl implements  GradeService{
         CustomResponse<List<Grade>> response = new CustomResponse<>();
         log.info("Fetching all grade/class names");
 
-
         try {
             List<Grade> grades = gradeRepository.findAll();
 
@@ -102,6 +105,7 @@ public class GradeServiceImpl implements  GradeService{
                 response.setMessage("All grades retrieved successfully.");
                 response.setStatusCode(HttpStatus.OK.value());
                 response.setEntity(grades);
+                auditService.log("GRADE_MANAGEMENT", "Retrieved", String.valueOf(grades.size()), "grades");
             }
         } catch (Exception e) {
             response.setMessage("An unexpected error occurred while retrieving all grades.");
@@ -137,6 +141,7 @@ public class GradeServiceImpl implements  GradeService{
             response.setMessage("Grade deleted successfully (soft delete).");
             response.setStatusCode(HttpStatus.OK.value());
             response.setEntity(null);
+            auditService.log("GRADE_MANAGEMENT", "Deleted grade:", grade.getName(), "with ID:", String.valueOf(id));
 
         } catch (RuntimeException e) {
             log.error("Error during soft delete of grade with id {}: {}", id, e.getMessage(), e);
@@ -146,7 +151,5 @@ public class GradeServiceImpl implements  GradeService{
         }
         return response;
     }
-
-
 
 }

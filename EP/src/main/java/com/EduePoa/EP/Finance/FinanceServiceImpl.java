@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Finance;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Responses.StudentBalanceDTO;
 import com.EduePoa.EP.StudentRegistration.Student;
@@ -19,9 +20,11 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class FinanceServiceImpl implements FinanceService{
+public class FinanceServiceImpl implements FinanceService {
     private final FinanceRepository financeRepository;
     private final StudentRepository studentRepository;
+    private final AuditService auditService;
+
     @Override
     public CustomResponse<?> getStudentsWithBalances() {
         CustomResponse<List<StudentBalanceDTO>> response = new CustomResponse<>();
@@ -48,7 +51,7 @@ public class FinanceServiceImpl implements FinanceService{
 
                         return StudentBalanceDTO.builder()
                                 .studentName(student.getFirstName() + " " + student.getLastName())
-                                .gradeName(student.getGradeName())  // Add grade name
+                                .gradeName(student.getGradeName()) // Add grade name
                                 .totalFeeAmount(finance.getTotalFeeAmount())
                                 .paidAmount(finance.getPaidAmount())
                                 .balance(balance)
@@ -62,6 +65,7 @@ public class FinanceServiceImpl implements FinanceService{
             response.setEntity(studentBalances);
             response.setMessage("Students with balances retrieved successfully");
             response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FINANCE", "Retrieved balances for", String.valueOf(studentBalances.size()), "students");
 
         } catch (RuntimeException e) {
             response.setMessage(e.getMessage());
@@ -70,6 +74,7 @@ public class FinanceServiceImpl implements FinanceService{
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getStudentsWithBalancePerStudent(Long studentId) {
         CustomResponse<Object> response = new CustomResponse<>();
@@ -106,6 +111,7 @@ public class FinanceServiceImpl implements FinanceService{
             response.setEntity(balances);
             response.setMessage("Balances retrieved successfully.");
             response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FINANCE", "Retrieved balance for student ID:", String.valueOf(studentId));
         } catch (RuntimeException e) {
             response.setEntity(null);
             response.setMessage(e.getMessage());
@@ -113,6 +119,5 @@ public class FinanceServiceImpl implements FinanceService{
         }
         return response;
     }
-
 
 }

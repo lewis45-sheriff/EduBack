@@ -1,5 +1,6 @@
 package com.EduePoa.EP.FeeComponents;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeComponents.Requests.FeeComponentRequest;
 import com.EduePoa.EP.FeeComponents.Responses.FeeComponentResponse;
@@ -16,12 +17,13 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class FeeComponentsServiceImpl implements FeeComponentsService {
     private final FeeComponentsRepository feeComponentsRepository;
+    private final AuditService auditService;
 
     @Override
     public CustomResponse<?> create(FeeComponentRequest feeComponentRequest) {
         CustomResponse<FeeComponentResponse> response = new CustomResponse<>();
         try {
-            //  Basic validation
+            // Basic validation
             if (feeComponentRequest.getName() == null || feeComponentRequest.getName().trim().isEmpty()) {
                 response.setEntity(null);
                 response.setStatusCode(HttpStatus.BAD_REQUEST.value());
@@ -32,16 +34,18 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
             // Map request to entity
             FeeComponents feeComponents = FeeComponents.builder()
                     .name(feeComponentRequest.getName().trim())
-                    .description(feeComponentRequest.getDescription() != null ? feeComponentRequest.getDescription().trim() : null)
+                    .description(
+                            feeComponentRequest.getDescription() != null ? feeComponentRequest.getDescription().trim()
+                                    : null)
                     .type(feeComponentRequest.getType())
                     .category(feeComponentRequest.getCategory())
                     .status(Status.ACTIVE)
                     .build();
 
-            //  Save to DB
+            // Save to DB
             FeeComponents savedComponent = feeComponentsRepository.save(feeComponents);
 
-            //  Map entity → DTO
+            // Map entity → DTO
             FeeComponentResponse dto = FeeComponentResponse.builder()
                     .id(savedComponent.getId())
                     .name(savedComponent.getName())
@@ -51,10 +55,12 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
                     .status(String.valueOf(savedComponent.getStatus()))
                     .build();
 
-            //  Build response
+            // Build response
             response.setEntity(dto);
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage("Fee component created successfully");
+            auditService.log("FEE_COMPONENTS", "Created fee component:", savedComponent.getName(), "with ID:",
+                    String.valueOf(savedComponent.getId()));
 
         } catch (RuntimeException e) {
             response.setEntity(null);
@@ -88,6 +94,7 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
             response.setEntity(responseList);
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Fee components retrieved successfully");
+            auditService.log("FEE_COMPONENTS", "Retrieved", String.valueOf(responseList.size()), "fee components");
 
         } catch (RuntimeException e) {
             response.setMessage(e.getMessage());
@@ -120,6 +127,8 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
             response.setEntity(null);
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Fee component soft deleted successfully");
+            auditService.log("FEE_COMPONENTS", "Deleted fee component:", feeComponent.getName(), "with ID:",
+                    String.valueOf(id));
 
         } catch (RuntimeException e) {
             response.setEntity(null);
@@ -128,6 +137,7 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
         }
         return response;
     }
+
     @Override
     public CustomResponse<?> getAllForFeeStructure() {
         CustomResponse<List<FeeStructureFormatedDTO>> response = new CustomResponse<>();
@@ -145,6 +155,8 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
             response.setStatusCode(HttpStatus.OK.value());
             response.setMessage("Fee components retrieved successfully");
             response.setEntity(formattedList);
+            auditService.log("FEE_COMPONENTS", "Retrieved", String.valueOf(formattedList.size()),
+                    "fee components for fee structure");
 
         } catch (RuntimeException e) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -153,7 +165,5 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
         }
         return response;
     }
-
-
 
 }

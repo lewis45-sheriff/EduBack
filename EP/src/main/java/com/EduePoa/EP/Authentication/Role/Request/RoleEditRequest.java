@@ -5,14 +5,10 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-public class RoleRequest {
+public class RoleEditRequest {
+    private Long id;
     private String name;
     private List<String> permissions;
 }
 
-@Data
-class PermissionInput {
-    private String name;
-    private String permission;
-    private String description;
-}
+
