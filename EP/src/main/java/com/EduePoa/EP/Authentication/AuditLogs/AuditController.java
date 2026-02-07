@@ -13,9 +13,7 @@ import java.util.Date;
 public class AuditController {
     private final AuditService auditService;
 
-    /**
-     * Get all audit logs with optional pagination
-     */
+
     @GetMapping("/logs")
     public ResponseEntity<?> getAllAuditLogs(
             @RequestParam(defaultValue = "0") int page,
@@ -24,9 +22,7 @@ public class AuditController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    /**
-     * Get audit logs by specific date
-     */
+
     @GetMapping("/logs/by-date/{date}")
     public ResponseEntity<?> getAuditLogsByDate(
             @PathVariable("date") @DateTimeFormat(pattern = "yyyy-MM-dd") Date date) {
@@ -34,9 +30,7 @@ public class AuditController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    /**
-     * Get audit logs within a date range
-     */
+
     @GetMapping("/logs/by-date-range")
     public ResponseEntity<?> getAuditLogsByDateRange(
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
@@ -45,27 +39,21 @@ public class AuditController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    /**
-     * Get audit logs by module (e.g., STUDENT, TRANSPORT, FINANCE)
-     */
+
     @GetMapping("/logs/by-module/{module}")
     public ResponseEntity<?> getAuditLogsByModule(@PathVariable String module) {
         var response = auditService.getAuditLogsByModule(module);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    /**
-     * Get audit logs by user email
-     */
+
     @GetMapping("/logs/by-user/{email}")
     public ResponseEntity<?> getAuditLogsByUser(@PathVariable String email) {
         var response = auditService.getAuditLogsByUser(email);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    /**
-     * Search audit logs by activity keyword
-     */
+
     @GetMapping("/logs/search")
     public ResponseEntity<?> searchAuditLogs(@RequestParam String keyword) {
         var response = auditService.searchAuditLogs(keyword);
