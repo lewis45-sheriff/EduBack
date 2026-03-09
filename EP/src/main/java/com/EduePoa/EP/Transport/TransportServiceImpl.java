@@ -22,6 +22,7 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -198,6 +199,7 @@ public class TransportServiceImpl implements TransportService {
                     .vehicle(vehicle)
                     .pickupLocation(request.getPickupLocation())
                     .transportType(request.getTransportType())
+                    .assignmentDate(LocalDate.now())
                     .build();
 
             // Save
@@ -238,6 +240,9 @@ public class TransportServiceImpl implements TransportService {
                             .vehiclePlateNumber(at.getVehicle().getVehicleNumber())
                             .pickupLocation(at.getPickupLocation())
                             .transportType(at.getTransportType())
+                            .admissionNumber(at.getStudent().getAdmissionNumber())
+                            .assignedDate(at.getAssignmentDate())
+
                             .build())
                     .toList();
 

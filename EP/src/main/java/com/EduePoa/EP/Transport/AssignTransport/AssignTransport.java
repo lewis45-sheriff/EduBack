@@ -6,6 +6,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "student_transport")
 @Getter
@@ -34,4 +36,7 @@ public class AssignTransport {
 
     @Column(name = "transport_type", nullable = false)
     private String transportType;
+
+    @Column(name = "assignment_date", nullable = false)
+    private LocalDate assignmentDate;
 }

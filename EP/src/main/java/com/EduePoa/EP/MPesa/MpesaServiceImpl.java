@@ -6,8 +6,13 @@ import com.EduePoa.EP.Finance.Finance;
 import com.EduePoa.EP.Finance.FinanceRepository;
 import com.EduePoa.EP.FinanceTransaction.FinanceTransaction;
 import com.EduePoa.EP.FinanceTransaction.FinanceTransactionRepository;
+import com.EduePoa.EP.FinanceTransaction.FinanceTransactionService;
+import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
+import com.EduePoa.EP.StudentInvoices.StudentInvoices;
+import com.EduePoa.EP.StudentInvoices.StudentInvoicesRepository;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
+import com.EduePoa.EP.Utils.CustomResponse;
 import com.google.gson.Gson;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
@@ -15,9 +20,10 @@ import okhttp3.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.net.ssl.*;
 import java.math.BigDecimal;
@@ -25,12 +31,12 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.Base64;
 import java.util.Date;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -46,6 +52,10 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
     private FinanceRepository financeRepository;
     @Autowired
     private FinanceTransactionRepository financeTransactionRepository;
+    @Autowired
+    private StudentInvoicesRepository studentInvoicesRepository;
+    @Autowired
+    private FinanceTransactionService financeTransactionService;
     @Autowired
     private AuditService auditService;
 
@@ -569,270 +579,329 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
         }
     }
 
-    // public Void processCallback(Object object) {
-    // Gson gson = new Gson();
-    // log.info("STK Callback received at " + new Date());
-    //
-    // // Parse the JSON object
-    // JSONObject callbackJson = new JSONObject(gson.toJson(object));
-    //
-    // // Initialize variables
-    // String resultCode = "";
-    // String resultDesc = "";
-    // String mpesaCode = "";
-    // String merchantRequestId = "";
-    // Timestamp transactionDate = null;
-    // String phoneNumber = "";
-    // Double amount = null;
-    // final Student[] student = {null};
-    //
-    // try {
-    // // Navigate through the JSON structure
-    // if (callbackJson.has("Body")) {
-    // JSONObject body = callbackJson.getJSONObject("Body");
-    //
-    // if (body.has("stkCallback")) {
-    // JSONObject stkCallback = body.getJSONObject("stkCallback");
-    //
-    // // Extract core callback fields
-    // resultCode = stkCallback.optString("ResultCode", "");
-    // resultDesc = stkCallback.optString("ResultDesc", "");
-    // merchantRequestId = stkCallback.optString("MerchantRequestID", "");
-    //
-    // // Extract callback metadata
-    // if (stkCallback.has("CallbackMetadata")) {
-    // JSONObject callbackMetadata = stkCallback.getJSONObject("CallbackMetadata");
-    //
-    // if (callbackMetadata.has("Item")) {
-    // JSONArray items = callbackMetadata.getJSONArray("Item");
-    //
-    // for (int i = 0; i < items.length(); i++) {
-    // JSONObject item = items.getJSONObject(i);
-    // String name = item.optString("Name", "");
-    //
-    // switch (name) {
-    // case "Amount":
-    // amount = item.optDouble("Value", 0.0);
-    // break;
-    // case "MpesaReceiptNumber":
-    // mpesaCode = item.optString("Value", "");
-    // break;
-    // case "TransactionDate":
-    // long rawDate = item.optLong("Value", 0L);
-    // String dateString = String.valueOf(rawDate);
-    // if (dateString.length() == 14) {
-    // SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
-    // transactionDate = new Timestamp(dateFormat.parse(dateString).getTime());
-    // }
-    // break;
-    // case "PhoneNumber":
-    // phoneNumber = item.optString("Value", "");
-    // break;
-    // default:
-    // break;
-    // }
-    // }
-    // }
-    // }
-    // }
-    // }
-    //
-    // // Log extracted values for debugging
-    // log.info("Result Code: {}", resultCode);
-    // log.info("Result Description: {}", resultDesc);
-    // log.info("Merchant Request ID: {}", merchantRequestId);
-    // log.info("Amount: {}", amount);
-    // log.info("Transaction Date: {}", transactionDate);
-    // log.info("Mpesa Code: {}", mpesaCode);
-    // log.info("Phone Number: {}", phoneNumber);
-    //
-    // // Validate necessary fields before proceeding
-    // if (merchantRequestId.isEmpty() || resultCode.isEmpty()) {
-    // log.error("Invalid callback response: Missing essential fields.");
-    // return null;
-    // }
-    //
-    // LocalDate currentDate = LocalDate.now();
-    // Term activeTerm = Term.getCurrentTerm();
-    //
-    // // Make variables effectively final for lambda
-    // String finalResultCode = resultCode;
-    // Double finalAmount = amount;
-    // String finalMpesaCode = mpesaCode;
-    // String finalResultDesc = resultDesc;
-    // Timestamp finalTransactionDate = transactionDate;
-    // String finalPhoneNumber = phoneNumber;
-    // String finalMerchantRequestId = merchantRequestId;
-    //
-    // // Find and update the FinanceTransaction record by MerchantRequestID
-    // this.financeTransactionRepository.findByMerchantRequestID(merchantRequestId).ifPresentOrElse(payment
-    // -> {
-    // try {
-    // // Fetch the student first (assuming you have the relationship)
-    // student[0] = payment.getAccountReference(); // Or however you get the Student
-    // from payment
-    //
-    // if (Integer.parseInt(finalResultCode) == 0) {
-    // // Process SUCCESS
-    // log.info("Processing successful payment for MerchantRequestID: {}",
-    // finalMerchantRequestId);
-    //
-    // // Update the FinanceTransaction with callback data
-    // payment.setAmount(BigDecimal.valueOf(finalAmount));
-    // payment.setReference(finalMpesaCode); // M-Pesa receipt number becomes the
-    // reference
-    // payment.setDescription("M-Pesa Payment - " + finalResultDesc);
-    // payment.setTransactionDate(finalTransactionDate != null ?
-    // finalTransactionDate.toLocalDateTime().toLocalDate() : LocalDate.now());
-    // // Note: You may need to add resultCode field to FinanceTransaction or use
-    // description
-    // payment.setUpdatedAt(LocalDateTime.now());
-    //
-    // this.feePaymentRepository.save(payment);
-    //// auditService.logAction("UPDATE", "FEE PAYMENT", payment, "Payment callback
-    // processed successfully");
-    // log.info("Payment successfully updated: {}", payment);
-    //
-    // // Update or create Finance record (student balance summary)
-    // Optional<Finance> financeOpt =
-    // financeRepository.findByStudentIdAndTermAndYear(
-    // student[0].getId(), activeTerm, Year.now());
-    //
-    // Finance finance;
-    // if (financeOpt.isPresent()) {
-    // finance = financeOpt.get();
-    // } else {
-    // // Create new Finance record if doesn't exist
-    // finance = new Finance();
-    // finance.setStudentId(student[0].getId());
-    // finance.setTerm(activeTerm);
-    // finance.setYear(Year.now());
-    // finance.setTotalFeeAmount(BigDecimal.ZERO); // Set from fee structure
-    // finance.setPaidAmount(BigDecimal.ZERO);
-    // finance.setBalance(BigDecimal.ZERO);
-    // }
-    //
-    // // Update paid amount and recalculate balance
-    // BigDecimal currentPaid = finance.getPaidAmount();
-    // finance.setPaidAmount(currentPaid.add(BigDecimal.valueOf(finalAmount)));
-    // finance.setBalance(finance.getTotalFeeAmount().subtract(finance.getPaidAmount()));
-    // finance.setLastUpdated(LocalDateTime.now());
-    //
-    // financeRepository.save(finance);
-    //// auditService.logAction("UPDATE", "FINANCE", finance, "Finance record
-    // updated after successful payment");
-    // log.info("Finance record updated: {}", finance);
-    //
-    // // Update StudentPaymentHistory if you're still using it
-    // Optional<StudentPaymentHistory> studentPaymentHistoryOpt =
-    // studentPaymentHistoryRepository.findByStudentAndTermAndGrade(
-    // student[0], activeTerm, student[0].getGrade());
-    //
-    // if (studentPaymentHistoryOpt.isPresent()) {
-    // StudentPaymentHistory studentPaymentHistory = studentPaymentHistoryOpt.get();
-    //
-    // // Fetch the total paid amount
-    // BigDecimal totalPaid = transactionHistoryRepository
-    // .getTotalPaidAmountByStudentAndTermAndGrade(
-    // student[0].getId(),
-    // activeTerm.getId(),
-    // student[0].getGrade().getId());
-    //
-    // studentPaymentHistory.setTermTotalFeePaid(totalPaid);
-    // studentPaymentHistoryRepository.save(studentPaymentHistory);
-    // auditService.logAction("UPDATE", "STUDENT PAYMENT HISTORY",
-    // studentPaymentHistory, "Payment history updated after successful callback");
-    // } else {
-    // log.warn("No existing StudentPaymentHistory found for student {} in term {}",
-    // student[0].getId(), activeTerm.getId());
-    // }
-    //
-    // // Recompute student balance
-    // paymentService.computeAndSaveStudentBalance(student[0].getId());
-    //
-    // } else {
-    // // Process FAILURE
-    // log.info("Processing failed payment for MerchantRequestID: {}",
-    // finalMerchantRequestId);
-    //
-    // // Update payment record with failure information
-    // payment.setDescription("Failed: " + finalResultDesc + " (Code: " +
-    // finalResultCode + ")");
-    // payment.setUpdatedAt(LocalDateTime.now());
-    //
-    // // You might want to set amount to 0 or keep the original
-    // // payment.setAmount(BigDecimal.ZERO);
-    //
-    // this.feePaymentRepository.save(payment);
-    // auditService.logAction("UPDATE", "FEE PAYMENT", payment, "Failed payment
-    // recorded");
-    // log.info("Failed payment record updated: {}", payment);
-    // }
-    //
-    // } catch (Exception e) {
-    // log.error("Error processing payment update for MerchantRequestID {}: ",
-    // finalMerchantRequestId, e);
-    // }
-    // }, () -> {
-    // log.warn("Transaction with MerchantRequestID {} not found in the database.",
-    // finalMerchantRequestId);
-    // });
-    //
-    // } catch (Exception e) {
-    // log.error("Error processing STK callback: ", e);
-    // }
-    //
-    // return null;
-    // }
-    // public Object registerURLs() {
-    //
-    // try{
-    // String access_token = generateToken();
-    // String endpoint = baseUrl+"/transactions/c2b";
-    // JSONObject jsonObject = new JSONObject();
-    // jsonObject.put("ShortCode",shortCode);
-    // jsonObject.put("ResponseType","Completed");
-    // jsonObject.put("ConfirmationURL",endpoint+"/confirmation");
-    // jsonObject.put("ValidationURL",endpoint+"/validation");
-    //
-    // JSONArray jsonArray = new JSONArray();
-    //
-    // String requestJson =
-    // jsonArray.put(jsonObject).toString().replaceAll("[\\[\\]]", "");
-    // MediaType mediaType = MediaType.parse("application/json");
-    // System.out.println(requestJson);
-    //
-    // RequestBody requestBody = RequestBody.create(mediaType,requestJson);
-    // Request request = new Request.Builder()
-    // .url(registerendpont)
-    // .method("POST", requestBody)
-    // .addHeader("Content-Type", "application/json")
-    // .addHeader("Authorization", String.format("Bearer" + " " + "%s",
-    // access_token))
-    // .build();
-    //
-    // OkHttpClient httpClient = new OkHttpClient();
-    // Response response1 = httpClient.newCall(request).execute();
-    //
-    // assert response1.body() != null;
-    // if (response1.isSuccessful()){
-    // log.info("{ Mpesa Service } {register URLs } { Successful }");
-    // return response1.body().string();
-    // }else {
-    // log.info("{ Mpesa Service } {register URLs } { Failed }");
-    // return null;
-    // }
-    //
-    // }catch (Exception e){
-    // return e.getMessage();
-    // }
-    // }
-    //
-    //
-    // // Parse Access Token from Response
-    // private String parseAccessToken(String responseBody) {
-    // // Implement a proper JSON parsing mechanism (e.g., using Jackson or Gson)
-    // // This is a placeholder and should be replaced with actual logic
-    // return "access_token_placeholder";
-    // }
+    @Override
+    @Transactional
+    public CustomResponse<?> processCallback(Object object) {
+        CustomResponse<Object> response = new CustomResponse<>();
+
+        try {
+            log.info("STK Callback received at {}", new Date());
+            MpesaCallbackData callbackData = extractCallbackData(object);
+
+            if (callbackData.merchantRequestId == null || callbackData.merchantRequestId.isBlank()
+                    || callbackData.resultCode == null || callbackData.resultCode.isBlank()) {
+                response.setMessage("Invalid callback response: missing merchant request ID or result code");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setEntity(null);
+                return response;
+            }
+
+            Optional<MpesaSTKTransactions> txnOpt = mpesaTransactionRepository
+                    .findByMerchantRequestID(callbackData.merchantRequestId);
+
+            if (txnOpt.isEmpty()) {
+                log.warn("M-Pesa callback received for unknown MerchantRequestID: {}", callbackData.merchantRequestId);
+                response.setMessage("Callback received but transaction not found for reconciliation");
+                response.setStatusCode(HttpStatus.ACCEPTED.value());
+                response.setEntity(null);
+                return response;
+            }
+
+            MpesaSTKTransactions mpesaTxn = txnOpt.get();
+            Student student = mpesaTxn.getAccountReference();
+
+            updateMpesaCallbackFields(mpesaTxn, callbackData);
+            mpesaTransactionRepository.save(mpesaTxn);
+
+            if (!"0".equals(callbackData.resultCode.trim())) {
+                response.setMessage("M-Pesa transaction failed: " + callbackData.resultDesc);
+                response.setStatusCode(HttpStatus.ACCEPTED.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            if (student == null) {
+                log.warn("M-Pesa payment received without student link. MerchantRequestID: {}",
+                        callbackData.merchantRequestId);
+                response.setMessage("Payment received but no student linked to this request");
+                response.setStatusCode(HttpStatus.ACCEPTED.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            BigDecimal amount = getCallbackAmount(callbackData, mpesaTxn);
+            if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                response.setMessage("Invalid callback amount");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            String receiptNumber = safeTrim(callbackData.mpesaCode);
+            if (receiptNumber == null || receiptNumber.isBlank()) {
+                response.setMessage("Missing M-Pesa receipt number");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            if (financeTransactionRepository.existsByReference(receiptNumber)) {
+                response.setMessage("Callback already processed for this receipt");
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            Term currentTerm = Term.getCurrentTerm();
+            if (currentTerm == null) {
+                throw new IllegalStateException("No active term found for current date");
+            }
+            Year currentYear = Year.now();
+
+            Optional<StudentInvoices> invoiceOpt = studentInvoicesRepository
+                    .findByStudentAndTermAndAcademicYear(student, currentTerm, currentYear);
+
+            if (invoiceOpt.isEmpty()) {
+                log.warn("No invoice found for student {} in current term", student.getAdmissionNumber());
+                response.setMessage(String.format(
+                        "Payment received but no invoice found for current term. Contact admin with reference: %s",
+                        receiptNumber));
+                response.setStatusCode(HttpStatus.ACCEPTED.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            CreateTransactionDTO transactionDTO = createMpesaTransactionDTO(
+                    callbackData,
+                    invoiceOpt.get(),
+                    currentTerm,
+                    currentYear,
+                    amount,
+                    receiptNumber);
+
+            CustomResponse<?> transactionResponse = financeTransactionService.createTransaction(
+                    student.getId(),
+                    transactionDTO);
+
+            if (transactionResponse.getStatusCode() != HttpStatus.CREATED.value()) {
+                response.setMessage("Payment saved but failed to update finance records: "
+                        + transactionResponse.getMessage());
+                response.setStatusCode(HttpStatus.PARTIAL_CONTENT.value());
+                response.setEntity(mpesaTxn);
+                return response;
+            }
+
+            Map<String, Object> transactionData = (Map<String, Object>) transactionResponse.getEntity();
+            Finance updatedFinance = (Finance) transactionData.get("finance");
+
+            response.setMessage(String.format(
+                    "M-Pesa payment processed successfully. New balance: KES %.2f",
+                    updatedFinance.getBalance()));
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(mpesaTxn);
+
+            auditService.log("MPESA", "Processed callback for receipt:", receiptNumber, "student:",
+                    student.getAdmissionNumber(), "amount:", amount.toPlainString());
+        } catch (IllegalArgumentException e) {
+            log.error("M-Pesa callback validation error: {}", e.getMessage(), e);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setEntity(null);
+        } catch (Exception e) {
+            log.error("Error processing STK callback: {}", e.getMessage(), e);
+            response.setMessage("Error processing M-Pesa payment: " + e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+        }
+
+        return response;
+    }
+
+    private CreateTransactionDTO createMpesaTransactionDTO(
+            MpesaCallbackData callbackData,
+            StudentInvoices invoice,
+            Term term,
+            Year year,
+            BigDecimal amount,
+            String receiptNumber) {
+        CreateTransactionDTO transactionDTO = new CreateTransactionDTO();
+        transactionDTO.setTransactionType(FinanceTransaction.TransactionType.INCOME);
+        transactionDTO.setAmount(amount);
+        transactionDTO.setCategory("School Fees Payment");
+        transactionDTO.setPaymentMethod(FinanceTransaction.PaymentMethod.MPESA);
+        transactionDTO.setReference(receiptNumber);
+        transactionDTO.setInvoiceId(invoice.getId());
+        transactionDTO.setTerm(term);
+        transactionDTO.setYear(year);
+        transactionDTO.setTransactionDate(parseMpesaTransactionDate(callbackData.transactionDate));
+        transactionDTO.setDescription(String.format(
+                "M-Pesa payment - Receipt: %s, MerchantRequestID: %s, Phone: %s",
+                receiptNumber,
+                callbackData.merchantRequestId,
+                safeTrim(callbackData.phoneNumber)));
+        return transactionDTO;
+    }
+
+    private void updateMpesaCallbackFields(MpesaSTKTransactions transaction, MpesaCallbackData callbackData) {
+        if (callbackData.amount != null && callbackData.amount > 0) {
+            transaction.setAmount(callbackData.amount);
+        }
+        String phone = safeTrim(callbackData.phoneNumber);
+        if (phone != null && !phone.isBlank()) {
+            transaction.setPhoneNumber(phone);
+        }
+        transaction.setResponseCode(safeTrim(callbackData.resultCode));
+        transaction.setResponseDescription(safeTrim(callbackData.resultDesc));
+        transaction.setCustomerMessage("Callback processed with result code: " + safeTrim(callbackData.resultCode));
+    }
+
+    private BigDecimal getCallbackAmount(MpesaCallbackData callbackData, MpesaSTKTransactions transaction) {
+        if (callbackData.amount != null && callbackData.amount > 0) {
+            return BigDecimal.valueOf(callbackData.amount);
+        }
+        if (transaction.getAmount() != null && transaction.getAmount() > 0) {
+            return BigDecimal.valueOf(transaction.getAmount());
+        }
+        return null;
+    }
+
+    private LocalDate parseMpesaTransactionDate(Timestamp transactionDate) {
+        if (transactionDate == null) {
+            return LocalDate.now();
+        }
+        return transactionDate.toLocalDateTime().toLocalDate();
+    }
+
+    private MpesaCallbackData extractCallbackData(Object object) throws Exception {
+        JSONObject callbackJson = new JSONObject(gson.toJson(object));
+        MpesaCallbackData data = new MpesaCallbackData();
+
+        if (!callbackJson.has("Body")) {
+            return data;
+        }
+
+        JSONObject body = callbackJson.getJSONObject("Body");
+        if (!body.has("stkCallback")) {
+            return data;
+        }
+
+        JSONObject stkCallback = body.getJSONObject("stkCallback");
+        data.resultCode = stkCallback.optString("ResultCode", "");
+        data.resultDesc = stkCallback.optString("ResultDesc", "");
+        data.merchantRequestId = stkCallback.optString("MerchantRequestID", "");
+
+        if (!stkCallback.has("CallbackMetadata")) {
+            return data;
+        }
+
+        JSONObject callbackMetadata = stkCallback.getJSONObject("CallbackMetadata");
+        if (!callbackMetadata.has("Item")) {
+            return data;
+        }
+
+        JSONArray items = callbackMetadata.getJSONArray("Item");
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.getJSONObject(i);
+            String name = item.optString("Name", "");
+
+            switch (name) {
+                case "Amount":
+                    if (item.has("Value")) {
+                        data.amount = item.optDouble("Value", 0.0);
+                    }
+                    break;
+                case "MpesaReceiptNumber":
+                    data.mpesaCode = item.optString("Value", "");
+                    break;
+                case "TransactionDate":
+                    long rawDate = item.optLong("Value", 0L);
+                    String dateString = String.valueOf(rawDate);
+                    if (dateString.length() == 14) {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
+                        data.transactionDate = new Timestamp(dateFormat.parse(dateString).getTime());
+                    }
+                    break;
+                case "PhoneNumber":
+                    data.phoneNumber = item.optString("Value", "");
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        log.info("M-Pesa callback parsed: resultCode={}, merchantRequestId={}, receipt={}, amount={}",
+                data.resultCode,
+                data.merchantRequestId,
+                data.mpesaCode,
+                data.amount);
+        return data;
+    }
+
+    private String safeTrim(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private static class MpesaCallbackData {
+        private String resultCode;
+        private String resultDesc;
+        private String mpesaCode;
+        private String merchantRequestId;
+        private Timestamp transactionDate;
+        private String phoneNumber;
+        private Double amount;
+    }
+     public Object registerURLs() {
+
+     try{
+     String access_token = generateToken();
+     String endpoint = baseUrl+"/transactions/c2b";
+     JSONObject jsonObject = new JSONObject();
+     jsonObject.put("ShortCode",shortCode);
+     jsonObject.put("ResponseType","Completed");
+     jsonObject.put("ConfirmationURL",endpoint+"/confirmation");
+     jsonObject.put("ValidationURL",endpoint+"/validation");
+
+     JSONArray jsonArray = new JSONArray();
+
+     String requestJson =
+     jsonArray.put(jsonObject).toString().replaceAll("[\\[\\]]", "");
+     MediaType mediaType = MediaType.parse("application/json");
+     System.out.println(requestJson);
+
+     RequestBody requestBody = RequestBody.create(mediaType,requestJson);
+     Request request = new Request.Builder()
+     .url(registerendpont)
+     .method("POST", requestBody)
+     .addHeader("Content-Type", "application/json")
+     .addHeader("Authorization", String.format("Bearer" + " " + "%s",
+     access_token))
+     .build();
+
+     OkHttpClient httpClient = new OkHttpClient();
+     Response response1 = httpClient.newCall(request).execute();
+
+     assert response1.body() != null;
+     if (response1.isSuccessful()){
+     log.info("{ Mpesa Service } {register URLs } { Successful }");
+     return response1.body().string();
+     }else {
+     log.info("{ Mpesa Service } {register URLs } { Failed }");
+     return null;
+     }
+
+     }catch (Exception e){
+     return e.getMessage();
+     }
+     }
+
+
+     // Parse Access Token from Response
+     private String parseAccessToken(String responseBody) {
+     // Implement a proper JSON parsing mechanism (e.g., using Jackson or Gson)
+     // This is a placeholder and should be replaced with actual logic
+     return "access_token_placeholder";
+     }
 }

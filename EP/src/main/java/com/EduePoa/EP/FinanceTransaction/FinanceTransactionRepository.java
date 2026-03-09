@@ -14,6 +14,7 @@ public interface FinanceTransactionRepository extends JpaRepository<FinanceTrans
                         java.time.LocalDate endDate);
 
         List<FinanceTransaction> findByStudentId(Long studentId);
+        boolean existsByReference(String reference);
 
         List<FinanceTransaction> findAllByOrderByTransactionDateDesc();
 

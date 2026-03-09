@@ -3,6 +3,8 @@ package com.EduePoa.EP.Transport.AssignTransport.Response;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 public class AssignTransportResponseDTO {
@@ -17,4 +19,7 @@ public class AssignTransportResponseDTO {
 
     private String pickupLocation;
     private String transportType;
+    private String admissionNumber;
+    private LocalDate assignedDate;
+
 }

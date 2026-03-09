@@ -11,6 +11,7 @@ public enum  FileTypeEnums {
     PARENT_FEE_STRUCTURE("parent_fee_structure", "parent_fee_structure.jrxml"),
     PARENT_FEE_STATEMENT("parent_fee_statement", "parent_fee_statement.jrxml"),
     TERM_PERFORMANCE("term_performance_report", "term_performance_report.jrxml"),
+    REPORT_CARD("report_card", "term_performance_report.jrxml"),
     FEE_STRUCTURE_STUDENT("fee_structure_student", "fee_structure_student.jrxml"),
     FEE_STRUCTURE_STUDENT_TERM("fee_structure_student_term", "fee_structure_student_term.jrxml");
 

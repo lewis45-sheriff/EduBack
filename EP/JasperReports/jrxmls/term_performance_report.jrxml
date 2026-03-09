@@ -47,9 +47,10 @@
 	</style>
 
 	<!-- Parameters -->
-	<parameter name="studentID" class="java.lang.String"/>
-	<parameter name="gradeId" class="java.lang.String"/>
+	<parameter name="studentID" class="java.lang.Long"/>
+	<parameter name="gradeId" class="java.lang.Long"/>
 	<parameter name="termID" class="java.lang.String"/>
+	<parameter name="year" class="java.lang.Long"/>
 	<parameter name="Logo" class="java.lang.String"/>
 	<parameter name="SchoolName" class="java.lang.String">
 		<defaultValueExpression><![CDATA["EXCELLENCE ACADEMY"]]></defaultValueExpression>
@@ -65,21 +66,20 @@
 	<queryString language="SQL">
 		<![CDATA[
         SELECT
-            sScore.subject_id as examSubjectId,
+            sScore.academic_subject_id as examSubjectId,
             subject.subject_code as examSubjectCode,
             subject.subject_name as examSubjectName,
             sScore.student_id as examStudentId,
             s.admission_number as studentAdmissionNumber,
             CONCAT(s.first_name, ' ', s.last_name) AS studentFullName,
-            sScore.exam_score as examScore,
-            sScore.year as examYear,
+            CAST(sScore.exam_score AS CHAR) as examScore,
+            CAST(sScore.year AS CHAR) as examYear,
             sScore.exam_type_id as examTypeId,
             eType.name as examTypeName,
             sScore.grade_id as examGradeId,
             g.name as examGradeName,
-            sScore.term_id as examTermId,
-            t.term_name as examTermName,
-            eTypeGrading.point as examScorePoint,
+            sScore.term as examTermName,
+            CAST(eTypeGrading.point AS CHAR) as examScorePoint,
             eTypeGrading.remarks as examScoreRemarks,
             eTypeGrading.start,
             eTypeGrading.end
@@ -88,21 +88,20 @@
         JOIN
             grade AS g ON g.id = sScore.grade_id
         JOIN
-            term AS t ON t.id = sScore.term_id
-        JOIN
             student AS s ON sScore.student_id = s.id
         JOIN
-            subject ON sScore.subject_id = subject.id
+            academic_subject AS subject ON sScore.academic_subject_id = subject.id
         JOIN
             exam_type AS eType ON sScore.exam_type_id = eType.id
-        JOIN
+        LEFT JOIN
             exam_type_grading AS eTypeGrading ON eType.id = eTypeGrading.exam_type_id
+                AND sScore.exam_score BETWEEN eTypeGrading.start AND eTypeGrading.end
         WHERE
-            sScore.exam_score BETWEEN eTypeGrading.start AND eTypeGrading.end
-            AND sScore.exam_type_id = eTypeGrading.exam_type_id
-            AND sScore.student_id =  $P{studentID}
+            sScore.student_id =  $P{studentID}
             AND sScore.grade_id =  $P{gradeId}
-            AND sScore.term_id =  $P{termID} ;
+            AND sScore.term =  $P{termID}
+            AND sScore.year = $P{year}
+        ORDER BY subject.subject_name ASC ;
         ]]>
 	</queryString>
 

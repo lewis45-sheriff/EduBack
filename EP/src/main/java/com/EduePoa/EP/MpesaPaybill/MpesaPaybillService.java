@@ -358,9 +358,7 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
         return response;
     }
 
-    /**
-     * Parse M-Pesa transaction time format (YYYYMMDDHHmmss)
-     */
+
     private LocalDateTime parseTransactionTime(String transTime) {
         try {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");

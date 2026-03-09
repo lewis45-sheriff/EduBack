@@ -44,7 +44,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password",
                                 "/api/v1/auth/refresh-token",
-                                "/api/v1/bank/post-transactions/"
+                                "/api/v1/bank/post-transactions/",
+                                "/api/v1/process-call-back",
+                                "/api/v1/validate"
                         ).permitAll()
                         // All other endpoints require authentication
                         // Permissions are handled by @PreAuthorize annotations in controllers

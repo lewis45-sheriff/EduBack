@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -143,5 +144,23 @@ public class ReportsController {
             res.setMessage("An error occurred: " + e.getMessage());
             return ResponseEntity.status(res.getStatusCode()).body(res);
         }
+    }
+
+    @PostMapping("/report-card")
+    public ResponseEntity<?> generateReportCard(@RequestBody ReportCardRequest request) {
+        CustomResponse<?> res = reportsService.generateReportCard(request);
+
+        if (res.getStatusCode() == HttpStatus.OK.value()) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=report-card-" + request.getStudentId() + "-" + request.getYear() + ".pdf");
+
+            return ResponseEntity.status(res.getStatusCode())
+                    .headers(headers)
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(res.getEntity());
+        }
+
+        return ResponseEntity.status(res.getStatusCode()).body(res);
     }
 }

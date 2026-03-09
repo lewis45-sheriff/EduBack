@@ -6,6 +6,7 @@ import net.sf.jasperreports.engine.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.sql.Connection;
@@ -37,6 +38,99 @@ public class ReportsService {
         return parameters;
     }
 
+    public CustomResponse<?> generateReportCard(ReportCardRequest request) {
+        CustomResponse<Object> res = new CustomResponse<>();
+
+        if (request == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("Request body is required");
+            return res;
+        }
+
+        if (request.getStudentId() == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("studentId is required");
+            return res;
+        }
+        if (request.getGradeId() == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("gradeId is required");
+            return res;
+        }
+        if (request.getTermId() == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("termId is required");
+            return res;
+        }
+        if (request.getYear() == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("year is required");
+            return res;
+        }
+
+        String termCode = mapTermIdToCode(request.getTermId());
+        if (termCode == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("Invalid termId. Use 1, 2, or 3");
+            return res;
+        }
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("report_path", path);
+        parameters.put("file_name", FileTypeEnums.TERM_PERFORMANCE.getReportTypeString());
+        parameters.put("studentID", request.getStudentId());
+        parameters.put("gradeId", request.getGradeId());
+        parameters.put("termID", termCode);
+        parameters.put("year", request.getYear().longValue());
+        parameters.put("Logo", resolveLogoPath(request.getLogoPath()));
+        if (StringUtils.hasText(request.getSchoolName())) {
+            parameters.put("SchoolName", request.getSchoolName());
+        }
+        if (StringUtils.hasText(request.getSchoolMotto())) {
+            parameters.put("SchoolMotto", request.getSchoolMotto());
+        }
+        if (StringUtils.hasText(request.getSchoolContact())) {
+            parameters.put("SchoolContact", request.getSchoolContact());
+        }
+
+        String reportPath = path + FileTypeEnums.TERM_PERFORMANCE.getReportTypeString();
+        File reportFile = new File(reportPath);
+        if (!reportFile.exists()) {
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Report template not found at " + reportPath);
+            return res;
+        }
+
+        Connection connection = null;
+        try (InputStream reportStream = new FileInputStream(reportFile)) {
+            JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
+            connection = DriverManager.getConnection(db, username, password);
+            JasperPrint report = JasperFillManager.fillReport(compiledReport, parameters, connection);
+            byte[] data = JasperExportManager.exportReportToPdf(report);
+
+            res.setEntity(data);
+            res.setStatusCode(HttpStatus.OK.value());
+            res.setMessage("Report card generated successfully");
+            return res;
+
+        } catch (JRException e) {
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Report generation error: " + e.getMessage());
+            return res;
+        } catch (Exception e) {
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Unexpected error: " + e.getMessage());
+            return res;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
     public CustomResponse<?> dynamicReportCreate(
             Long studentID,
             ReportModel model,
@@ -64,6 +158,9 @@ public class ReportsService {
             JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
 
             Map<String, Object> parameters = setParameters(reportRequestObject);
+            boolean isTermPerformance = FileTypeEnums.TERM_PERFORMANCE.getReportTypeString()
+                    .equalsIgnoreCase(reportRequestObject.fileName)
+                    || FileTypeEnums.REPORT_CARD.getReportTypeString().equalsIgnoreCase(reportRequestObject.fileName);
 
             // **CRITICAL FIX: The JRXML expects studentID as Long, not String**
             // Check your JRXML: <parameter name="studentID" class="java.lang.Long"/>
@@ -86,7 +183,7 @@ public class ReportsService {
 
             // **FIX: year parameter should be Integer as per JRXML**
             if (year != null) {
-                parameters.put("year", year);  // Pass as Long, JRXML expects Integer
+                parameters.put("year", year);
             } else {
                 // Handle case where year is null but required
                 res.setMessage("Year is required");
@@ -96,12 +193,21 @@ public class ReportsService {
 
             // **FIX: term parameter should be String as per JRXML**
             if (term != null && !term.isEmpty()) {
-                parameters.put("termID", term);  // Pass as String
+                parameters.put("termID", isTermPerformance ? normalizeTermValue(term) : term);
             } else {
                 // Handle case where term is null but required
                 res.setMessage("Term is required");
                 res.setStatusCode(HttpStatus.BAD_REQUEST.value());
                 return res;
+            }
+
+            if (isTermPerformance) {
+                if (gradeId == null) {
+                    res.setMessage("Grade ID is required");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return res;
+                }
+                parameters.put("gradeId", gradeId);
             }
 
             // Debug: Print parameters being passed
@@ -170,5 +276,34 @@ public class ReportsService {
         }
 
         return res;
+    }
+
+    private String mapTermIdToCode(Integer termId) {
+        return switch (termId) {
+            case 1 -> "TERM_1";
+            case 2 -> "TERM_2";
+            case 3 -> "TERM_3";
+            default -> null;
+        };
+    }
+
+    private String normalizeTermValue(String term) {
+        if (!StringUtils.hasText(term)) {
+            return term;
+        }
+        String trimmed = term.trim();
+        return switch (trimmed) {
+            case "1" -> "TERM_1";
+            case "2" -> "TERM_2";
+            case "3" -> "TERM_3";
+            default -> trimmed;
+        };
+    }
+
+    private String resolveLogoPath(String logoPath) {
+        if (StringUtils.hasText(logoPath)) {
+            return logoPath;
+        }
+        return path + "effort-schools-logo.jpg";
     }
 }

@@ -22,7 +22,7 @@ public class MpesaPaybillController {
         String response = mpesaPaybillService.generateToken();
         return ResponseEntity.ok(response);
     }
-    @PostMapping(  value = "/validate",
+    @PostMapping(  value = {"/validate", "/transactions/c2b/validation"},
             consumes = "application/json",
             produces = "application/json")
     ResponseEntity<?>validate(@RequestBody ValidationRequest request){
@@ -30,7 +30,7 @@ public class MpesaPaybillController {
         return  ResponseEntity.status(response.getStatusCode()).body(response);
 
     }
-    @PostMapping( value = "/process-call-back",
+    @PostMapping( value = {"/process-call-back", "/transactions/c2b/confirmation"},
             consumes = "application/json",
             produces = "application/json")
     ResponseEntity<?>processCallBack(@RequestBody ConfirmationRequest request){

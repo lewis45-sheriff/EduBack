@@ -27,16 +27,16 @@ public class MPesaController {
 
 
 
-//    @RequestMapping(
-//            path = "/stk-callback",
-//            method = RequestMethod.POST,
-//            produces = MediaType.APPLICATION_JSON_VALUE
-//    )
-//    public void stkPushCallback(@RequestBody Object object){
-//        log.info(String.format("STK PUSH Callback Response: %s ", object.toString()));
-//
-//        this.mpesaService.processCallback(object);
-//    }
+    @RequestMapping(
+            path = "/stk-callback",
+            method = RequestMethod.POST,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<?> stkPushCallback(@RequestBody Object object){
+        log.info(String.format("STK PUSH Callback Response: %s ", object.toString()));
+        var response = this.mpesaService.processCallback(object);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 //
 ////    @GetMapping("/transaction-status/{transactionId}")
 ////    public ResponseEntity<CustomResponse<?>> queryTransactionStatus(@PathVariable String transactionId) {
