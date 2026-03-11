@@ -11,6 +11,9 @@ public interface UserRepository extends JpaRepository<User,Long> {
     Optional<User> findByEmail(String email);
     @Query(nativeQuery = true, value = "Select count(*) from user join role r on r.id = user.role_id where r.name=:roleName")
     Integer adminCount(@Param("roleName") String roleName);
+    Optional<User>findByUsernameIgnoreCaseOrEmailIgnoreCase(String userName,String email);
+    boolean existsByEmail(String email);
+
 
 
 }

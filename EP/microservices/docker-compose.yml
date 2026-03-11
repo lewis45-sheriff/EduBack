@@ -1,0 +1,150 @@
+services:
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: ep-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - academics-service
+      - finance-service
+      - transport-service
+      - communications-service
+      - reporting-service
+      - analytics-service
+    restart: unless-stopped
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: ep-auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
+      - MAIL_PASSWORD=changeme
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  academics-service:
+    build: ./services/academics-service
+    container_name: ep-academics-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  finance-service:
+    build: ./services/finance-service
+    container_name: ep-finance-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
+      - MAIL_PASSWORD=changeme
+      - MPESA_APP_KEY=dummy
+      - MPESA_APP_SECRET=dummy
+      - MPESA_STK_PASSWORD=dummy
+      - MPESA_PAYBILL_APP_KEY=dummy
+      - MPESA_PAYBILL_APP_SECRET=dummy
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  transport-service:
+    build: ./services/transport-service
+    container_name: ep-transport-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  communications-service:
+    build: ./services/communications-service
+    container_name: ep-communications-service
+    ports:
+      - "8086:8086"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
+      - MAIL_PASSWORD=changeme
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  reporting-service:
+    build: ./services/reporting-service
+    container_name: ep-reporting-service
+    ports:
+      - "8087:8087"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - REPORT_PATH=/app/JasperReports/jrxmls/
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  analytics-service:
+    build: ./services/analytics-service
+    container_name: ep-analytics-service
+    ports:
+      - "8088:8088"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mariadb:11
+    container_name: ep-microservices-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=bureti
+    volumes:
+      - ep_microservices_db_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  ep_microservices_db_data:

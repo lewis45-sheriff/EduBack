@@ -1,0 +1,376 @@
+package com.EduePoa.EP.FinanceTransaction;
+
+import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
+import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Finance.Finance;
+import com.EduePoa.EP.Finance.FinanceRepository;
+import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
+import com.EduePoa.EP.FinanceTransaction.Response.MonthlyFeeDTO;
+import com.EduePoa.EP.FinanceTransaction.Response.StatisticsDTO;
+import com.EduePoa.EP.StudentInvoices.StudentInvoices;
+import com.EduePoa.EP.StudentInvoices.StudentInvoicesRepository;
+import com.EduePoa.EP.StudentInvoices.StudentInvoicesService;
+import com.EduePoa.EP.StudentRegistration.Student;
+import com.EduePoa.EP.StudentRegistration.StudentRepository;
+import com.EduePoa.EP.Utils.CustomResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Year;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+@Service
+@RequiredArgsConstructor
+public class FinanceTransactionServiceImpl implements FinanceTransactionService {
+    private final StudentRepository studentRepository;
+    private final FinanceRepository financeRepository;
+    private final FinanceTransactionRepository financeTransactionRepository;
+    private final StudentInvoicesRepository studentInvoicesRepository;
+    private final AuditService auditService;
+
+    @Override
+    @Transactional
+    public CustomResponse<?> createTransaction(Long studentId, CreateTransactionDTO createTransactionDTO) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            // Get current term
+            Term currentTerm = Term.getCurrentTerm();
+            if (currentTerm == null) {
+                throw new RuntimeException("No active term found for current date");
+            }
+
+            // Validate that the transaction is for the current term
+            if (createTransactionDTO.getTerm() != currentTerm) {
+                throw new RuntimeException("Transactions can only be created for the current term ("
+                        + currentTerm.name() + "). Requested term: " + createTransactionDTO.getTerm().name());
+            }
+
+            // Validate current year
+            Year currentYear = Year.now();
+
+            if (!currentYear.equals(createTransactionDTO.getYear())) {
+                throw new RuntimeException(
+                        "Transactions can only be created for the current year ("
+                                + currentYear + "). Requested year: " + createTransactionDTO.getYear());
+            }
+
+            // Validate student exists
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+
+            // Validate and get the specific invoice
+            StudentInvoices invoice = studentInvoicesRepository.findById(createTransactionDTO.getInvoiceId())
+                    .orElseThrow(() -> new RuntimeException(
+                            "Invoice not found with ID: " + createTransactionDTO.getInvoiceId()));
+
+            // Verify the invoice belongs to this student
+            if (!invoice.getStudent().getId().equals(studentId)) {
+                throw new RuntimeException("Invoice does not belong to this student");
+            }
+
+            // Verify invoice is for the current term and year
+            if (invoice.getTerm() != currentTerm ||
+                    !currentYear.equals(invoice.getAcademicYear())) {
+                throw new RuntimeException(
+                        "Invoice is not for the current term and year. Cannot process transaction.");
+            }
+
+            // Get Finance record for student (should be for current term)
+            Finance finance = financeRepository.findByStudentIdAndTermAndYear(studentId, currentTerm, currentYear)
+                    .orElseThrow(() -> new RuntimeException(
+                            "No finance record found for student in current term. Please create an invoice first."));
+
+            // Get the current balance before this transaction (from the latest transaction
+            // or finance record)
+            BigDecimal previousBalance = finance.getBalance();
+
+            // Create the transaction with invoice reference
+            FinanceTransaction transaction = getFinanceTransaction(studentId, createTransactionDTO, student);
+            transaction.setInvoiceId(invoice.getId());
+            transaction.setTerm(currentTerm);
+            transaction.setYear(currentYear);
+
+            // Set the opening balance (balance before this transaction)
+            transaction.setOpeningBalance(previousBalance);
+
+            // Calculate and set the new balance after this transaction
+            BigDecimal newBalance;
+            if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.INCOME) {
+                // Payment received - reduces balance
+                newBalance = previousBalance.subtract(createTransactionDTO.getAmount());
+            } else {
+                // Expense/Refund - increases balance
+                newBalance = previousBalance.add(createTransactionDTO.getAmount());
+            }
+
+            transaction.setClosingBalance(newBalance);
+
+            // Save transaction first
+            FinanceTransaction savedTransaction = financeTransactionRepository.save(transaction);
+
+            // Update Invoice based on transaction type
+            if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.INCOME) {
+                // Payment received - update invoice
+                invoice.setAmountPaid(invoice.getAmountPaid().add(createTransactionDTO.getAmount()));
+                invoice.setBalance(invoice.getTotalAmount().subtract(invoice.getAmountPaid()));
+
+                // Update invoice status
+                if (invoice.getBalance().compareTo(BigDecimal.ZERO) == 0) {
+                    invoice.setStatus('C'); // Cleared
+                } else if (invoice.getBalance().compareTo(invoice.getTotalAmount()) < 0) {
+                    invoice.setStatus('P'); // Partially paid (still pending)
+                }
+
+                // Update Finance record
+                finance.setPaidAmount(finance.getPaidAmount().add(createTransactionDTO.getAmount()));
+                finance.setBalance(newBalance);
+
+            } else if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.EXPENSE) {
+                // Refund or adjustment - update invoice
+                invoice.setAmountPaid(invoice.getAmountPaid().subtract(createTransactionDTO.getAmount()));
+                invoice.setBalance(invoice.getTotalAmount().subtract(invoice.getAmountPaid()));
+
+                // Update invoice status
+                if (invoice.getBalance().compareTo(invoice.getTotalAmount()) == 0) {
+                    invoice.setStatus('P'); // Back to pending
+                }
+
+                // Update Finance record
+                finance.setPaidAmount(finance.getPaidAmount().subtract(createTransactionDTO.getAmount()));
+                finance.setBalance(newBalance);
+            }
+
+            // Save updated invoice
+            StudentInvoices updatedInvoice = studentInvoicesRepository.save(invoice);
+
+            // Save updated finance record
+            finance.setLastUpdated(LocalDateTime.now());
+            Finance updatedFinance = financeRepository.save(finance);
+
+            // Prepare response
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("transaction", savedTransaction);
+            responseData.put("invoice", updatedInvoice);
+            responseData.put("finance", updatedFinance);
+
+            response.setStatusCode(HttpStatus.CREATED.value());
+            response.setMessage("Transaction created and invoice updated successfully");
+            response.setEntity(responseData);
+            auditService.log("FINANCE_TRANSACTION", "Created transaction for student ID:", String.valueOf(studentId),
+                    "amount:", createTransactionDTO.getAmount().toString(), "type:",
+                    createTransactionDTO.getTransactionType().name());
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getTransactions() {
+        CustomResponse<List<FinanceTransaction>> response = new CustomResponse<>();
+        try {
+            List<FinanceTransaction> transactions = financeTransactionRepository.findAllByOrderByTransactionDateDesc();
+
+            if (transactions.isEmpty()) {
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("No transactions found");
+                response.setEntity(new ArrayList<>());
+            } else {
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("Transactions retrieved successfully");
+                response.setEntity(transactions);
+                auditService.log("FINANCE_TRANSACTION", "Retrieved", String.valueOf(transactions.size()),
+                        "transactions");
+            }
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getByStudentId(Long studentId) {
+        CustomResponse<List<FinanceTransaction>> response = new CustomResponse<>();
+        try {
+            List<FinanceTransaction> transactions = financeTransactionRepository.findByStudentId(studentId);
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Transactions retrieved successfully");
+            response.setEntity(transactions);
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getById(Long id) {
+        CustomResponse<FinanceTransaction> response = new CustomResponse<>();
+        try {
+            Optional<FinanceTransaction> optionalFinanceTransaction = financeTransactionRepository.findById(id);
+
+            if (optionalFinanceTransaction.isEmpty()) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setEntity(null);
+                response.setMessage("Finance Transaction not found with ID: " + id);
+                return response;
+            }
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(optionalFinanceTransaction.get());
+            response.setMessage("Finance Transaction retrieved successfully");
+
+        } catch (Exception e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("Error retrieving transaction: " + e.getMessage());
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getStatistics() {
+        CustomResponse<StatisticsDTO> response = new CustomResponse<>();
+        try {
+            int currentYear = LocalDate.now().getYear();
+
+            // Get monthly income data from repository
+            List<Object[]> monthlyData = financeTransactionRepository.getMonthlyIncomeStatistics(currentYear);
+
+            // Initialize all months with zero
+            Map<Integer, BigDecimal> monthlyIncomeMap = new HashMap<>();
+            for (int i = 1; i <= 12; i++) {
+                monthlyIncomeMap.put(i, BigDecimal.ZERO);
+            }
+
+            // Fill in actual data
+            for (Object[] data : monthlyData) {
+                Integer month = (Integer) data[0];
+                BigDecimal income = (BigDecimal) data[1];
+                monthlyIncomeMap.put(month, income);
+            }
+
+            // Convert to MonthlyFeeDTO list
+            String[] monthNames = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+            List<MonthlyFeeDTO> monthlyFees = new ArrayList<>();
+            for (int i = 1; i <= 12; i++) {
+                monthlyFees.add(new MonthlyFeeDTO(
+                        monthNames[i - 1],
+                        monthlyIncomeMap.get(i)));
+            }
+
+            // Calculate totals
+            BigDecimal totalIncome = financeTransactionRepository
+                    .sumByTransactionTypeAndYear(FinanceTransaction.TransactionType.INCOME, currentYear);
+            BigDecimal totalExpense = financeTransactionRepository
+                    .sumByTransactionTypeAndYear(FinanceTransaction.TransactionType.EXPENSE, currentYear);
+
+            if (totalIncome == null)
+                totalIncome = BigDecimal.ZERO;
+            if (totalExpense == null)
+                totalExpense = BigDecimal.ZERO;
+
+            BigDecimal netBalance = totalIncome.subtract(totalExpense);
+
+            // Build response
+            StatisticsDTO statistics = new StatisticsDTO();
+            statistics.setMonthlyFees(monthlyFees);
+            statistics.setTotalIncome(totalIncome);
+            statistics.setTotalExpense(totalExpense);
+            statistics.setNetBalance(netBalance);
+
+            response.setEntity(statistics);
+            response.setMessage("Statistics retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FINANCE_TRANSACTION", "Retrieved statistics for year:", String.valueOf(currentYear));
+
+        } catch (Exception e) {
+            response.setMessage("Error retrieving statistics: " + e.getMessage());
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getStudentPayment(Long studentId) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            // Fetch all income transactions for the student
+            List<FinanceTransaction> transactions = financeTransactionRepository
+                    .findByStudentIdAndTransactionTypeOrderByTransactionDateAsc(
+                            studentId,
+                            FinanceTransaction.TransactionType.INCOME);
+
+            if (transactions.isEmpty()) {
+                response.setEntity(BigDecimal.ZERO);
+                response.setMessage("No payment records found for student");
+                response.setStatusCode(HttpStatus.OK.value());
+                return response;
+            }
+
+            // Calculate cumulative amount
+            BigDecimal cumulativePaid = transactions.stream()
+                    .map(FinanceTransaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Create response with detailed info
+            Map<String, Object> paymentSummary = new HashMap<>();
+            paymentSummary.put("studentId", studentId);
+            paymentSummary.put("studentName", transactions.get(0).getStudentName());
+            paymentSummary.put("admissionNumber", transactions.get(0).getAdmissionNumber());
+            paymentSummary.put("cumulativePaid", cumulativePaid);
+            paymentSummary.put("totalTransactions", transactions.size());
+            paymentSummary.put("transactions", transactions);
+
+            response.setEntity(paymentSummary);
+            response.setMessage("Student payment retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
+    private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO,
+            Student student) {
+        FinanceTransaction transaction = new FinanceTransaction();
+        transaction.setStudentId(studentId);
+        // transaction.setStudentName(
+        // Stream.of(student.getFirstName(), student.getLastName())
+        // .filter(Objects::nonNull)
+        // .collect(Collectors.joining(" "))
+        // );
+        transaction.setStudentName(student.getFirstName() + " " + student.getLastName());
+
+        transaction.setAdmissionNumber(student.getAdmissionNumber());
+        transaction.setTransactionType(createTransactionDTO.getTransactionType());
+        transaction.setCategory(createTransactionDTO.getCategory());
+        transaction.setAmount(createTransactionDTO.getAmount());
+        transaction.setTransactionDate(createTransactionDTO.getTransactionDate());
+        transaction.setDescription(createTransactionDTO.getDescription());
+        transaction.setPaymentMethod(createTransactionDTO.getPaymentMethod());
+        return transaction;
+    }
+}

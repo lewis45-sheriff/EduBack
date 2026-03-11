@@ -17,7 +17,7 @@ public class CookieService {
     private static final String ACCESS_TOKEN_NAME = "accessToken";
     private static final String REFRESH_TOKEN_NAME = "refreshToken";
 
-    @Value("${cookie.access-token.max-age:1200}") // 20 minutes default
+    @Value("${cookie.access-token.max-age:10800}") // 20 minutes default
     private int accessTokenMaxAge;
 
     @Value("${cookie.refresh-token.max-age:2592000}") // 30 days default

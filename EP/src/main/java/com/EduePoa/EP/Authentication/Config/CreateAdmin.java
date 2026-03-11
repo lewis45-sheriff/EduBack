@@ -32,6 +32,7 @@ public class CreateAdmin implements ApplicationRunner {
         addAdminRole();
         addAdmin();
         addParentsRole();
+        addSupplier();
     }
 
     void addAdminRole() {
@@ -51,6 +52,17 @@ public class CreateAdmin implements ApplicationRunner {
             roleService.createRole("ROLE_PARENT");
         } else {
             log.info("ROLE_PARENT role already exists.");
+        }
+    }
+    void addSupplier() {
+        Optional<Role> existingRole = roleRepository.findByName("SUPPLIER");
+
+        if (existingRole.isEmpty()) {
+            log.info("Creating SUPPLIER role on " + LocalDateTime.now());
+            roleService.createRole("SUPPLIER");
+        } else {
+            log.info("SUPPLIER role already exists. Updating permissions...");
+            // roleService.updateRolePermissionsSupplier(existingRole.get());
         }
     }
 
