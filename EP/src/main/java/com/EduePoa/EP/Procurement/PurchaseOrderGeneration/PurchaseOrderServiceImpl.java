@@ -325,6 +325,34 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
         return response;
     }
+    @Override
+    public CustomResponse<?> getPurchaseOrderPerSupplier(Long supplierId) {
+        CustomResponse<List<PurchaseOrderResponseDTO>> response = new CustomResponse<>();
+        try {
+            List<PurchaseOrder> purchaseOrderList = purchaseOrderRepository.findBySupplierId(supplierId);
+
+            if (purchaseOrderList == null || purchaseOrderList.isEmpty()) {
+                response.setMessage("No purchase orders found for the given supplier");
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setEntity(null);
+                return response;
+            }
+
+            List<PurchaseOrderResponseDTO> purchaseOrderResponseList = purchaseOrderList.stream()
+                    .map(this::mapToResponseDTO)
+                    .collect(Collectors.toList());
+
+            response.setMessage("Purchase orders retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(purchaseOrderResponseList);
+
+        } catch (Exception e) {
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+        }
+        return response;
+    }
 
     private String generatePoNumber() {
         String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));

@@ -27,4 +27,5 @@ public interface SupplierInvoiceService {
     CustomResponse<?> updateStatus(Long id, InvoiceStatus status);
 
     CustomResponse<?> delete(Long id);
+    CustomResponse<?>InvoicePerSupplier(Long id);
 }

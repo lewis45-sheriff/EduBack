@@ -65,5 +65,11 @@ public class DeliveryNoteController {
         var response = deliveryNoteService.rejectDeliveryNote(request);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @DeleteMapping("delivery-note-per-supplier/{id}")
+    @PreAuthorize("hasPermission(null, 'delivery_note:delete')")
+    public ResponseEntity<?> deliveryNotePerSupplierId(@PathVariable Long id) {
+        var response = deliveryNoteService.deliveryNotePerSupplierId(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 }

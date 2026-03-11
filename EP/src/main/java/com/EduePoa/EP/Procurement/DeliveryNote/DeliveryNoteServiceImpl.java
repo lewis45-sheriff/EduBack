@@ -250,6 +250,35 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
         return approveDeliveryNote(request);
     }
 
+    @Override
+    public CustomResponse<?> deliveryNotePerSupplierId(Long id) {
+        CustomResponse<List<DeliveryNoteResponseDTO>> response = new CustomResponse<>();
+        try {
+            List<DeliveryNote> deliveryNoteList = deliveryNoteRepository.findByPurchaseOrder_Supplier_Id(id);
+
+            if (deliveryNoteList == null || deliveryNoteList.isEmpty()) {
+                response.setMessage("No delivery notes found for the given supplier");
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setEntity(null);
+                return response;
+            }
+
+            List<DeliveryNoteResponseDTO> deliveryNoteResponseDTOS = deliveryNoteList.stream()
+                    .map(this::toResponseDTO)
+                    .collect(Collectors.toList());
+
+            response.setMessage("Delivery notes retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(deliveryNoteResponseDTOS);
+
+        } catch (Exception e) {
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+        }
+        return response;
+    }
+
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getName() == null) {

@@ -50,12 +50,10 @@ public class AuthService {
     private final CookieService cookieService;
     private final TokenBlacklistService tokenBlacklistService;
 
-
     CustomResponse<?> login(LoginRequest loginRequest, HttpServletResponse httpResponse, HttpServletRequest httpRequest) {
         CustomResponse<AuthResponse> response = new CustomResponse<>();
 
         try {
-            // Authenticate user
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
             );
@@ -63,13 +61,6 @@ public class AuthService {
             User user = userRepository.findByEmail(loginRequest.getEmail())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-            // Check if password reset is required
-            if (user.getPassword() == null || user.getPassword().trim().isEmpty() || Boolean.TRUE.equals(user.getPasswordReset())) {
-                user.setPasswordReset(true);
-                userRepository.save(user);
-            }
-
-            // Check if user account is active
             if (user.getStatus().equals(Status.INACTIVE)) {
                 response.setStatusCode(HttpStatus.FORBIDDEN.value());
                 response.setMessage("User Account is Inactive. Please Contact System Admin");
@@ -77,26 +68,35 @@ public class AuthService {
                 return response;
             }
 
-            // Generate OTP
-            String otp = String.valueOf((int) ((Math.random() * 900000) + 100000)); // 6-digit OTP
-            LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(5); // OTP valid for 5 mins
+            // Enforce force password reset before generating OTP, cookies, or JWT
+            if (Boolean.TRUE.equals(user.getPasswordReset())) {
+                AuthResponse authResponse = AuthResponse.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .firstname(user.getFirstName())
+                        .lastname(user.getLastName())
+                        .phoneNumber(user.getPhoneNumber())
+                        .role(user.getRole().getName())
+                        .passwordReset(true)
+                        .build();
 
-            // Save OTP in user
+                response.setStatusCode(HttpStatus.FORBIDDEN.value());
+                response.setMessage("Password reset required.");
+                response.setEntity(authResponse);
+                return response;
+            }
+
+            // Continue normal login flow only if password reset is not required
+            String otp = String.valueOf((int) ((Math.random() * 900000) + 100000));
+            LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(5);
+
             user.setOtpCode(otp);
             user.setOtpExpiry(expiryTime);
             userRepository.save(user);
 
-            // Send OTP email
-            String subject = "Your Login OTP";
-            String body = "<p>Hello " + user.getFirstName() + ",</p>"
-                    + "<p>Your one-time password (OTP) is: <b>" + otp + "</b></p>"
-                    + "<p>This OTP will expire in 5 minutes.</p>"
-                    + "<br><p>Regards,<br>Security Team</p>";
-
-            // emailService.sendEmail(user.getEmail(), subject, body);
             log.info("OTP generated for user: {}", user.getEmail());
 
-            // Invalidate old session
             try {
                 HttpSession oldSession = httpRequest.getSession(false);
                 if (oldSession != null) {
@@ -107,17 +107,12 @@ public class AuthService {
                 log.warn("Could not invalidate old session: {}", e.getMessage());
             }
 
-            // Clear existing cookies
             cookieService.deleteAuthCookies(httpResponse);
-
-            // Clear SecurityContext
             SecurityContextHolder.clearContext();
 
-            // Create new session
             HttpSession newSession = httpRequest.getSession(true);
             log.debug("Created new session: {}", newSession.getId());
 
-            // Generate JWT tokens
             Map<String, Object> accessClaims = new HashMap<>();
             accessClaims.put("type", "ACCESS");
             String jwtToken = jwtService.generateJwtToken(accessClaims, user, ACCESS_TOKEN_DURATION);
@@ -126,16 +121,13 @@ public class AuthService {
             refreshClaims.put("type", "REFRESH");
             String refreshToken = jwtService.generateJwtToken(refreshClaims, user, REFRESH_TOKEN_DURATION);
 
-            // Set tokens in cookies
             cookieService.createAccessTokenCookie(httpResponse, jwtToken);
             cookieService.createRefreshTokenCookie(httpResponse, refreshToken);
 
-            // Set authentication in SecurityContext
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, jwtToken, user.getAuthorities());
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(user, jwtToken, user.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            log.debug("Set authentication for user: {}", user.getUsername());
 
-            //  Map user's role permissions to PermissionDTO list
             List<PermissionDTO> permissionDTOs = user.getRole().getRolePermissions().stream()
                     .map(rp -> new PermissionDTO(
                             rp.getPermission().name(),
@@ -144,7 +136,6 @@ public class AuthService {
                     ))
                     .collect(Collectors.toList());
 
-            // Build AuthResponse (tokens are in cookies, not in response body)
             AuthResponse authResponse = AuthResponse.builder()
                     .id(user.getId())
                     .username(user.getUsername())
@@ -153,8 +144,7 @@ public class AuthService {
                     .lastname(user.getLastName())
                     .role(user.getRole().getName())
                     .phoneNumber(user.getPhoneNumber())
-                    .passwordReset(user.getPasswordReset())
-                    .role(user.getRole().getName())
+                    .passwordReset(false)
                     .permissions(permissionDTOs)
                     .build();
 
@@ -181,8 +171,6 @@ public class AuthService {
 
         return response;
     }
-
-
 
     CustomResponse<?> resetPassword(ResetPassword resetPassword) {
         CustomResponse<?> response = new CustomResponse<>();

@@ -89,4 +89,11 @@ public class SupplierInvoiceController {
         var response = supplierInvoiceService.rejectInvoice(request);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+
+    @GetMapping("/invoice-per-supplier/{id}")
+    @PreAuthorize("hasPermission(null, 'invoice:delete')")
+    public ResponseEntity<?> InvoicePerSupplier(@PathVariable Long id) {
+        var response = supplierInvoiceService.InvoicePerSupplier(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 }

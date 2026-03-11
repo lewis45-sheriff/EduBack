@@ -59,5 +59,11 @@ public class PurchaseOrderController {
         var response = purchaseOrderService.rejectPurchaseOrder(id,dto);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-purchase-oder-per-supplier/{supplierId}")
+    @PreAuthorize("hasPermission(null, 'purchase_order:reject')")
+    public ResponseEntity<?> getPurchaseOrderPerSupplier(@PathVariable Long supplierId) {
+        var response = purchaseOrderService.getPurchaseOrderPerSupplier(supplierId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 }

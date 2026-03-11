@@ -14,4 +14,5 @@ public interface PurchaseOrderService {
     CustomResponse<?> delete(Long id);
     CustomResponse<?>approvePurchaseOrder(Long id);
     CustomResponse<?>rejectPurchaseOrder(Long id, PurchaseOrderRejectionRequestDTO dto);
+    CustomResponse<?>getPurchaseOrderPerSupplier(Long supplierId);
 }

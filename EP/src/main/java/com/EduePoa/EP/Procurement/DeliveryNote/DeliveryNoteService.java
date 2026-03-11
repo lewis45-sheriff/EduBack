@@ -24,4 +24,5 @@ public interface DeliveryNoteService {
     CustomResponse<?> approveDeliveryNote(DeliveryNoteApprovalRequestDTO request);
 
     CustomResponse<?> rejectDeliveryNote(DeliveryNoteApprovalRequestDTO request);
+    CustomResponse<?>deliveryNotePerSupplierId(Long id);
 }

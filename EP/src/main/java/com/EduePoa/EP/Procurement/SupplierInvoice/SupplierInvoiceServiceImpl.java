@@ -427,7 +427,34 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
         return response;
     }
 
+    @Override
+    public CustomResponse<?> InvoicePerSupplier(Long id) {
+        CustomResponse<List<SupplierInvoiceResponseDTO>> response = new CustomResponse<>();
+        try {
+            List<SupplierInvoice> supplierInvoiceList = supplierInvoiceRepository.findBySupplier(id);
 
+            if (supplierInvoiceList == null || supplierInvoiceList.isEmpty()) {
+                response.setMessage("No invoices found for the given supplier");
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setEntity(null);
+                return response;
+            }
+
+            List<SupplierInvoiceResponseDTO> supplierInvoiceItemResponseDTOS = supplierInvoiceList.stream()
+                    .map(this::toResponseDTO)
+                    .collect(Collectors.toList());
+
+            response.setEntity(supplierInvoiceItemResponseDTOS);
+            response.setMessage("Supplier invoices retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (Exception e) {
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
 
     private List<SupplierInvoiceItem> buildItems(List<SupplierInvoiceItemRequestDTO> itemDTOs,
             SupplierInvoice invoice) {

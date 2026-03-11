@@ -16,4 +16,6 @@ public interface DeliveryNoteRepository extends JpaRepository<DeliveryNote, Long
     Page<DeliveryNote> findByStatus(DeliveryNoteStatus status, Pageable pageable);
 
     List<DeliveryNote> findByPurchaseOrderIdAndStatus(Long purchaseOrderId, DeliveryNoteStatus status);
+
+    List<DeliveryNote> findByPurchaseOrder_Supplier_Id(Long supplierId);
 }

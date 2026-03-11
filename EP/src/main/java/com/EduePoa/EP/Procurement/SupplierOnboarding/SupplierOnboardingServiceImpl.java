@@ -64,7 +64,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
                     .orElseThrow(() -> new IllegalStateException(
                             "Role 'SUPPLIER' not found. Please seed the roles table."));
 
-            String temporaryPassword = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            String temporaryPassword ="1234";
 
             User user = new User();
             user.setUsername(request.getEmail());
