@@ -1,7 +1,9 @@
+version: '3.8'
+
 services:
-  app:
+  backend:
     build: .
-    container_name: edupoa-backend
+    container_name: smartedu-backend
     ports:
       - "8085:8085"
     environment:
@@ -9,12 +11,17 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=root
+      - SERVER_PORT=8085
+      - SPRING_MAIL_USERNAME=lewiskipkemoi765@gmail.com
+      - SPRING_MAIL_PASSWORD=yzvj hzze mrom gbcu
       - JWT_SECRET_KEY=ThisIsSecretForJWTHS512SignatureAlgorithmThatMUSTHave64ByteLength
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - smartedu-network
 
+<<<<<<< HEAD
   db:
     image: mariadb:11
     container_name: edupoa-db
@@ -34,3 +41,8 @@ services:
 
 volumes:
   mariadb_data:
+=======
+networks:
+  smartedu-network:
+    driver: bridge
+>>>>>>> 1c76a45 (all)
