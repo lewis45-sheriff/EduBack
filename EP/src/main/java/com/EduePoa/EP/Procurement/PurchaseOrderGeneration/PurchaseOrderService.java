@@ -15,4 +15,5 @@ public interface PurchaseOrderService {
     CustomResponse<?>approvePurchaseOrder(Long id);
     CustomResponse<?>rejectPurchaseOrder(Long id, PurchaseOrderRejectionRequestDTO dto);
     CustomResponse<?>getPurchaseOrderPerSupplier(Long supplierId);
+    CustomResponse<?> getBySupplier(Long supplierId, int page, int size, String sortBy, String sortDir);
 }

@@ -48,8 +48,16 @@ public class SupplierPaymentController {
 
     @GetMapping("/supplier/{supplierId}")
     @PreAuthorize("hasPermission(null, 'supplier_payment:read')")
-    public ResponseEntity<?> getPaymentsBySupplier(@PathVariable Long supplierId, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    public ResponseEntity<?> getPaymentsBySupplier(
+            @PathVariable Long supplierId, 
+            @RequestParam(defaultValue = "0") int page, 
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "paymentDate") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDir) {
+        
+        Sort.Direction direction = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        
         Page<PaymentResponseDTO> result = supplierPaymentService.getPaymentsBySupplier(supplierId, pageable);
         return ResponseEntity.ok(result);
     }

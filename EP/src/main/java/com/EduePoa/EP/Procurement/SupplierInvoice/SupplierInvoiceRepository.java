@@ -26,6 +26,8 @@ public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice
 
     List<SupplierInvoice> findBySupplierId(Long supplierId);
 
+    Page<SupplierInvoice> findBySupplierId(Long supplierId, Pageable pageable);
+
     // Re-adding original methods that were not explicitly replaced by multi-tenancy
     // versions
     Optional<SupplierInvoice> findByInvoiceNumber(String invoiceNumber); // Kept for non-multi-tenancy lookup if needed

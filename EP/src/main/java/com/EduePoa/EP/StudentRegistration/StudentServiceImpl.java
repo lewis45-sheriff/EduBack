@@ -1,5 +1,6 @@
 package com.EduePoa.EP.StudentRegistration;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
@@ -57,7 +58,7 @@ public class StudentServiceImpl implements StudentService {
     private final AuditService auditService;
 
     @Override
-
+    @Audit(module = "STUDENT MANAGEMENT", action = "CREATE")
     public CustomResponse<?> captureNewStudent(StudentRequestDTO studentRequestDTO) {
         CustomResponse<StudentResponseDTO> response = new CustomResponse<>();
         try {
@@ -168,6 +169,7 @@ public class StudentServiceImpl implements StudentService {
     }
 
     @Override
+    @Audit(module = "STUDENT MANAGEMENT", action = "GET_ALL")
     public CustomResponse<?> getAllStudents() {
         CustomResponse<List<StudentResponseDTO>> response = new CustomResponse<>();
         try {
@@ -194,6 +196,7 @@ public class StudentServiceImpl implements StudentService {
     }
 
     @Override
+    @Audit(module = "STUDENT MANAGEMENT", action = "GET_BY_ID")
     public CustomResponse<StudentResponseDTO> getStudentById(Long studentId) {
         CustomResponse<StudentResponseDTO> response = new CustomResponse<>();
         try {
@@ -322,6 +325,7 @@ public class StudentServiceImpl implements StudentService {
     }
 
     @Override
+    @Audit(module = "STUDENT MANAGEMENT", action = "BULK_UPLOAD")
     public CustomResponse<?> bulkUploads(MultipartFile file) {
         CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
         BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();

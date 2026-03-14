@@ -1,5 +1,6 @@
 package com.EduePoa.EP.FeeStructure;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeComponents.FeeComponents;
@@ -36,6 +37,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
     private final AuditService auditService;
 
     @Override
+    @Audit(module = "FEE STRUCTURE", action = "CREATE")
     public CustomResponse<?> create(FeeStructureRequestDTO request) {
         log.info("Creating fee structure: {}", request);
         CustomResponse<FeeStructure> response = new CustomResponse<>();
@@ -128,6 +130,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
     }
 
     @Override
+    @Audit(module = "FEE STRUCTURE", action = "GET_ALL")
     public CustomResponse<?> getAllFeeStructures() {
         CustomResponse<Object> response = new CustomResponse<>();
         try {
@@ -161,6 +164,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
     }
 
     @Override
+    @Audit(module = "FEE STRUCTURE", action = "GET_BY_ID")
     public CustomResponse<?> getFeeStructureById(Long id) {
         CustomResponse<FeeStructureResponseDTO> response = new CustomResponse<>();
         try {

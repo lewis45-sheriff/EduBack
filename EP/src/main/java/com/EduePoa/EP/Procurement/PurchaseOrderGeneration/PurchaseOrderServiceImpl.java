@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Procurement.PurchaseOrderGeneration;
 
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.PurchaseOrderStatus;
 import com.EduePoa.EP.Authentication.User.User;
@@ -41,14 +42,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final AuditService auditService;
 
     @Override
+    @Audit(module = "PURCHASE ORDER", action = "CREATE")
     @Transactional
     public CustomResponse<?> create(PurchaseOrderRequestDTO dto) {
         CustomResponse<PurchaseOrderResponseDTO> response = new CustomResponse<>();
         try {
-            SupplierOnboarding supplier = supplierOnboardingRepository
-                    .findById(dto.getSupplierId())
-                    .orElseThrow(() -> new RuntimeException("Supplier not found"));
-
+            SupplierOnboarding supplier = supplierOnboardingRepository.findById(dto.getSupplierId())
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(dto.getSupplierId())
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + dto.getSupplierId())));
             if (dto.getItems() == null || dto.getItems().isEmpty()) {
                 response.setMessage("Purchase order must contain at least one item");
                 response.setStatusCode(HttpStatus.BAD_REQUEST.value());
@@ -95,6 +96,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Audit(module = "PURCHASE ORDER", action = "GET_BY_ID")
     @Transactional(readOnly = true)
     public CustomResponse<?> getById(Long id) {
         CustomResponse<PurchaseOrderResponseDTO> response = new CustomResponse<>();
@@ -139,6 +141,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Audit(module = "PURCHASE ORDER", action = "UPDATE")
     @Transactional
     public CustomResponse<?> update(Long id, PurchaseOrderUpdateRequestDTO dto) {
         CustomResponse<PurchaseOrderResponseDTO> response = new CustomResponse<>();
@@ -156,10 +159,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
             // Update supplier if changed
             if (dto.getSupplierId() != null) {
-                SupplierOnboarding supplier = supplierOnboardingRepository
-                        .findById(dto.getSupplierId())
-                        .orElseThrow(() -> new RuntimeException("Supplier not found"));
-                purchaseOrder.setSupplier(supplier);
+                SupplierOnboarding newSupplier = supplierOnboardingRepository.findById(dto.getSupplierId())
+                        .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(dto.getSupplierId())
+                                .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + dto.getSupplierId())));
+                purchaseOrder.setSupplier(newSupplier);
             }
 
             // Update simple fields
@@ -197,6 +200,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Audit(module = "PURCHASE ORDER", action = "DELETE")
     @Transactional
     public CustomResponse<?> delete(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
@@ -229,6 +233,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Audit(module = "PURCHASE ORDER", action = "APPROVE")
     @Transactional
     public CustomResponse<?> approvePurchaseOrder(Long id) {
         CustomResponse<PurchaseOrderResponseDTO> response = new CustomResponse<>();
@@ -274,6 +279,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Audit(module = "PURCHASE ORDER", action = "REJECT")
     @Transactional
     public CustomResponse<?> rejectPurchaseOrder(Long id, PurchaseOrderRejectionRequestDTO dto) {
         CustomResponse<PurchaseOrderResponseDTO> response = new CustomResponse<>();
@@ -329,7 +335,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     public CustomResponse<?> getPurchaseOrderPerSupplier(Long supplierId) {
         CustomResponse<List<PurchaseOrderResponseDTO>> response = new CustomResponse<>();
         try {
-            List<PurchaseOrder> purchaseOrderList = purchaseOrderRepository.findBySupplierId(supplierId);
+            SupplierOnboarding supplier = supplierOnboardingRepository.findByUser_Id(supplierId)
+                    .orElseThrow(() -> new RuntimeException("Supplier not found for the given user"));
+            Long actualSupplierId = supplier.getId();
+
+            List<PurchaseOrder> purchaseOrderList = purchaseOrderRepository.findBySupplierId(actualSupplierId);
 
             if (purchaseOrderList == null || purchaseOrderList.isEmpty()) {
                 response.setMessage("No purchase orders found for the given supplier");
@@ -348,6 +358,39 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         } catch (Exception e) {
             response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    @Audit(module = "PURCHASE ORDER", action = "GET_BY_SUPPLIER")
+    public CustomResponse<?> getBySupplier(Long supplierId, int page, int size, String sortBy, String sortDir) {
+        CustomResponse<Page<PurchaseOrderResponseDTO>> response = new CustomResponse<>();
+        try {
+            SupplierOnboarding supplier = supplierOnboardingRepository.findById(supplierId)
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(supplierId)
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + supplierId)));
+            Long actualSupplierId = supplier.getId();
+
+            Sort.Direction direction = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+            Page<PurchaseOrderResponseDTO> resultPage = purchaseOrderRepository
+                    .findBySupplierId(actualSupplierId, pageable)
+                    .map(this::mapToResponseDTO);
+
+            response.setMessage("Purchase orders fetched successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(resultPage);
+
+        } catch (RuntimeException e) {
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+            response.setEntity(null);
+        } catch (Exception e) {
+            response.setMessage("Error fetching purchase orders: " + e.getMessage());
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             response.setEntity(null);
         }

@@ -1,5 +1,6 @@
 package com.EduePoa.EP.StudentInvoices;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
@@ -32,6 +33,7 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService {
     private final FinanceRepository financeRepository;
     private final AuditService auditService;
 
+    @Audit(module = "STUDENT INVOICE", action = "CREATE")
     public CustomResponse<?> create(Long studentId, String term) {
         CustomResponse<StudentInvoiceResponseDTO> response = new CustomResponse<>();
         try {
@@ -220,6 +222,7 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService {
     }
 
     @Override
+    @Audit(module = "STUDENT INVOICE", action = "BULK_INVOICE")
     public CustomResponse<?> invoiceAll(String term) {
         CustomResponse<InvoiceSummary> response = new CustomResponse<>();
         try {

@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Procurement.SupplierOnboarding;
 
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.Authentication.Enum.SupplierStatus;
@@ -35,6 +36,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
+    @Audit(module = "SUPPLIER ONBOARDING", action = "REGISTER")
 //    @Transactional
     public CustomResponse<?> registerSupplier(SupplierOnboardingRequestDTO request) {
         CustomResponse<SupplierOnboarding> response = new CustomResponse<>();
@@ -148,6 +150,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
         return supplier;
     }
 
+    @Audit(module = "SUPPLIER ONBOARDING", action = "GET_BY_ID")
     @Transactional(readOnly = true)
     public CustomResponse<SupplierOnboardingResponseDTO> getSupplierById(Long id) {
 
@@ -176,6 +179,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
         return response;
     }
 
+    @Audit(module = "SUPPLIER ONBOARDING", action = "GET_ALL")
     @Transactional(readOnly = true)
     public CustomResponse<List<SupplierOnboardingResponseDTO>> getAllSuppliers() {
         CustomResponse<List<SupplierOnboardingResponseDTO>> response = new CustomResponse<>();
@@ -200,6 +204,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
         return response;
     }
 
+    @Audit(module = "SUPPLIER ONBOARDING", action = "UPDATE")
     @Transactional
     public CustomResponse<?> updateSupplier(Long id, SupplierOnboardingRequestDTO request) {
 
@@ -251,6 +256,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
     }
 
     @Override
+    @Audit(module = "SUPPLIER ONBOARDING", action = "DELETE")
     @Transactional
     public CustomResponse<?> deleteSupplier(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
@@ -281,6 +287,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
     }
 
     @Override
+    @Audit(module = "SUPPLIER ONBOARDING", action = "APPROVE")
     @Transactional
     public CustomResponse<?> approveSupplier(Long id) {
         CustomResponse<SupplierOnboardingResponseDTO> response = new CustomResponse<>();
@@ -335,6 +342,7 @@ public class SupplierOnboardingServiceImpl implements SupplierOnboardingService 
     }
 
     @Override
+    @Audit(module = "SUPPLIER ONBOARDING", action = "REJECT")
     @Transactional
     public CustomResponse<?> rejectSupplier(Long id, String rejectionReason) {
         CustomResponse<SupplierOnboardingResponseDTO> response = new CustomResponse<>();

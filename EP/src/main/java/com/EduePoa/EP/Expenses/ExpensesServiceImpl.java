@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Expenses;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Expenses.Requests.ExpenseRequestDTO;
@@ -31,6 +32,7 @@ public class ExpensesServiceImpl implements ExpensesService {
     private final LedgerService ledgerService;
 
     @Override
+    @Audit(module = "EXPENSES", action = "CREATE")
     @Transactional
     public CustomResponse<?> create(ExpenseRequestDTO dto) {
         CustomResponse<ExpenseResponseDTO> response = new CustomResponse<>();
@@ -120,6 +122,7 @@ public class ExpensesServiceImpl implements ExpensesService {
     }
 
     @Override
+    @Audit(module = "EXPENSES", action = "UPDATE")
     @Transactional
     public CustomResponse<?> update(Long id, ExpenseRequestDTO dto) {
         CustomResponse<ExpenseResponseDTO> response = new CustomResponse<>();
@@ -156,12 +159,17 @@ public class ExpensesServiceImpl implements ExpensesService {
     }
 
     @Override
+    @Audit(module = "EXPENSES", action = "DELETE")
     @Transactional
     public CustomResponse<?> delete(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
         try {
-            if (!expensesRepository.existsById(id)) {
-                throw new RuntimeException("Expense not found with id: " + id);
+            Expenses expense = expensesRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Expense not found with id: " + id));
+
+            if ("APPROVED".equalsIgnoreCase(expense.getStatus())) {
+                throw new RuntimeException(
+                        "Cannot delete expense '" + expense.getExpenseNumber() + "' because it has already been approved.");
             }
 
             expensesRepository.deleteById(id);
@@ -170,6 +178,10 @@ public class ExpensesServiceImpl implements ExpensesService {
             response.setEntity(null);
             response.setStatusCode(HttpStatus.OK.value());
 
+        } catch (RuntimeException e) {
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
         } catch (Exception e) {
             response.setMessage(e.getMessage());
             response.setEntity(null);
@@ -213,6 +225,7 @@ public class ExpensesServiceImpl implements ExpensesService {
     }
 
     @Override
+    @Audit(module = "EXPENSES", action = "APPROVE")
     @Transactional
     public CustomResponse<?> approveExpense(Long id) {
         CustomResponse<ExpenseResponseDTO> response = new CustomResponse<>();

@@ -28,4 +28,5 @@ public interface SupplierInvoiceService {
 
     CustomResponse<?> delete(Long id);
     CustomResponse<?>InvoicePerSupplier(Long id);
+    CustomResponse<?> getBySupplier(Long supplierId, int page, int size, String sortBy, String sortDir);
 }

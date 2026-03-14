@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Transport;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
@@ -37,6 +38,7 @@ public class TransportServiceImpl implements TransportService {
     private final AuditService auditService;
 
     @Override
+    @Audit(module = "TRANSPORT", action = "CREATE")
     public CustomResponse<?> create(TransportRequestDTO transportRequestDTO) {
         CustomResponse<TransportResponseDTO> response = new CustomResponse<>();
         try {
@@ -119,6 +121,7 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
+    @Audit(module = "TRANSPORT", action = "UPDATE")
     public CustomResponse<?> update(Long id, TransportRequestDTO transportRequestDTO) {
         CustomResponse<TransportResponseDTO> response = new CustomResponse<>();
         try {
@@ -152,6 +155,7 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
+    @Audit(module = "TRANSPORT", action = "DEACTIVATE")
     public CustomResponse<?> delete(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
         try {
@@ -176,6 +180,7 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
+    @Audit(module = "TRANSPORT", action = "ASSIGN")
     public CustomResponse<?> assign(AssignTransportRequestDTO request) {
         CustomResponse<AssignTransport> response = new CustomResponse<>();
 
@@ -303,6 +308,7 @@ public class TransportServiceImpl implements TransportService {
     }
 
     @Override
+    @Audit(module = "TRANSPORT", action = "CREATE_TRANSACTION")
     public CustomResponse<?> createTransportTransaction(Long studentId,
             TransportTransactionRequestDTO transportTransactionRequestDTO) {
         CustomResponse<Map<String, Object>> response = new CustomResponse<>();

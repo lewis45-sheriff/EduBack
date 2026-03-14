@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Procurement.SupplierPayments;
 
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.InvoiceStatus;
 import com.EduePoa.EP.Authentication.Enum.PaymentStatus;
@@ -41,6 +42,7 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
     private final AuditService auditService;
 
     @Override
+    @Audit(module = "SUPPLIER PAYMENT", action = "RECORD")
     @Transactional
     public CustomResponse<?> recordPayment(PaymentRequestDTO request) {
         CustomResponse<PaymentResponseDTO> response = new CustomResponse<>();
@@ -58,13 +60,21 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
             //  Calculate current outstanding balance
             BigDecimal invoiceTotal = invoice.getTotalAmount();
             BigDecimal currentPaid = invoice.getPaidAmount() != null ? invoice.getPaidAmount() : BigDecimal.ZERO;
-            BigDecimal currentOutstanding = invoiceTotal.subtract(currentPaid);
 
-            //  Validate payment does not exceed outstanding balance
-            if (request.getAmount().compareTo(currentOutstanding) > 0) {
+            //  Also sum any existing PENDING_APPROVAL payments (not yet approved/applied)
+            BigDecimal pendingPaymentsTotal = paymentRepository
+                    .sumAmountByInvoiceIdAndStatus(invoice.getId(), PaymentStatus.PENDING_APPROVAL);
+            if (pendingPaymentsTotal == null) pendingPaymentsTotal = BigDecimal.ZERO;
+
+            //  Effective outstanding = total - already paid - already pending
+            BigDecimal effectiveOutstanding = invoiceTotal.subtract(currentPaid).subtract(pendingPaymentsTotal);
+
+            //  Validate payment does not exceed effective outstanding balance
+            if (request.getAmount().compareTo(effectiveOutstanding) > 0) {
                 throw new RuntimeException(String.format(
-                        "Payment amount (%.2f) exceeds outstanding balance (%.2f). Invoice total: %.2f, Already paid: %.2f",
-                        request.getAmount(), currentOutstanding, invoiceTotal, currentPaid));
+                        "Payment amount (%.2f) exceeds available outstanding balance (%.2f). " +
+                        "Invoice total: %.2f, Already paid: %.2f, Pending approval: %.2f",
+                        request.getAmount(), effectiveOutstanding, invoiceTotal, currentPaid, pendingPaymentsTotal));
             }
 
             SupplierOnboarding supplier = invoice.getSupplier();
@@ -109,6 +119,7 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER PAYMENT", action = "APPROVE")
     @Transactional
     public CustomResponse<?> approvePayment(Long paymentId) {
         CustomResponse<PaymentResponseDTO> response = new CustomResponse<>();
@@ -208,6 +219,7 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER PAYMENT", action = "REJECT")
     @Transactional
     public CustomResponse<?> rejectPayment(Long paymentId, String reason) {
         CustomResponse<PaymentResponseDTO> response = new CustomResponse<>();
@@ -244,6 +256,7 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER PAYMENT", action = "EDIT")
     @Transactional
     public CustomResponse<?> editPayment(Long paymentId, PaymentRequestDTO request) {
         CustomResponse<PaymentResponseDTO> response = new CustomResponse<>();
@@ -338,7 +351,11 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
     @Override
     @Transactional(readOnly = true)
     public Page<PaymentResponseDTO> getPaymentsBySupplier(Long supplierId, Pageable pageable) {
-        return paymentRepository.findBySupplierId(supplierId, pageable)
+        return supplierOnboardingRepository.findById(supplierId)
+                .or(() -> supplierOnboardingRepository.findByUser_Id(supplierId))
+                .map(SupplierOnboarding::getId)
+                .map(actualId -> paymentRepository.findBySupplierId(actualId, pageable))
+                .orElse(Page.empty())
                 .map(this::toResponseDTO);
     }
 
@@ -355,7 +372,8 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
         CustomResponse<BigDecimal> response = new CustomResponse<>();
         try {
             SupplierOnboarding supplier = supplierOnboardingRepository.findById(supplierId)
-                    .orElseThrow(() -> new RuntimeException("Supplier not found"));
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(supplierId)
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + supplierId)));
 
             BigDecimal balance = supplier.getCurrentBalance() != null
                     ? supplier.getCurrentBalance()

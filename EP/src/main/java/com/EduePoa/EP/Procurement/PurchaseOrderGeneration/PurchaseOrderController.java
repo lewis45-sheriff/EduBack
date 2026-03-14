@@ -66,4 +66,16 @@ public class PurchaseOrderController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @GetMapping("/supplier/{supplierId}")
+    @PreAuthorize("hasPermission(null, 'purchase_order:read')")
+    public ResponseEntity<?> getPurchaseOrdersBySupplier(
+            @PathVariable Long supplierId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "orderDate") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDir) {
+        var response = purchaseOrderService.getBySupplier(supplierId, page, size, sortBy, sortDir);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 }

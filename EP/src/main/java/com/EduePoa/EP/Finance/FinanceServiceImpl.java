@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Finance;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Responses.StudentBalanceDTO;
@@ -26,6 +27,7 @@ public class FinanceServiceImpl implements FinanceService {
     private final AuditService auditService;
 
     @Override
+    @Audit(module = "FINANCE", action = "GET_BALANCES")
     public CustomResponse<?> getStudentsWithBalances() {
         CustomResponse<List<StudentBalanceDTO>> response = new CustomResponse<>();
         try {
@@ -76,6 +78,7 @@ public class FinanceServiceImpl implements FinanceService {
     }
 
     @Override
+    @Audit(module = "FINANCE", action = "GET_BALANCE_PER_STUDENT")
     public CustomResponse<?> getStudentsWithBalancePerStudent(Long studentId) {
         CustomResponse<Object> response = new CustomResponse<>();
         try {

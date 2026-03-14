@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Procurement.DeliveryNote;
 
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.DeliveryNoteStatus;
 import com.EduePoa.EP.Authentication.User.User;
@@ -31,6 +32,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.EduePoa.EP.Procurement.SupplierOnboarding.SupplierOnboarding;
+import com.EduePoa.EP.Procurement.SupplierOnboarding.SupplierOnboardingRepository;
+
 @Service
 @RequiredArgsConstructor
 public class DeliveryNoteServiceImpl implements DeliveryNoteService {
@@ -42,8 +46,10 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
     private final DeliveryNoteItemRepository deliveryNoteItemRepository;
     private final AuditService auditService;
     private final InventoryService inventoryService;
+    private final SupplierOnboardingRepository supplierOnboardingRepository;
 
     @Override
+    @Audit(module = "DELIVERY NOTE", action = "CREATE")
 //    @Transactional
     public CustomResponse<?> create(DeliveryNoteRequestDTO dto) {
         CustomResponse<DeliveryNoteResponseDTO> response = new CustomResponse<>();
@@ -122,6 +128,7 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
     }
 
     @Override
+    @Audit(module = "DELIVERY NOTE", action = "UPDATE")
     @Transactional
     public CustomResponse<?> update(Long id, DeliveryNoteRequestDTO dto) {
         CustomResponse<DeliveryNoteResponseDTO> response = new CustomResponse<>();
@@ -162,6 +169,7 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
     }
 
     @Override
+    @Audit(module = "DELIVERY NOTE", action = "DELETE")
     @Transactional
     public CustomResponse<?> delete(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
@@ -194,6 +202,7 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
     }
 
     @Override
+    @Audit(module = "DELIVERY NOTE", action = "APPROVE")
     @Transactional
     public CustomResponse<?> approveDeliveryNote(DeliveryNoteApprovalRequestDTO request) {
         CustomResponse<DeliveryNoteResponseDTO> response = new CustomResponse<>();
@@ -244,6 +253,7 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
     }
 
     @Override
+    @Audit(module = "DELIVERY NOTE", action = "REJECT")
     @Transactional
     public CustomResponse<?> rejectDeliveryNote(DeliveryNoteApprovalRequestDTO request) {
         request.setApproved(false);
@@ -254,7 +264,12 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
     public CustomResponse<?> deliveryNotePerSupplierId(Long id) {
         CustomResponse<List<DeliveryNoteResponseDTO>> response = new CustomResponse<>();
         try {
-            List<DeliveryNote> deliveryNoteList = deliveryNoteRepository.findByPurchaseOrder_Supplier_Id(id);
+            SupplierOnboarding supplier = supplierOnboardingRepository.findById(id)
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(id)
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + id)));
+            Long actualSupplierId = supplier.getId();
+
+            List<DeliveryNote> deliveryNoteList = deliveryNoteRepository.findByPurchaseOrder_Supplier_Id(actualSupplierId);
 
             if (deliveryNoteList == null || deliveryNoteList.isEmpty()) {
                 response.setMessage("No delivery notes found for the given supplier");

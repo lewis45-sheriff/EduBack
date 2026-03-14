@@ -2,6 +2,8 @@ package com.EduePoa.EP.Procurement.SupplierInvoice;
 
 
 import com.EduePoa.EP.Authentication.Enum.InvoiceStatus;
+import com.EduePoa.EP.Authentication.Enum.PaymentMethod;
+import com.EduePoa.EP.Authentication.Enum.PaymentStatus;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Procurement.DeliveryNote.DeliveryNote;
@@ -19,8 +21,15 @@ import com.EduePoa.EP.Procurement.SupplierInvoice.Responses.SupplierInvoiceRespo
 import com.EduePoa.EP.Procurement.SupplierInvoice.SupplierInvoiceItem.SupplierInvoiceItem;
 import com.EduePoa.EP.Procurement.SupplierOnboarding.SupplierOnboarding;
 import com.EduePoa.EP.Procurement.SupplierOnboarding.SupplierOnboardingRepository;
+import com.EduePoa.EP.Procurement.SupplierPayments.Payment;
+import com.EduePoa.EP.Procurement.SupplierPayments.PaymentRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,6 +37,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,8 +56,10 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
     private final UserRepository userRepository;
     private final EtimsValidationService etimsValidationService;
     private final ThreeWayMatchService threeWayMatchService;
+    private final PaymentRepository paymentRepository;
 
     @Override
+    @Audit(module = "SUPPLIER INVOICE", action = "CREATE")
 //    @Transactional
     public CustomResponse<?> create(SupplierInvoiceRequestDTO dto) {
         CustomResponse<SupplierInvoiceResponseDTO> response = new CustomResponse<>();
@@ -56,9 +68,22 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
                 throw new RuntimeException("Invoice number already exists: " + dto.getInvoiceNumber());
             }
 
+
             PurchaseOrder purchaseOrder = purchaseOrderRepository.findById(dto.getPurchaseOrderId())
                     .orElseThrow(() -> new RuntimeException(
                             "Purchase order not found with id: " + dto.getPurchaseOrderId()));
+
+            // Support partial delivery: Validate that the specific Delivery Notes haven't been invoiced yet
+            List<SupplierInvoice> existingInvoices = supplierInvoiceRepository.findByPurchaseOrderId(purchaseOrder.getId());
+            for (SupplierInvoice existingInvoice : existingInvoices) {
+                if (existingInvoice.getStatus() != com.EduePoa.EP.Authentication.Enum.InvoiceStatus.REJECTED) {
+                    for (DeliveryNote dn : existingInvoice.getDeliveryNotes()) {
+                        if (dto.getDeliveryNoteIds().contains(dn.getId())) {
+                            throw new RuntimeException("Delivery Note ID: " + dn.getId() + " has already been invoiced.");
+                        }
+                    }
+                }
+            }
 
             // Fetch all delivery notes
             List<DeliveryNote> deliveryNotes = new ArrayList<>();
@@ -69,9 +94,11 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
                 deliveryNotes.add(dn);
             }
 
+
             SupplierOnboarding supplier = supplierOnboardingRepository.findById(dto.getSupplierId())
-                    .orElseThrow(() -> new RuntimeException(
-                            "Supplier not found with id: " + dto.getSupplierId()));
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(dto.getSupplierId())
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + dto.getSupplierId())));
+
 
             SupplierInvoice invoice = SupplierInvoice.builder()
                     .purchaseOrder(purchaseOrder)
@@ -109,6 +136,7 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER INVOICE", action = "UPLOAD")
     public CustomResponse<?> uploadInvoice(SupplierInvoiceUploadRequestDTO request) {
         CustomResponse<SupplierInvoiceResponseDTO> response = new CustomResponse<>();
         try {
@@ -123,6 +151,18 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
             PurchaseOrder po = purchaseOrderRepository.findById(request.getPurchaseOrderId())
                     .orElseThrow(() -> new RuntimeException("Purchase Order not found"));
 
+            // Support partial delivery: Validate that the specific Delivery Notes haven't been invoiced yet
+            List<SupplierInvoice> existingInvoices = supplierInvoiceRepository.findByPurchaseOrderId(po.getId());
+            for (SupplierInvoice existingInvoice : existingInvoices) {
+                if (existingInvoice.getStatus() != InvoiceStatus.REJECTED) {
+                    for (DeliveryNote dn : existingInvoice.getDeliveryNotes()) {
+                        if (request.getDeliveryNoteIds().contains(dn.getId())) {
+                            throw new RuntimeException("Delivery Note ID: " + dn.getId() + " has already been invoiced.");
+                        }
+                    }
+                }
+            }
+
             //  Validate all DNs and same PO
             List<DeliveryNote> deliveryNotes = new ArrayList<>();
             for (Long dnId : request.getDeliveryNoteIds()) {
@@ -136,9 +176,9 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
                 deliveryNotes.add(dn);
             }
 
-            SupplierOnboarding supplier = supplierOnboardingRepository
-                    .findById(request.getSupplierId())
-                    .orElseThrow(() -> new RuntimeException("Supplier not found"));
+            SupplierOnboarding supplier = supplierOnboardingRepository.findById(request.getSupplierId())
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(request.getSupplierId())
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + request.getSupplierId())));
 
             // 3-Way Match + Amount Matching (after all validations pass)
             threeWayMatchService.performThreeWayMatch(
@@ -193,6 +233,7 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER INVOICE", action = "APPROVE")
     @Transactional
     public CustomResponse<?> approveInvoice(SupplierInvoiceApprovalRequestDTO request) {
         CustomResponse<SupplierInvoiceResponseDTO> response = new CustomResponse<>();
@@ -213,18 +254,49 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
                 invoice.setApprovedBy(currentUser);
                 invoice.setApprovedAt(LocalDateTime.now());
                 invoice.setRejectionReason(null);
+
+                SupplierInvoice saved = supplierInvoiceRepository.save(invoice);
+
+                // Auto-log a payment record representing the amount now owed to the supplier
+                SupplierOnboarding supplier = invoice.getSupplier();
+                BigDecimal invoiceTotal = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+
+//                Payment invoicePayment = Payment.builder()
+//                        .supplierInvoice(saved)
+//                        .supplier(supplier)
+//                        .paymentDate(LocalDate.now())
+//                        .amount(invoiceTotal)
+////                        .paymentMethod(PaymentMethod.BANK_TRANSFER)
+//                        .referenceNumber("INV-" + saved.getInvoiceNumber())
+//                        .remarks("Auto-logged on invoice approval")
+////                        .status(PaymentStatus.PENDING_APPROVAL)
+//                        .createdBy(currentUser)
+//                        .createdAt(LocalDateTime.now())
+//                        .build();
+//                paymentRepository.save(invoicePayment);
+
+                // Credit the supplier's current balance (money now owed to them)
+                BigDecimal currentBalance = supplier.getCurrentBalance() != null
+                        ? supplier.getCurrentBalance()
+                        : BigDecimal.ZERO;
+                supplier.setCurrentBalance(currentBalance.add(invoiceTotal));
+                supplierOnboardingRepository.save(supplier);
+
+                response.setMessage("Invoice approved successfully. Payment of " + invoiceTotal + " logged and supplier balance updated.");
+                response.setEntity(toResponseDTO(saved));
+                response.setStatusCode(HttpStatus.OK.value());
             } else {
                 invoice.setStatus(InvoiceStatus.REJECTED);
                 invoice.setRejectedBy(currentUser);
                 invoice.setRejectedAt(LocalDateTime.now());
                 invoice.setRejectionReason(request.getRejectionReason());
+
+                SupplierInvoice saved = supplierInvoiceRepository.save(invoice);
+
+                response.setMessage("Invoice rejected successfully");
+                response.setEntity(toResponseDTO(saved));
+                response.setStatusCode(HttpStatus.OK.value());
             }
-
-            SupplierInvoice saved = supplierInvoiceRepository.save(invoice);
-
-            response.setMessage("Invoice " + (request.getApproved() ? "approved" : "rejected") + " successfully");
-            response.setEntity(toResponseDTO(saved));
-            response.setStatusCode(HttpStatus.OK.value());
 
         } catch (RuntimeException e) {
             response.setMessage(e.getMessage());
@@ -253,6 +325,7 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER INVOICE", action = "GET_BY_ID")
     public CustomResponse<?> getById(Long id) {
         CustomResponse<SupplierInvoiceResponseDTO> response = new CustomResponse<>();
         try {
@@ -273,6 +346,7 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
     }
 
     @Override
+    @Audit(module = "SUPPLIER INVOICE", action = "GET_ALL")
     public CustomResponse<?> getAll() {
         CustomResponse<List<SupplierInvoiceResponseDTO>> response = new CustomResponse<>();
         try {
@@ -346,8 +420,8 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
             }
 
             SupplierOnboarding supplier = supplierOnboardingRepository.findById(dto.getSupplierId())
-                    .orElseThrow(() -> new RuntimeException(
-                            "Supplier not found with id: " + dto.getSupplierId()));
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(dto.getSupplierId())
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + dto.getSupplierId())));
 
             existing.setPurchaseOrder(purchaseOrder);
             existing.setDeliveryNotes(deliveryNotes);
@@ -426,12 +500,16 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
         }
         return response;
     }
-
     @Override
     public CustomResponse<?> InvoicePerSupplier(Long id) {
         CustomResponse<List<SupplierInvoiceResponseDTO>> response = new CustomResponse<>();
         try {
-            List<SupplierInvoice> supplierInvoiceList = supplierInvoiceRepository.findBySupplier(id);
+            SupplierOnboarding supplier = supplierOnboardingRepository.findById(id)
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(id)
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + id)));
+            Long actualSupplierId = supplier.getId();
+
+            List<SupplierInvoice> supplierInvoiceList = supplierInvoiceRepository.findBySupplierId(actualSupplierId);
 
             if (supplierInvoiceList == null || supplierInvoiceList.isEmpty()) {
                 response.setMessage("No invoices found for the given supplier");
@@ -456,6 +534,39 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
         return response;
     }
 
+    @Override
+    @Audit(module = "SUPPLIER INVOICE", action = "GET_BY_SUPPLIER")
+    public CustomResponse<?> getBySupplier(Long supplierId, int page, int size, String sortBy, String sortDir) {
+        CustomResponse<Page<SupplierInvoiceResponseDTO>> response = new CustomResponse<>();
+        try {
+            SupplierOnboarding supplier = supplierOnboardingRepository.findById(supplierId)
+                    .orElseGet(() -> supplierOnboardingRepository.findByUser_Id(supplierId)
+                            .orElseThrow(() -> new RuntimeException("Supplier not found with id: " + supplierId)));
+            Long actualSupplierId = supplier.getId();
+
+            Sort.Direction direction = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+            Page<SupplierInvoiceResponseDTO> resultPage = supplierInvoiceRepository
+                    .findBySupplierId(actualSupplierId, pageable)
+                    .map(this::toResponseDTO);
+
+            response.setMessage("Supplier invoices fetched successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(resultPage);
+
+        } catch (RuntimeException e) {
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+            response.setEntity(null);
+        } catch (Exception e) {
+            response.setMessage("Error fetching supplier invoices: " + e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
     private List<SupplierInvoiceItem> buildItems(List<SupplierInvoiceItemRequestDTO> itemDTOs,
             SupplierInvoice invoice) {
         return itemDTOs.stream().map(dto -> {
@@ -463,14 +574,24 @@ public class SupplierInvoiceServiceImpl implements SupplierInvoiceService {
                     .orElseThrow(() -> new RuntimeException(
                             "Purchase order item not found with id: " + dto.getPurchaseOrderItemId()));
 
-            BigDecimal total = dto.getUnitPrice()
+            // Validate: invoice unit price must match the PO unit price
+            if (dto.getUnitPrice().compareTo(poItem.getUnitPrice()) != 0) {
+                throw new RuntimeException(String.format(
+                        "Unit price mismatch for item '%s' (PO Item ID: %d). " +
+                        "Expected: %.2f (from Purchase Order), but invoice provided: %.2f",
+                        poItem.getItemName(), poItem.getId(),
+                        poItem.getUnitPrice(), dto.getUnitPrice()));
+            }
+
+            // Use PO unit price as the authoritative value
+            BigDecimal total = poItem.getUnitPrice()
                     .multiply(BigDecimal.valueOf(dto.getInvoicedQuantity()));
 
             return SupplierInvoiceItem.builder()
                     .supplierInvoice(invoice)
                     .purchaseOrderItem(poItem)
                     .invoicedQuantity(dto.getInvoicedQuantity())
-                    .unitPrice(dto.getUnitPrice())
+                    .unitPrice(poItem.getUnitPrice())
                     .totalPrice(total)
                     .build();
         }).collect(Collectors.toList());

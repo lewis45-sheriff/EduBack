@@ -64,7 +64,6 @@ public class ExpensesController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    // DELETE /api/v1/expenses/{id}  (also: DELETE /delete/{id})
     @DeleteMapping({"/{id}", "/delete/{id}"})
     public ResponseEntity<?> delete(@PathVariable Long id) {
         var response = expensesService.delete(id);

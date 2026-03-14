@@ -96,4 +96,16 @@ public class SupplierInvoiceController {
         var response = supplierInvoiceService.InvoicePerSupplier(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+
+    @GetMapping("/supplier/{supplierId}")
+    @PreAuthorize("hasPermission(null, 'invoice:read')")
+    public ResponseEntity<?> getInvoicesBySupplier(
+            @PathVariable Long supplierId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "invoiceDate") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDir) {
+        var response = supplierInvoiceService.getBySupplier(supplierId, page, size, sortBy, sortDir);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 }

@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Grade;
 
+import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Grade.Requests.GradeDto;
 import com.EduePoa.EP.Utils.CustomResponse;
@@ -21,6 +22,7 @@ public class GradeServiceImpl implements GradeService {
     private final AuditService auditService;
 
     @Override
+    @Audit(module = "GRADE MANAGEMENT", action = "CREATE")
     public CustomResponse<?> createGrade(String name, Integer start, Integer end) {
         CustomResponse<Set<GradeDto>> response = new CustomResponse<>();
         Set<GradeDto> createdGrades = new HashSet<>();
@@ -90,6 +92,7 @@ public class GradeServiceImpl implements GradeService {
     }
 
     @Override
+    @Audit(module = "GRADE MANAGEMENT", action = "GET_ALL")
     public CustomResponse<?> getAllGrades() {
         CustomResponse<List<Grade>> response = new CustomResponse<>();
         log.info("Fetching all grade/class names");
@@ -120,6 +123,7 @@ public class GradeServiceImpl implements GradeService {
     }
 
     @Override
+    @Audit(module = "GRADE MANAGEMENT", action = "DELETE")
     public CustomResponse<?> delete(Long id) {
         CustomResponse<?> response = new CustomResponse<>();
         try {

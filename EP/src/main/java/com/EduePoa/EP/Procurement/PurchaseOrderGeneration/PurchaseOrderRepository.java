@@ -14,4 +14,6 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     Page<PurchaseOrder> findByStatus(PurchaseOrderStatus status, Pageable pageable);
 
     List<PurchaseOrder> findBySupplierId(Long supplierId);
+
+    Page<PurchaseOrder> findBySupplierId(Long supplierId, Pageable pageable);
 }
