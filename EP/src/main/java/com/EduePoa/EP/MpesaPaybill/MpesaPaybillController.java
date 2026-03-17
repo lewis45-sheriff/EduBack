@@ -22,17 +22,12 @@ public class MpesaPaybillController {
         String response = mpesaPaybillService.generateToken();
         return ResponseEntity.ok(response);
     }
-    @PostMapping(  value = {"/validate", "/transactions/c2b/validation"},
-            consumes = "application/json",
-            produces = "application/json")
+    @PostMapping(  value = {"/validate", "/transactions/c2b/validation"}, consumes = "application/json", produces = "application/json")
     ResponseEntity<?>validate(@RequestBody ValidationRequest request){
         var response = mpesaPaybillService.validate(request);
         return  ResponseEntity.status(response.getStatusCode()).body(response);
-
     }
-    @PostMapping( value = {"/process-call-back", "/transactions/c2b/confirmation"},
-            consumes = "application/json",
-            produces = "application/json")
+    @PostMapping( value = {"/process-call-back", "/transactions/c2b/confirmation"}, consumes = "application/json", produces = "application/json")
     ResponseEntity<?>processCallBack(@RequestBody ConfirmationRequest request){
         var response = mpesaPaybillService.processCallBack(request);
         return  ResponseEntity.status(response.getStatusCode()).body(response);

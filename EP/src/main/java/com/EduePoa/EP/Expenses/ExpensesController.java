@@ -49,14 +49,12 @@ public class ExpensesController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    // GET /api/v1/expenses/{id}  (also: GET /get-by-id/{id})
     @GetMapping({"/{id}", "/get-by-id/{id}"})
     public ResponseEntity<?> getById(@PathVariable Long id) {
         var response = expensesService.getById(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    // PUT /api/v1/expenses/{id}  (also: PUT /update/{id}, PUT /edit/{id})
     @PutMapping({"/{id}", "/update/{id}", "/edit/{id}"})
     public ResponseEntity<?> update(@PathVariable Long id,
                                     @Valid @RequestBody ExpenseRequestDTO requestDTO) {
@@ -70,7 +68,6 @@ public class ExpensesController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    // PATCH /api/v1/expenses/approve/{id}
     @PatchMapping("/approve/{id}")
     public ResponseEntity<?> approveExpense(@PathVariable Long id) {
         var response = expensesService.approveExpense(id);

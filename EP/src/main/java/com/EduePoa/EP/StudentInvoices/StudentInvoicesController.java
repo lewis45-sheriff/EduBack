@@ -34,7 +34,7 @@ public class StudentInvoicesController {
     }
     @GetMapping("get-current-terms")
     ResponseEntity<?> getCurrentTermInvoices(){
-        var response = studentInvoicesService. getCurrentTermInvoices();
+        var response = studentInvoicesService.getCurrentTermInvoices();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
     @GetMapping("/term/{term}")

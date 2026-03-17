@@ -7,4 +7,6 @@ public interface FeeStructureService {
     CustomResponse<?>create(FeeStructureRequestDTO feeStructureRequestDTO);
     CustomResponse<?>getAllFeeStructures();
     CustomResponse<?>getFeeStructureById(Long id);
+    CustomResponse<?>update(Long id, FeeStructureRequestDTO feeStructureRequestDTO);
+    CustomResponse<?>delete(Long id);
 }

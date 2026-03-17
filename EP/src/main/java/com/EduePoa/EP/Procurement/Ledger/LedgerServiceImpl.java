@@ -43,7 +43,8 @@ public class LedgerServiceImpl implements LedgerService {
 
     private void createEntry(TransactionType type, BigDecimal amount, String description, String referenceType, Long referenceId, String referenceNumber, LocalDate transactionDate, User createdBy) {
         Optional<LedgerEntry> existing = ledgerEntryRepository
-                .findByReferenceTypeAndReferenceId(referenceType, referenceId);
+                .findByReferenceTypeAndReferenceId(referenceType, referenceId)
+                .filter(entry -> entry.getReferenceType() != null && entry.getReferenceId() != null);
         if (existing.isPresent()) {
             log.warn("Ledger entry already exists for {} with ID {}. Skipping.", referenceType, referenceId);
 //            auditService.logAction("SKIP", "LEDGER", existing.get(), "Duplicate ledger entry skipped for " + referenceType + " #" + referenceId);

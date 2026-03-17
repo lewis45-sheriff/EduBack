@@ -8,7 +8,10 @@ import com.EduePoa.EP.Communications.Requests.*;
 import com.EduePoa.EP.Communications.Responses.*;
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
+import com.EduePoa.EP.StudentRegistration.Parent;
 import com.EduePoa.EP.StudentRegistration.Student;
+import com.EduePoa.EP.StudentRegistration.StudentGuardian;
+import com.EduePoa.EP.StudentRegistration.StudentGuardianRepository;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class CommunicationServiceImpl implements CommunicationService {
     private final MessageRecipientRepository messageRecipientRepository;
     private final AttachmentRepository attachmentRepository;
     private final StudentRepository studentRepository;
+    private final StudentGuardianRepository studentGuardianRepository;
     private final UserRepository userRepository;
     private final GradeRepository gradeRepository;
     private final AuditService auditService;
@@ -609,19 +613,20 @@ public class CommunicationServiceImpl implements CommunicationService {
                                 .toList();
 
                         for (Student student : students) {
-                            if (student.getParent() != null) {
-                                recipients.add(MessageRecipient.builder()
-                                        .recipientType(RecipientType.PARENT)
-                                        .recipientId(student.getParent().getId())
-                                        .recipientName(student.getParent().getFirstName() + " "
-                                                + student.getParent().getLastName())
-                                        .email(student.getParent().getEmail())
-                                        .phone(student.getParent().getPhoneNumber())
-                                        .deliveryStatus(status)
-                                        .deliveredAt(deliveredAt)
-                                        .message(message)
-                                        .build());
-                            }
+                            studentGuardianRepository.findByStudentId(student.getId()).stream()
+                                    .filter(StudentGuardian::isPrimaryContact)
+                                    .findFirst()
+                                    .map(StudentGuardian::getParent)
+                                    .ifPresent(parent -> recipients.add(MessageRecipient.builder()
+                                            .recipientType(RecipientType.PARENT)
+                                            .recipientId(parent.getId())
+                                            .recipientName(parent.getFirstName() + " " + parent.getLastName())
+                                            .email(parent.getEmail())
+                                            .phone(parent.getPhoneNumber())
+                                            .deliveryStatus(status)
+                                            .deliveredAt(deliveredAt)
+                                            .message(message)
+                                            .build()));
                         }
                     }
                 }
@@ -630,19 +635,20 @@ public class CommunicationServiceImpl implements CommunicationService {
             case "ALL_PARENTS":
                 List<Student> allStudents = studentRepository.findAllByIsDeleted(false);
                 for (Student student : allStudents) {
-                    if (student.getParent() != null) {
-                        recipients.add(MessageRecipient.builder()
-                                .recipientType(RecipientType.PARENT)
-                                .recipientId(student.getParent().getId())
-                                .recipientName(
-                                        student.getParent().getFirstName() + " " + student.getParent().getLastName())
-                                .email(student.getParent().getEmail())
-                                .phone(student.getParent().getPhoneNumber())
-                                .deliveryStatus(status)
-                                .deliveredAt(deliveredAt)
-                                .message(message)
-                                .build());
-                    }
+                    studentGuardianRepository.findByStudentId(student.getId()).stream()
+                            .filter(StudentGuardian::isPrimaryContact)
+                            .findFirst()
+                            .map(StudentGuardian::getParent)
+                            .ifPresent(parent -> recipients.add(MessageRecipient.builder()
+                                    .recipientType(RecipientType.PARENT)
+                                    .recipientId(parent.getId())
+                                    .recipientName(parent.getFirstName() + " " + parent.getLastName())
+                                    .email(parent.getEmail())
+                                    .phone(parent.getPhoneNumber())
+                                    .deliveryStatus(status)
+                                    .deliveredAt(deliveredAt)
+                                    .message(message)
+                                    .build()));
                 }
                 break;
 

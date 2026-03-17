@@ -3,15 +3,19 @@ package com.EduePoa.EP.StudentRegistration;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Status;
+import com.EduePoa.EP.Authentication.Role.Role;
+import com.EduePoa.EP.Authentication.Role.RoleRepository;
+import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import com.EduePoa.EP.FeeStructure.FeeStructureRepository;
+import com.EduePoa.EP.FeeStructure.Responses.FeeStructureGroupedResponseDTO;
 import com.EduePoa.EP.FeeStructure.Responses.FeeStructureResponseDTO;
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
-import com.EduePoa.EP.StudentRegistration.Request.BulkUploadError;
-import com.EduePoa.EP.StudentRegistration.Request.BulkUploadResponseDTO;
-import com.EduePoa.EP.StudentRegistration.Request.StudentRequestDTO;
+import com.EduePoa.EP.StudentRegistration.*;
+import com.EduePoa.EP.StudentRegistration.Request.*;
 import com.EduePoa.EP.StudentRegistration.Response.StudentResponseDTO;
 import com.EduePoa.EP.StudentRegistration.Response.StudentsPerGradeDTO;
 import com.EduePoa.EP.Utils.CustomResponse;
@@ -19,7 +23,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -27,6 +34,7 @@ import org.apache.poi.ss.usermodel.*;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.core.io.ByteArrayResource;
@@ -34,7 +42,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.ByteArrayOutputStream;
@@ -45,7 +52,6 @@ import java.time.Period;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,110 +62,198 @@ public class StudentServiceImpl implements StudentService {
     private final GradeRepository gradeRepository;
     private final FeeStructureRepository feeStructureRepository;
     private final AuditService auditService;
+    private final ParentRepository parentRepository;
+    private final StudentGuardianRepository studentGuardianRepository;
+    private final StudentNemisRepository studentNemisRepository;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Audit(module = "STUDENT MANAGEMENT", action = "CREATE")
-    public CustomResponse<?> captureNewStudent(StudentRequestDTO studentRequestDTO) {
+    @Transactional
+    public CustomResponse<?> captureNewStudent(CreateStudentRequestDTO request) {
         CustomResponse<StudentResponseDTO> response = new CustomResponse<>();
         try {
-            // Validate input
-            if (studentRequestDTO == null) {
+            // ── 1. Validate top-level ──────────────────────────────────────────────────
+            if (request == null || request.getStudent() == null) {
                 throw new RuntimeException("Student data cannot be null");
             }
+            StudentInfoDTO dto = request.getStudent();
 
-            // Validate required fields
-            if (studentRequestDTO.getAdmissionNumber() == null
-                    || studentRequestDTO.getAdmissionNumber().trim().isEmpty()) {
+            // Required field validations
+            if (dto.getAdmissionNumber() == null || dto.getAdmissionNumber().trim().isEmpty())
                 throw new RuntimeException("Admission number is required");
-            }
-            if (studentRequestDTO.getFirstName() == null || studentRequestDTO.getFirstName().trim().isEmpty()) {
+            if (dto.getFirstName() == null || dto.getFirstName().trim().isEmpty())
                 throw new RuntimeException("First name is required");
-            }
-            if (studentRequestDTO.getLastName() == null || studentRequestDTO.getLastName().trim().isEmpty()) {
+            if (dto.getLastName() == null || dto.getLastName().trim().isEmpty())
                 throw new RuntimeException("Last name is required");
-            }
-            if (studentRequestDTO.getDateOfBirth() == null) {
+            if (dto.getDateOfBirth() == null)
                 throw new RuntimeException("Date of birth is required");
-            }
-            if (studentRequestDTO.getAdmissionDate() == null) {
+            if (dto.getAdmissionDate() == null)
                 throw new RuntimeException("Admission date is required");
-            }
-            if (studentRequestDTO.getGrade() == null) {
-                throw new RuntimeException("Grade is required");
-            }
+            if (dto.getGradeId() == null)
+                throw new RuntimeException("Grade ID is required");
 
-            // Check if admission number already exists
-            if (studentRepository.existsByAdmissionNumber(studentRequestDTO.getAdmissionNumber().trim())) {
-                throw new RuntimeException(
-                        "Student with admission number " + studentRequestDTO.getAdmissionNumber() + " already exists");
-            }
+            // Duplicate admission number check
+            if (studentRepository.existsByAdmissionNumber(dto.getAdmissionNumber().trim()))
+                throw new RuntimeException("Student with admission number " + dto.getAdmissionNumber() + " already exists");
 
-            // Fetch Grade entity
-            Grade grade = gradeRepository.findById(studentRequestDTO.getGrade())
-                    .orElseThrow(
-                            () -> new RuntimeException("Grade not found with ID: " + studentRequestDTO.getGrade()));
+            // ── 2. Resolve grade and fee structure ────────────────────────────────────
+            Grade grade = gradeRepository.findById(dto.getGradeId())
+                    .orElseThrow(() -> new RuntimeException("Grade not found with ID: " + dto.getGradeId()));
 
-            // Get FeeStructure by grade (assuming you have a method to get fee structure by
-            // grade)
             FeeStructure feeStructure = feeStructureRepository.findByGrade(grade)
                     .orElseThrow(() -> new RuntimeException("Fee structure not found for grade: " + grade.getName()));
 
-            // Create new Student entity
+            // ── 3. Build and save Student ─────────────────────────────────────────────
             Student student = new Student();
-            student.setAdmissionNumber(studentRequestDTO.getAdmissionNumber().trim());
-            student.setFirstName(studentRequestDTO.getFirstName().trim());
-            student.setLastName(studentRequestDTO.getLastName().trim());
-            student.setDateOfBirth(studentRequestDTO.getDateOfBirth());
-            student.setAdmissionDate(LocalDate.parse(studentRequestDTO.getAdmissionDate()));
-            student.setGradeName(grade.getName());
+            student.setAdmissionNumber(dto.getAdmissionNumber().trim());
+            student.setFirstName(dto.getFirstName().trim());
+            student.setMiddleName(dto.getMiddleName());
+            student.setLastName(dto.getLastName().trim());
+            student.setDateOfBirth(dto.getDateOfBirth());
+            student.setAdmissionDate(dto.getAdmissionDate());
             student.setGrade(grade);
-            student.setGender(studentRequestDTO.getGender());
+            student.setGradeName(grade.getName());
+            student.setStreamName(dto.getStreamName());
+            student.setGender(dto.getGender());
+            student.setBoardingStatus(dto.getBoardingStatus());
+            student.setRouteName(dto.getRouteName());
+            student.setResidentialAddress(dto.getResidentialAddress());
+            student.setMedicalNotes(dto.getMedicalNotes());
+            student.setSpecialNeedsFlag(Boolean.TRUE.equals(dto.getSpecialNeedsFlag()));
+            student.setSpecialNeedsNotes(dto.getSpecialNeedsNotes());
+            student.setPreviousSchoolName(dto.getPreviousSchoolName());
+            student.setPreviousSchoolNemisCode(dto.getPreviousSchoolNemisCode());
+            student.setBirthCertificateNumber(dto.getBirthCertificateNumber());
+            student.setNationality(dto.getNationality());
             student.setFeeStructure(feeStructure);
             student.setStatus(Status.ACTIVE);
             student.setIs_lockedFlag('N');
             student.setOnLastGrade('N');
-            student.setAcademicYear(Year.of(LocalDate.now().getYear())); // Current academic year
+            student.setAcademicYear(Year.of(LocalDate.now().getYear()));
+            if (dto.getStudentImage() != null && !dto.getStudentImage().trim().isEmpty())
+                student.setStudentImage(dto.getStudentImage());
 
-            // Handle student image if provided
-            if (studentRequestDTO.getStudentImage() != null && !studentRequestDTO.getStudentImage().trim().isEmpty()) {
-                student.setStudentImage(studentRequestDTO.getStudentImage());
-            }
-
-            // Handle parent assignment if parent ID is provided
-            // if (studentRequestDTO.getParentId() != null) {
-            // User parent = userRepository.findById(studentRequestDTO.getParentId())
-            // .orElseThrow(() -> new RuntimeException("Parent not found with ID: " +
-            // studentRequestDTO.getParentId()));
-            // student.setParent(parent);
-            // }
-
-            // Save the student
             Student savedStudent = studentRepository.save(student);
 
-            // Create response DTO
-            StudentResponseDTO responseDTO = getStudentResponseDTO(savedStudent);
+            // ── 4. Process guardians ──────────────────────────────────────────────────
+            if (request.getGuardians() != null) {
+                for (GuardianDTO guardianDTO : request.getGuardians()) {
+                    Parent parent;
 
-            // Set success response
+                    if (guardianDTO.getParentId() != null) {
+                        // Link existing parent
+                        parent = parentRepository.findById(guardianDTO.getParentId())
+                                .orElseThrow(() -> new RuntimeException(
+                                        "Parent not found with ID: " + guardianDTO.getParentId()));
+                    } else if (guardianDTO.getParent() != null) {
+                        // Create new parent
+                        ParentInfoDTO pDto = guardianDTO.getParent();
+
+                        // Check for email duplicate
+                        if (pDto.getEmail() != null && parentRepository.existsByEmail(pDto.getEmail()))
+                            throw new RuntimeException("A parent with email " + pDto.getEmail() + " already exists");
+
+                        parent = new Parent();
+                        parent.setFirstName(pDto.getFirstName());
+                        parent.setLastName(pDto.getLastName());
+                        parent.setOtherNames(pDto.getOtherNames());
+                        parent.setPhoneNumber(pDto.getPhoneNumber());
+                        parent.setAlternatePhoneNumber(pDto.getAlternatePhoneNumber());
+                        parent.setEmail(pDto.getEmail());
+                        parent.setNationalIdOrPassport(pDto.getNationalIdOrPassport());
+                        parent.setOccupation(pDto.getOccupation());
+                        parent.setAddress(pDto.getAddress());
+                        parent.setPortalAccessEnabled(pDto.isPortalAccessEnabled());
+                        parent.setReceiveSms(pDto.isReceiveSms());
+                        parent.setReceiveEmail(pDto.isReceiveEmail());
+
+                        // Create a linked User account if portal access is enabled or email is provided
+                        if (pDto.getEmail() != null && !pDto.getEmail().trim().isEmpty()) {
+                            // Check if user with that email already exists
+                            if (!userRepository.existsByEmail(pDto.getEmail())) {
+                                Role parentRole = roleRepository.findByName("ROLE_PARENT")
+                                        .orElseThrow(() -> new RuntimeException(
+                                                "PARENT role not found. Please create it in the database."));
+
+                                User user = new User();
+                                user.setFirstName(pDto.getFirstName());
+                                user.setLastName(pDto.getLastName());
+                                user.setEmail(pDto.getEmail());
+                                user.setPhoneNumber(pDto.getPhoneNumber());
+                                user.setPassword(passwordEncoder.encode("1234"));
+                                user.setForcePasswordReset(true);
+                                user.setRole(parentRole);
+                                user.setStatus(Status.ACTIVE);
+                                user.setEnabledFlag('Y');
+                                user.setDeletedFlag('N');
+                                user.setIs_lockedFlag('N');
+
+                                User savedUser = userRepository.save(user);
+                                parent.setUser(savedUser);
+                            } else {
+                                // Link existing user account
+                                userRepository.findByEmail(pDto.getEmail())
+                                        .ifPresent(parent::setUser);
+                            }
+                        }
+
+                        parent = parentRepository.save(parent);
+                    } else {
+                        throw new RuntimeException("Guardian entry must have either parentId or a parent object");
+                    }
+
+                    // Create the guardian link
+                    StudentGuardian guardian = new StudentGuardian();
+                    guardian.setStudent(savedStudent);
+                    guardian.setParent(parent);
+                    guardian.setRelationship(guardianDTO.getRelationship());
+                    guardian.setPrimaryContact(guardianDTO.isPrimaryContact());
+                    guardian.setFeePayer(guardianDTO.isFeePayer());
+                    guardian.setFeeResponsibilityPercent(guardianDTO.getFeeResponsibilityPercent());
+                    guardian.setPickupAuthorized(guardianDTO.isPickupAuthorized());
+                    studentGuardianRepository.save(guardian);
+                }
+            }
+
+            // ── 5. Save NEMIS data ────────────────────────────────────────────────────
+            if (request.getNemis() != null) {
+                NemisDTO nemisDTO = request.getNemis();
+                StudentNemis nemis = new StudentNemis();
+                nemis.setStudent(savedStudent);
+                nemis.setUpi(nemisDTO.getUpi());
+                nemis.setRegistrationIdentifierType(nemisDTO.getRegistrationIdentifierType());
+                nemis.setRegistrationIdentifierValue(nemisDTO.getRegistrationIdentifierValue());
+                nemis.setQueueSync(nemisDTO.isQueueSync());
+                studentNemisRepository.save(nemis);
+            }
+
+            // ── 6. Build response ─────────────────────────────────────────────────────
+            StudentResponseDTO responseDTO = getStudentResponseDTO(savedStudent);
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setEntity(responseDTO);
             response.setMessage("Student created successfully");
 
-            // Log the successful creation
             log.info("Student created successfully with admission number: {}", savedStudent.getAdmissionNumber());
             auditService.log("STUDENT_MANAGEMENT", "Created student:", savedStudent.getFirstName(),
                     savedStudent.getLastName(), "with admission number:", savedStudent.getAdmissionNumber());
 
         } catch (DataIntegrityViolationException e) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             log.error("Data integrity violation while creating student: {}", e.getMessage());
             response.setStatusCode(HttpStatus.CONFLICT.value());
             response.setEntity(null);
             response.setMessage("Student with this admission number already exists");
         } catch (RuntimeException e) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             log.error("Runtime exception while creating student: {}", e.getMessage());
             response.setStatusCode(HttpStatus.BAD_REQUEST.value());
             response.setEntity(null);
             response.setMessage(e.getMessage());
         } catch (Exception e) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             log.error("Unexpected error while creating student: {}", e.getMessage(), e);
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             response.setEntity(null);
@@ -235,50 +329,21 @@ public class StudentServiceImpl implements StudentService {
     public CustomResponse<?> getFeeStructurePerStudent(Long studentId) {
         CustomResponse<Object> response = new CustomResponse<>();
         try {
-            // Validate student ID
-            if (studentId == null) {
-                response.setEntity(null);
-                response.setMessage("Student ID cannot be null");
-                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-                return response;
-            }
-
-            // Find the student by ID
-            Optional<Student> studentOptional = studentRepository.findById(studentId);
-            if (studentOptional.isEmpty()) {
-                response.setEntity(null);
-                response.setMessage("Student not found with ID: " + studentId);
-                response.setStatusCode(HttpStatus.NOT_FOUND.value());
-                return response;
-            }
-
-            Student student = studentOptional.get();
-
-            // Check if student has an assigned fee structure
-            if (student.getFeeStructure() == null) {
-                response.setEntity(null);
-                response.setMessage("No fee structure assigned to student with ID: " + studentId);
-                response.setStatusCode(HttpStatus.NOT_FOUND.value());
-                return response;
-            }
-
-            FeeStructure feeStructure = student.getFeeStructure();
-
-            // Check if fee structure is active (not deleted)
-            if (feeStructure.getIsDeleted() == 'Y' || feeStructure.getDeleted() == 'Y') {
-                response.setEntity(null);
-                response.setMessage("Fee structure assigned to student is no longer active");
-                response.setStatusCode(HttpStatus.NOT_FOUND.value());
-                return response;
-            }
-
-            // Convert fee structure to response DTO using your existing method
+            FeeStructure feeStructure = getActiveFeeStructureForStudent(studentId);
             FeeStructureResponseDTO feeStructureResponse = convertToResponseDTO(feeStructure);
 
             response.setEntity(feeStructureResponse);
             response.setMessage("Fee structure retrieved successfully for student");
             response.setStatusCode(HttpStatus.OK.value());
 
+        } catch (IllegalArgumentException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
         } catch (Exception e) {
             response.setEntity(null);
             response.setMessage("Error retrieving fee structure for student: " + e.getMessage());
@@ -324,91 +389,91 @@ public class StudentServiceImpl implements StudentService {
         return response;
     }
 
-    @Override
-    @Audit(module = "STUDENT MANAGEMENT", action = "BULK_UPLOAD")
-    public CustomResponse<?> bulkUploads(MultipartFile file) {
-        CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
-        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
-
-        try {
-            // Validate file
-            if (file == null || file.isEmpty()) {
-                throw new RuntimeException("File cannot be empty");
-            }
-
-            String filename = file.getOriginalFilename();
-            if (filename == null) {
-                throw new RuntimeException("Invalid file name");
-            }
-
-            List<StudentRequestDTO> studentDTOs = new ArrayList<>();
-
-            // Parse file based on extension
-            if (filename.endsWith(".csv")) {
-                studentDTOs = parseCSV(file);
-            } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
-                studentDTOs = parseExcel(file);
-            } else {
-                throw new RuntimeException("Unsupported file format. Please upload CSV or Excel file");
-            }
-
-            uploadResponse.setTotalRecords(studentDTOs.size());
-
-            // Process each student
-            for (int i = 0; i < studentDTOs.size(); i++) {
-                StudentRequestDTO studentDTO = studentDTOs.get(i);
-                int rowNumber = i + 2; // +2 because row 1 is header and arrays are 0-indexed
-
-                try {
-                    // Use the existing captureNewStudent method
-                    CustomResponse<?> studentResponse = captureNewStudent(studentDTO);
-
-                    if (studentResponse.getStatusCode() == HttpStatus.CREATED.value()) {
-                        uploadResponse.setSuccessCount(uploadResponse.getSuccessCount() + 1);
-                        uploadResponse.getSuccessfulStudents().add((StudentResponseDTO) studentResponse.getEntity());
-                    } else {
-                        uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
-                        uploadResponse.getErrors().add(new BulkUploadError(
-                                rowNumber,
-                                studentDTO.getAdmissionNumber(),
-                                studentResponse.getMessage()));
-                    }
-                } catch (Exception e) {
-                    uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
-                    uploadResponse.getErrors().add(new BulkUploadError(
-                            rowNumber,
-                            studentDTO.getAdmissionNumber(),
-                            e.getMessage()));
-                    log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
-                }
-            }
-
-            response.setStatusCode(HttpStatus.OK.value());
-            response.setEntity(uploadResponse);
-            response.setMessage(String.format("Bulk upload completed. Success: %d, Failed: %d",
-                    uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()));
-
-            log.info("Bulk upload completed. Total: {}, Success: {}, Failed: {}",
-                    uploadResponse.getTotalRecords(),
-                    uploadResponse.getSuccessCount(),
-                    uploadResponse.getFailureCount());
-            auditService.log("STUDENT_MANAGEMENT", "Bulk upload completed. Success:",
-                    String.valueOf(uploadResponse.getSuccessCount()), "Failed:",
-                    String.valueOf(uploadResponse.getFailureCount()));
-
-        } catch (RuntimeException e) {
-            log.error("Runtime exception during bulk upload: {}", e.getMessage());
-            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-            response.setEntity(null);
-            response.setMessage(e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error during bulk upload: {}", e.getMessage(), e);
-            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-            response.setEntity(null);
-            response.setMessage("An unexpected error occurred during bulk upload");
-        }
-        return response;
-    }
+//    @Override
+//    @Audit(module = "STUDENT MANAGEMENT", action = "BULK_UPLOAD")
+//    public CustomResponse<?> bulkUploads(MultipartFile file) {
+//        CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
+//        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
+//
+//        try {
+//            // Validate file
+//            if (file == null || file.isEmpty()) {
+//                throw new RuntimeException("File cannot be empty");
+//            }
+//
+//            String filename = file.getOriginalFilename();
+//            if (filename == null) {
+//                throw new RuntimeException("Invalid file name");
+//            }
+//
+//            List<StudentRequestDTO> studentDTOs = new ArrayList<>();
+//
+//            // Parse file based on extension
+//            if (filename.endsWith(".csv")) {
+//                studentDTOs = parseCSV(file);
+//            } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+//                studentDTOs = parseExcel(file);
+//            } else {
+//                throw new RuntimeException("Unsupported file format. Please upload CSV or Excel file");
+//            }
+//
+//            uploadResponse.setTotalRecords(studentDTOs.size());
+//
+//            // Process each student
+//            for (int i = 0; i < studentDTOs.size(); i++) {
+//                StudentRequestDTO studentDTO = studentDTOs.get(i);
+//                int rowNumber = i + 2; // +2 because row 1 is header and arrays are 0-indexed
+//
+//                try {
+//                    // Use the existing captureNewStudent method
+//                    CustomResponse<?> studentResponse = captureNewStudent(studentDTO);
+//
+//                    if (studentResponse.getStatusCode() == HttpStatus.CREATED.value()) {
+//                        uploadResponse.setSuccessCount(uploadResponse.getSuccessCount() + 1);
+//                        uploadResponse.getSuccessfulStudents().add((StudentResponseDTO) studentResponse.getEntity());
+//                    } else {
+//                        uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
+//                        uploadResponse.getErrors().add(new BulkUploadError(
+//                                rowNumber,
+//                                studentDTO.getAdmissionNumber(),
+//                                studentResponse.getMessage()));
+//                    }
+//                } catch (Exception e) {
+//                    uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
+//                    uploadResponse.getErrors().add(new BulkUploadError(
+//                            rowNumber,
+//                            studentDTO.getAdmissionNumber(),
+//                            e.getMessage()));
+//                    log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
+//                }
+//            }
+//
+//            response.setStatusCode(HttpStatus.OK.value());
+//            response.setEntity(uploadResponse);
+//            response.setMessage(String.format("Bulk upload completed. Success: %d, Failed: %d",
+//                    uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()));
+//
+//            log.info("Bulk upload completed. Total: {}, Success: {}, Failed: {}",
+//                    uploadResponse.getTotalRecords(),
+//                    uploadResponse.getSuccessCount(),
+//                    uploadResponse.getFailureCount());
+//            auditService.log("STUDENT_MANAGEMENT", "Bulk upload completed. Success:",
+//                    String.valueOf(uploadResponse.getSuccessCount()), "Failed:",
+//                    String.valueOf(uploadResponse.getFailureCount()));
+//
+//        } catch (RuntimeException e) {
+//            log.error("Runtime exception during bulk upload: {}", e.getMessage());
+//            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+//            response.setEntity(null);
+//            response.setMessage(e.getMessage());
+//        } catch (Exception e) {
+//            log.error("Unexpected error during bulk upload: {}", e.getMessage(), e);
+//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+//            response.setEntity(null);
+//            response.setMessage("An unexpected error occurred during bulk upload");
+//        }
+//        return response;
+//    }
 
     private List<StudentRequestDTO> parseCSV(MultipartFile file) throws Exception {
         List<StudentRequestDTO> students = new ArrayList<>();
@@ -578,6 +643,140 @@ public class StudentServiceImpl implements StudentService {
             response.setMessage("Failed to retrieve students per grade");
         }
         return response;
+    }
+
+    @Override
+    public CustomResponse<?> getFeeStucturePerStudent(Long studentId) {
+        CustomResponse<FeeStructureGroupedResponseDTO> response = new CustomResponse<>();
+        try {
+            FeeStructure feeStructure = getActiveFeeStructureForStudent(studentId);
+            FeeStructureGroupedResponseDTO feeStructureResponse = convertToGroupedResponseDTO(feeStructure);
+
+            response.setEntity(feeStructureResponse);
+            response.setMessage("Fee structure retrieved successfully for student");
+            response.setStatusCode(HttpStatus.OK.value());
+
+        } catch (IllegalArgumentException e) {
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        } catch (Exception e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error retrieving fee structure for student: " + e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getStudentGuardians(Long studentId) {
+        CustomResponse<List<com.EduePoa.EP.StudentRegistration.Response.StudentGuardianResponseDTO>> response = new CustomResponse<>();
+        try {
+            // Verify student exists
+            studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+
+            List<StudentGuardian> guardians = studentGuardianRepository.findByStudentId(studentId);
+
+            List<com.EduePoa.EP.StudentRegistration.Response.StudentGuardianResponseDTO> result = guardians.stream()
+                    .map(g -> {
+                        Parent parent = g.getParent();
+                        String fullName = buildFullName(parent.getFirstName(), parent.getOtherNames(), parent.getLastName());
+                        return com.EduePoa.EP.StudentRegistration.Response.StudentGuardianResponseDTO.builder()
+                                .id(g.getId())
+                                .studentId(studentId)
+                                .parentId(parent.getId())
+                                .fullName(fullName)
+                                .relationship(g.getRelationship() != null ? g.getRelationship().name() : null)
+                                .phoneNumber(parent.getPhoneNumber())
+                                .email(parent.getEmail())
+                                .nationalIdOrPassport(parent.getNationalIdOrPassport())
+                                .isPrimaryContact(g.isPrimaryContact())
+                                .isFeePayer(g.isFeePayer())
+                                .pickupAuthorized(g.isPickupAuthorized())
+                                .feeResponsibilityPercent(g.getFeeResponsibilityPercent())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Student guardians fetched successfully");
+            response.setEntity(result);
+
+        } catch (RuntimeException e) {
+            log.error("Error fetching student guardians for studentId {}: {}", studentId, e.getMessage());
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        } catch (Exception e) {
+            log.error("Unexpected error fetching student guardians: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error fetching student guardians");
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> getNemisStatus(Long studentId) {
+        CustomResponse<com.EduePoa.EP.StudentRegistration.Response.NemisStatusResponseDTO> response = new CustomResponse<>();
+        try {
+            // Verify student exists
+            studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+
+            StudentNemis nemis = studentNemisRepository.findByStudentId(studentId)
+                    .orElse(null);
+
+            com.EduePoa.EP.StudentRegistration.Response.NemisStatusResponseDTO dto;
+            if (nemis == null) {
+                dto = com.EduePoa.EP.StudentRegistration.Response.NemisStatusResponseDTO.builder()
+                        .studentId(studentId)
+                        .syncStatus("NOT_REGISTERED")
+                        .build();
+            } else {
+                String syncStatus = nemis.isQueueSync() ? "QUEUED" : "READY";
+                dto = com.EduePoa.EP.StudentRegistration.Response.NemisStatusResponseDTO.builder()
+                        .studentId(studentId)
+                        .upi(nemis.getUpi())
+                        .registrationIdentifierType(nemis.getRegistrationIdentifierType())
+                        .registrationIdentifierValue(nemis.getRegistrationIdentifierValue())
+                        .syncStatus(syncStatus)
+                        .lastSyncedAt(null)
+                        .lastSyncAttemptAt(null)
+                        .lastSyncError(null)
+                        .verifiedAt(null)
+                        .build();
+            }
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("NEMIS status fetched successfully");
+            response.setEntity(dto);
+
+        } catch (RuntimeException e) {
+            log.error("Error fetching NEMIS status for studentId {}: {}", studentId, e.getMessage());
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        } catch (Exception e) {
+            log.error("Unexpected error fetching NEMIS status: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error fetching NEMIS status");
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    private String buildFullName(String firstName, String otherNames, String lastName) {
+        StringBuilder sb = new StringBuilder();
+        if (firstName != null) sb.append(firstName.trim());
+        if (otherNames != null && !otherNames.trim().isEmpty()) sb.append(" ").append(otherNames.trim());
+        if (lastName != null) sb.append(" ").append(lastName.trim());
+        return sb.toString().trim();
     }
 
     private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
@@ -810,6 +1009,55 @@ public class StudentServiceImpl implements StudentService {
             }
         }
         return feeItems;
+    }
+
+    private FeeStructureGroupedResponseDTO convertToGroupedResponseDTO(FeeStructure feeStructure) {
+        FeeStructureGroupedResponseDTO dto = new FeeStructureGroupedResponseDTO();
+        dto.setId(feeStructure.getId());
+        dto.setGrade(feeStructure.getGrade() != null ? feeStructure.getGrade().getName() : "Unknown");
+        dto.setCreatedOn(feeStructure.getDatePosted());
+        dto.setUpdatedOn(feeStructure.getDatePosted());
+        dto.setTerms(getGroupedTerms(feeStructure));
+        return dto;
+    }
+
+    private List<FeeStructureGroupedResponseDTO.TermDTO> getGroupedTerms(FeeStructure feeStructure) {
+        Map<String, List<FeeStructureGroupedResponseDTO.FeeItemDTO>> groupedByTerm = new LinkedHashMap<>();
+
+        if (feeStructure.getTermComponents() != null) {
+            for (FeeComponentConfig config : feeStructure.getTermComponents()) {
+                String term = config.getTerm() != null ? config.getTerm() : "Unknown";
+                groupedByTerm.computeIfAbsent(term, ignored -> new ArrayList<>())
+                        .add(new FeeStructureGroupedResponseDTO.FeeItemDTO(
+                                Long.valueOf(config.getId()),
+                                config.getName() != null ? config.getName() : "Unknown",
+                                config.getAmount() != null ? config.getAmount().doubleValue() : 0.0));
+            }
+        }
+
+        return groupedByTerm.entrySet().stream()
+                .map(entry -> new FeeStructureGroupedResponseDTO.TermDTO(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
+    }
+
+    private FeeStructure getActiveFeeStructureForStudent(Long studentId) {
+        if (studentId == null) {
+            throw new IllegalArgumentException("Student ID cannot be null");
+        }
+
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+
+        if (student.getFeeStructure() == null) {
+            throw new RuntimeException("No fee structure assigned to student with ID: " + studentId);
+        }
+
+        FeeStructure feeStructure = student.getFeeStructure();
+        if (feeStructure.getIsDeleted() == 'Y' || feeStructure.getDeleted() == 'Y') {
+            throw new RuntimeException("Fee structure assigned to student is no longer active");
+        }
+
+        return feeStructure;
     }
 
     private StudentResponseDTO convertToResponseDTO(Student student) {

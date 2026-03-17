@@ -26,6 +26,16 @@ public class FeeStructureContoller {
         var response = feeStructureService.getFeeStructureById(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @PutMapping("update/{id}")
+    ResponseEntity<?> update(@PathVariable Long id, @RequestBody FeeStructureRequestDTO feeStructureRequestDTO){
+        var response = feeStructureService.update(id, feeStructureRequestDTO);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @DeleteMapping("delete/{id}")
+    ResponseEntity<?> delete(@PathVariable Long id){
+        var response = feeStructureService.delete(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 
 
