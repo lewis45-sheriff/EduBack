@@ -34,6 +34,7 @@ public class ReportsService {
 
         parameters.put("file_name", reportRequestObject.fileName);
         parameters.put("report_path", path);
+        parameters.put("Logo", resolveLogoPath(null));
 
         return parameters;
     }
@@ -101,11 +102,20 @@ public class ReportsService {
             return res;
         }
 
-        Connection connection = null;
-        try (InputStream reportStream = new FileInputStream(reportFile)) {
+        try (InputStream reportStream = new FileInputStream(reportFile);
+             Connection connection = DriverManager.getConnection(db, username, password)) {
             JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
-            connection = DriverManager.getConnection(db, username, password);
             JasperPrint report = JasperFillManager.fillReport(compiledReport, parameters, connection);
+            if (report.getPages() == null || report.getPages().isEmpty()) {
+                res.setStatusCode(HttpStatus.NOT_FOUND.value());
+                res.setMessage(String.format(
+                        "No report data found for studentID=%s, gradeId=%s, termID=%s, year=%s",
+                        request.getStudentId(),
+                        request.getGradeId(),
+                        termCode,
+                        request.getYear()));
+                return res;
+            }
             byte[] data = JasperExportManager.exportReportToPdf(report);
 
             res.setEntity(data);
@@ -121,13 +131,6 @@ public class ReportsService {
             res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             res.setMessage("Unexpected error: " + e.getMessage());
             return res;
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (Exception ignored) {
-                }
-            }
         }
     }
 
@@ -144,7 +147,6 @@ public class ReportsService {
         String reportRequest = gson.toJson(model);
         ReportModel reportRequestObject = new Gson().fromJson(reportRequest, ReportModel.class);
 
-        Connection connection = null;
         try {
             String reportPath = path + reportRequestObject.fileName;
             System.out.println("Loading report from path: " + reportPath);
@@ -153,9 +155,6 @@ public class ReportsService {
             if (!reportFile.exists()) {
                 throw new FileNotFoundException("Report file not found at " + reportPath);
             }
-
-            InputStream reportStream = new FileInputStream(reportFile);
-            JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
 
             Map<String, Object> parameters = setParameters(reportRequestObject);
             boolean isTermPerformance = FileTypeEnums.TERM_PERFORMANCE.getReportTypeString()
@@ -218,8 +217,6 @@ public class ReportsService {
             );
             System.out.println("=========================");
 
-            connection = DriverManager.getConnection(db, username, password);
-
             // Additional debug: Test the SQL with parameters
             System.out.println("Testing SQL with parameters:");
             System.out.println("  studentID: " + parameters.get("studentID") +
@@ -232,12 +229,27 @@ public class ReportsService {
                     " Type: " + (parameters.get("year") != null ?
                     parameters.get("year").getClass().getSimpleName() : "null"));
 
-            JasperPrint report = JasperFillManager.fillReport(compiledReport, parameters, connection);
+            try (InputStream reportStream = new FileInputStream(reportFile);
+                 Connection connection = DriverManager.getConnection(db, username, password)) {
+                JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
+                JasperPrint report = JasperFillManager.fillReport(compiledReport, parameters, connection);
 
-            byte[] data = JasperExportManager.exportReportToPdf(report);
-            res.setEntity(data);
-            res.setStatusCode(HttpStatus.OK.value());
-            res.setMessage("Successfully generated report");
+                if (report.getPages() == null || report.getPages().isEmpty()) {
+                    res.setMessage(String.format(
+                            "No report data found for studentID=%s, gradeId=%s, termID=%s, year=%s",
+                            studentID,
+                            gradeId,
+                            parameters.get("termID"),
+                            year));
+                    res.setStatusCode(HttpStatus.NOT_FOUND.value());
+                    return res;
+                }
+
+                byte[] data = JasperExportManager.exportReportToPdf(report);
+                res.setEntity(data);
+                res.setStatusCode(HttpStatus.OK.value());
+                res.setMessage("Successfully generated report");
+            }
 
         } catch (FileNotFoundException e) {
             System.err.println("FileNotFoundException: " + e.getMessage());
@@ -265,14 +277,6 @@ public class ReportsService {
             e.printStackTrace();
             res.setMessage("Unexpected error: " + e.getMessage());
             res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (Exception e) {
-                    System.err.println("Error closing database connection: " + e.getMessage());
-                }
-            }
         }
 
         return res;

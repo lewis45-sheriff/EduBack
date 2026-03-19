@@ -41,6 +41,12 @@ public class FinanceTransactionController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @GetMapping("get-student-balance/{studentId}")
+    ResponseEntity<?> getStudentBalance(@PathVariable Long studentId){
+        var response = financeTransactionService.getStudentBalance(studentId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 

@@ -4,12 +4,12 @@ import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Finance;
 import com.EduePoa.EP.Finance.FinanceRepository;
+import com.EduePoa.EP.Finance.Responses.StudentBalanceDTO;
 import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
 import com.EduePoa.EP.FinanceTransaction.Response.MonthlyFeeDTO;
 import com.EduePoa.EP.FinanceTransaction.Response.StatisticsDTO;
 import com.EduePoa.EP.StudentInvoices.StudentInvoices;
 import com.EduePoa.EP.StudentInvoices.StudentInvoicesRepository;
-import com.EduePoa.EP.StudentInvoices.StudentInvoicesService;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
@@ -23,8 +23,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -353,6 +351,47 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         return response;
     }
 
+    @Override
+    public CustomResponse<?> getStudentBalance(Long studentId) {
+        CustomResponse<StudentBalanceDTO> response = new CustomResponse<>();
+        try {
+            Optional<Student> studentOpt = studentRepository.findById(studentId);
+            if (studentOpt.isEmpty()) {
+                response.setEntity(null);
+                response.setMessage("Student not found with ID: " + studentId);
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            Term currentTerm = Term.getCurrentTerm();
+            if (currentTerm == null) {
+                response.setEntity(null);
+                response.setMessage("No active term found.");
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            Year currentYear = Year.now();
+            Optional<Finance> financeOpt = financeRepository.findByStudentIdAndTermAndYear(studentId, currentTerm, currentYear);
+            if (financeOpt.isEmpty()) {
+                response.setEntity(null);
+                response.setMessage("No finance record found for student ID: " + studentId + " in " + currentTerm + " " + currentYear);
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            response.setEntity(buildStudentBalance(financeOpt.get(), studentOpt.get()));
+            response.setMessage("Student balance retrieved successfully");
+            response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FINANCE_TRANSACTION", "Retrieved balance for student ID:", String.valueOf(studentId));
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
     private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO,
             Student student) {
         FinanceTransaction transaction = new FinanceTransaction();
@@ -372,5 +411,29 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         transaction.setDescription(createTransactionDTO.getDescription());
         transaction.setPaymentMethod(createTransactionDTO.getPaymentMethod());
         return transaction;
+    }
+
+    private StudentBalanceDTO buildStudentBalance(Finance finance, Student student) {
+        return StudentBalanceDTO.builder()
+                .studentId(student.getId())
+                .studentName(student.getFirstName() + " " + student.getLastName())
+                .gradeName(student.getGradeName())
+                .totalFeeAmount(finance.getTotalFeeAmount())
+                .paidAmount(finance.getPaidAmount())
+                .balance(finance.getBalance())
+                .term(finance.getTerm())
+                .year(finance.getYear())
+                .balanceStatus(resolveBalanceStatus(finance.getBalance()))
+                .build();
+    }
+
+    private String resolveBalanceStatus(BigDecimal balance) {
+        if (balance.compareTo(BigDecimal.ZERO) > 0) {
+            return "OUTSTANDING";
+        }
+        if (balance.compareTo(BigDecimal.ZERO) < 0) {
+            return "OVERPAID";
+        }
+        return "CLEARED";
     }
 }

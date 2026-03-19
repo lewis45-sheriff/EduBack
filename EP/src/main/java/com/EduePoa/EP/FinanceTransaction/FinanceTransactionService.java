@@ -10,4 +10,5 @@ public interface FinanceTransactionService {
     CustomResponse<?>getById(Long id);
     CustomResponse<?>getStatistics();
     CustomResponse<?> getStudentPayment(Long studentId);
+    CustomResponse<?> getStudentBalance(Long studentId);
 }

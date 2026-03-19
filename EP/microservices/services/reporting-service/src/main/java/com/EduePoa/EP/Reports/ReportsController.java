@@ -42,6 +42,9 @@ public class ReportsController {
                 return ResponseEntity.status(res.getStatusCode()).body(res);
             }
 
+            boolean requiresStudentAcademicFilters = reportTypeEnum == FileTypeEnums.TERM_PERFORMANCE
+                    || reportTypeEnum == FileTypeEnums.REPORT_CARD;
+
             // Validate required parameters based on report type
             if (reportTypeEnum == FileTypeEnums.FEE_STATEMENT) {
                 if (studentID == null || studentID.isEmpty()) {
@@ -56,6 +59,29 @@ public class ReportsController {
                 }
                 if (year == null || year.isEmpty()) {
                     res.setMessage("Year is required for fee statement");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return ResponseEntity.status(res.getStatusCode()).body(res);
+                }
+            }
+
+            if (requiresStudentAcademicFilters) {
+                if (studentID == null || studentID.isEmpty()) {
+                    res.setMessage("Student ID is required for this report");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return ResponseEntity.status(res.getStatusCode()).body(res);
+                }
+                if (gradeId == null || gradeId.isEmpty()) {
+                    res.setMessage("Grade ID is required for this report");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return ResponseEntity.status(res.getStatusCode()).body(res);
+                }
+                if (term == null || term.isEmpty()) {
+                    res.setMessage("Term is required for this report");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return ResponseEntity.status(res.getStatusCode()).body(res);
+                }
+                if (year == null || year.isEmpty()) {
+                    res.setMessage("Year is required for this report");
                     res.setStatusCode(HttpStatus.BAD_REQUEST.value());
                     return ResponseEntity.status(res.getStatusCode()).body(res);
                 }
