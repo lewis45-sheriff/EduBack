@@ -1,9 +1,9 @@
-package com.EduePoa.EP.StudentRegistration.Request;
+package com.EduePoa.EP.Parents.Request;
 
 import lombok.Data;
 
 @Data
-public class ParentInfoDTO {
+public class UpdateParentRequestDTO {
     private String firstName;
     private String lastName;
     private String otherNames;
@@ -13,7 +13,7 @@ public class ParentInfoDTO {
     private String nationalIdOrPassport;
     private String occupation;
     private String address;
-    private boolean portalAccessEnabled = false;
-    private boolean receiveSms = true;
-    private boolean receiveEmail = false;
+    private Boolean portalAccessEnabled;
+    private Boolean receiveSms;
+    private Boolean receiveEmail;
 }

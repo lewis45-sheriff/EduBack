@@ -16,11 +16,15 @@ import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
 import com.EduePoa.EP.StudentRegistration.*;
 import com.EduePoa.EP.StudentRegistration.Request.*;
+import com.EduePoa.EP.Parents.Parent;
+import com.EduePoa.EP.Parents.ParentRepository;
+import com.EduePoa.EP.Parents.Request.ParentInfoDTO;
 import com.EduePoa.EP.StudentRegistration.Response.StudentResponseDTO;
 import com.EduePoa.EP.StudentRegistration.Response.StudentsPerGradeDTO;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -75,7 +79,6 @@ public class StudentServiceImpl implements StudentService {
     public CustomResponse<?> captureNewStudent(CreateStudentRequestDTO request) {
         CustomResponse<StudentResponseDTO> response = new CustomResponse<>();
         try {
-            // ── 1. Validate top-level ──────────────────────────────────────────────────
             if (request == null || request.getStudent() == null) {
                 throw new RuntimeException("Student data cannot be null");
             }
@@ -99,14 +102,12 @@ public class StudentServiceImpl implements StudentService {
             if (studentRepository.existsByAdmissionNumber(dto.getAdmissionNumber().trim()))
                 throw new RuntimeException("Student with admission number " + dto.getAdmissionNumber() + " already exists");
 
-            // ── 2. Resolve grade and fee structure ────────────────────────────────────
             Grade grade = gradeRepository.findById(dto.getGradeId())
                     .orElseThrow(() -> new RuntimeException("Grade not found with ID: " + dto.getGradeId()));
 
             FeeStructure feeStructure = feeStructureRepository.findByGrade(grade)
                     .orElseThrow(() -> new RuntimeException("Fee structure not found for grade: " + grade.getName()));
 
-            // ── 3. Build and save Student ─────────────────────────────────────────────
             Student student = new Student();
             student.setAdmissionNumber(dto.getAdmissionNumber().trim());
             student.setFirstName(dto.getFirstName().trim());
@@ -138,7 +139,6 @@ public class StudentServiceImpl implements StudentService {
 
             Student savedStudent = studentRepository.save(student);
 
-            // ── 4. Process guardians ──────────────────────────────────────────────────
             if (request.getGuardians() != null) {
                 for (GuardianDTO guardianDTO : request.getGuardians()) {
                     Parent parent;
@@ -166,7 +166,8 @@ public class StudentServiceImpl implements StudentService {
                         parent.setNationalIdOrPassport(pDto.getNationalIdOrPassport());
                         parent.setOccupation(pDto.getOccupation());
                         parent.setAddress(pDto.getAddress());
-                        parent.setPortalAccessEnabled(pDto.isPortalAccessEnabled());
+                        boolean hasEmail = pDto.getEmail() != null && !pDto.getEmail().trim().isEmpty();
+                        parent.setPortalAccessEnabled(pDto.isPortalAccessEnabled() || hasEmail);
                         parent.setReceiveSms(pDto.isReceiveSms());
                         parent.setReceiveEmail(pDto.isReceiveEmail());
 
@@ -206,19 +207,12 @@ public class StudentServiceImpl implements StudentService {
                     }
 
                     // Create the guardian link
-                    StudentGuardian guardian = new StudentGuardian();
-                    guardian.setStudent(savedStudent);
-                    guardian.setParent(parent);
-                    guardian.setRelationship(guardianDTO.getRelationship());
-                    guardian.setPrimaryContact(guardianDTO.isPrimaryContact());
-                    guardian.setFeePayer(guardianDTO.isFeePayer());
-                    guardian.setFeeResponsibilityPercent(guardianDTO.getFeeResponsibilityPercent());
-                    guardian.setPickupAuthorized(guardianDTO.isPickupAuthorized());
+                    StudentGuardian guardian = getStudentGuardian(guardianDTO, savedStudent, parent);
                     studentGuardianRepository.save(guardian);
                 }
             }
 
-            // ── 5. Save NEMIS data ────────────────────────────────────────────────────
+
             if (request.getNemis() != null) {
                 NemisDTO nemisDTO = request.getNemis();
                 StudentNemis nemis = new StudentNemis();
@@ -230,7 +224,6 @@ public class StudentServiceImpl implements StudentService {
                 studentNemisRepository.save(nemis);
             }
 
-            // ── 6. Build response ─────────────────────────────────────────────────────
             StudentResponseDTO responseDTO = getStudentResponseDTO(savedStudent);
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setEntity(responseDTO);
@@ -260,6 +253,19 @@ public class StudentServiceImpl implements StudentService {
             response.setMessage("An unexpected error occurred while creating student");
         }
         return response;
+    }
+
+    @NotNull
+    private static StudentGuardian getStudentGuardian(GuardianDTO guardianDTO, Student savedStudent, Parent parent) {
+        StudentGuardian guardian = new StudentGuardian();
+        guardian.setStudent(savedStudent);
+        guardian.setParent(parent);
+        guardian.setRelationship(guardianDTO.getRelationship());
+        guardian.setPrimaryContact(guardianDTO.isPrimaryContact());
+        guardian.setFeePayer(guardianDTO.isFeePayer());
+        guardian.setFeeResponsibilityPercent(guardianDTO.getFeeResponsibilityPercent());
+        guardian.setPickupAuthorized(guardianDTO.isPickupAuthorized());
+        return guardian;
     }
 
     @Override
@@ -324,7 +330,6 @@ public class StudentServiceImpl implements StudentService {
         return response;
     }
 
-    // Simple implementation - returns only the fee structure
     @Override
     public CustomResponse<?> getFeeStructurePerStudent(Long studentId) {
         CustomResponse<Object> response = new CustomResponse<>();
@@ -389,165 +394,262 @@ public class StudentServiceImpl implements StudentService {
         return response;
     }
 
-//    @Override
-//    @Audit(module = "STUDENT MANAGEMENT", action = "BULK_UPLOAD")
-//    public CustomResponse<?> bulkUploads(MultipartFile file) {
-//        CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
-//        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
-//
-//        try {
-//            // Validate file
-//            if (file == null || file.isEmpty()) {
-//                throw new RuntimeException("File cannot be empty");
-//            }
-//
-//            String filename = file.getOriginalFilename();
-//            if (filename == null) {
-//                throw new RuntimeException("Invalid file name");
-//            }
-//
-//            List<StudentRequestDTO> studentDTOs = new ArrayList<>();
-//
-//            // Parse file based on extension
-//            if (filename.endsWith(".csv")) {
-//                studentDTOs = parseCSV(file);
-//            } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
-//                studentDTOs = parseExcel(file);
-//            } else {
-//                throw new RuntimeException("Unsupported file format. Please upload CSV or Excel file");
-//            }
-//
-//            uploadResponse.setTotalRecords(studentDTOs.size());
-//
-//            // Process each student
-//            for (int i = 0; i < studentDTOs.size(); i++) {
-//                StudentRequestDTO studentDTO = studentDTOs.get(i);
-//                int rowNumber = i + 2; // +2 because row 1 is header and arrays are 0-indexed
-//
-//                try {
-//                    // Use the existing captureNewStudent method
-//                    CustomResponse<?> studentResponse = captureNewStudent(studentDTO);
-//
-//                    if (studentResponse.getStatusCode() == HttpStatus.CREATED.value()) {
-//                        uploadResponse.setSuccessCount(uploadResponse.getSuccessCount() + 1);
-//                        uploadResponse.getSuccessfulStudents().add((StudentResponseDTO) studentResponse.getEntity());
-//                    } else {
-//                        uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
-//                        uploadResponse.getErrors().add(new BulkUploadError(
-//                                rowNumber,
-//                                studentDTO.getAdmissionNumber(),
-//                                studentResponse.getMessage()));
-//                    }
-//                } catch (Exception e) {
-//                    uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
-//                    uploadResponse.getErrors().add(new BulkUploadError(
-//                            rowNumber,
-//                            studentDTO.getAdmissionNumber(),
-//                            e.getMessage()));
-//                    log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
-//                }
-//            }
-//
-//            response.setStatusCode(HttpStatus.OK.value());
-//            response.setEntity(uploadResponse);
-//            response.setMessage(String.format("Bulk upload completed. Success: %d, Failed: %d",
-//                    uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()));
-//
-//            log.info("Bulk upload completed. Total: {}, Success: {}, Failed: {}",
-//                    uploadResponse.getTotalRecords(),
-//                    uploadResponse.getSuccessCount(),
-//                    uploadResponse.getFailureCount());
-//            auditService.log("STUDENT_MANAGEMENT", "Bulk upload completed. Success:",
-//                    String.valueOf(uploadResponse.getSuccessCount()), "Failed:",
-//                    String.valueOf(uploadResponse.getFailureCount()));
-//
-//        } catch (RuntimeException e) {
-//            log.error("Runtime exception during bulk upload: {}", e.getMessage());
-//            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-//            response.setEntity(null);
-//            response.setMessage(e.getMessage());
-//        } catch (Exception e) {
-//            log.error("Unexpected error during bulk upload: {}", e.getMessage(), e);
-//            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-//            response.setEntity(null);
-//            response.setMessage("An unexpected error occurred during bulk upload");
-//        }
-//        return response;
-//    }
+    @Override
+    @Audit(module = "STUDENT MANAGEMENT", action = "BULK_UPLOAD")
+    public CustomResponse<?> bulkUploads(MultipartFile file) {
+        CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
+        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
 
-    private List<StudentRequestDTO> parseCSV(MultipartFile file) throws Exception {
-        List<StudentRequestDTO> students = new ArrayList<>();
+        try {
+            // Validate file
+            if (file == null || file.isEmpty()) {
+                throw new RuntimeException("File cannot be empty");
+            }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            String filename = file.getOriginalFilename();
+            if (filename == null) {
+                throw new RuntimeException("Invalid file name");
+            }
+
+            List<CreateStudentRequestDTO> records = new ArrayList<>();
+
+            // Parse file based on extension
+            if (filename.endsWith(".csv")) {
+                records = parseBulkCSV(file);
+            } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+                records = parseBulkExcel(file);
+            } else {
+                throw new RuntimeException("Unsupported file format. Please upload CSV or Excel file");
+            }
+
+            uploadResponse.setTotalRecords(records.size());
+
+            // Process each student (with parent) using the existing captureNewStudent flow
+            for (int i = 0; i < records.size(); i++) {
+                CreateStudentRequestDTO record = records.get(i);
+                int rowNumber = i + 2; // +2 because row 1 is header and arrays are 0-indexed
+                String admissionNumber = record.getStudent() != null ? record.getStudent().getAdmissionNumber() : "ROW_" + rowNumber;
+
+                try {
+                    // Reuse captureNewStudent which handles student + guardian + parent creation
+                    CustomResponse<?> studentResponse = captureNewStudent(record);
+
+                    if (studentResponse.getStatusCode() == HttpStatus.CREATED.value()) {
+                        uploadResponse.setSuccessCount(uploadResponse.getSuccessCount() + 1);
+                        uploadResponse.getSuccessfulStudents().add((StudentResponseDTO) studentResponse.getEntity());
+                    } else {
+                        uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
+                        uploadResponse.getErrors().add(new BulkUploadError(
+                                rowNumber, admissionNumber, studentResponse.getMessage()));
+                    }
+                } catch (Exception e) {
+                    uploadResponse.setFailureCount(uploadResponse.getFailureCount() + 1);
+                    uploadResponse.getErrors().add(new BulkUploadError(
+                            rowNumber, admissionNumber, e.getMessage()));
+                    log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
+                }
+            }
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(uploadResponse);
+            response.setMessage(String.format("Bulk upload completed. Success: %d, Failed: %d",
+                    uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()));
+
+            log.info("Bulk upload completed. Total: {}, Success: {}, Failed: {}",
+                    uploadResponse.getTotalRecords(),
+                    uploadResponse.getSuccessCount(),
+                    uploadResponse.getFailureCount());
+            auditService.log("STUDENT_MANAGEMENT", "Bulk upload completed. Success:",
+                    String.valueOf(uploadResponse.getSuccessCount()), "Failed:",
+                    String.valueOf(uploadResponse.getFailureCount()));
+
+        } catch (RuntimeException e) {
+            log.error("Runtime exception during bulk upload: {}", e.getMessage());
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during bulk upload: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("An unexpected error occurred during bulk upload");
+        }
+        return response;
+    }
+
+    private List<CreateStudentRequestDTO> parseBulkCSV(MultipartFile file) throws Exception {
+        List<CreateStudentRequestDTO> records = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT
                     .withFirstRecordAsHeader()
                     .withIgnoreHeaderCase()
                     .withTrim());
 
             for (CSVRecord record : csvParser) {
-                StudentRequestDTO dto = new StudentRequestDTO();
-                dto.setAdmissionNumber(record.get("admissionNumber"));
-                dto.setFirstName(record.get("firstName"));
-                dto.setLastName(record.get("lastName"));
-                dto.setDateOfBirth(LocalDate.parse(record.get("dateOfBirth"))); // Expected format: yyyy-MM-dd
-                dto.setAdmissionDate(record.get("admissionDate")); // Expected format: yyyy-MM-dd
-                dto.setGrade(Long.parseLong(record.get("gradeId")));
-                dto.setGender(record.get("gender"));
-
-                // Optional fields
-                if (record.isMapped("studentImage") && !record.get("studentImage").isEmpty()) {
-                    dto.setStudentImage(record.get("studentImage"));
-                }
-
-                students.add(dto);
+                CreateStudentRequestDTO dto = buildFromCsvRecord(record);
+                // Skip completely empty rows
+                if (dto.getStudent().getAdmissionNumber() == null ||
+                        dto.getStudent().getAdmissionNumber().isBlank()) continue;
+                records.add(dto);
             }
         }
-
-        return students;
+        return records;
     }
 
-    private List<StudentRequestDTO> parseExcel(MultipartFile file) throws Exception {
-        List<StudentRequestDTO> students = new ArrayList<>();
+    private CreateStudentRequestDTO buildFromCsvRecord(CSVRecord record) {
+        StudentInfoDTO student = new StudentInfoDTO();
+        student.setAdmissionNumber(safeGet(record, "admissionNumber"));
+        student.setFirstName(safeGet(record, "firstName"));
+        student.setMiddleName(safeGet(record, "middleName"));
+        student.setLastName(safeGet(record, "lastName"));
+        student.setGender(safeGet(record, "gender"));
+        student.setStreamName(safeGet(record, "streamName"));
+        student.setNationality(safeGet(record, "nationality"));
+        student.setBirthCertificateNumber(safeGet(record, "birthCertificateNumber"));
+        String dobStr = safeGet(record, "dateOfBirth");
+        if (dobStr != null && !dobStr.isBlank()) student.setDateOfBirth(LocalDate.parse(dobStr));
+        String admDateStr = safeGet(record, "admissionDate");
+        if (admDateStr != null && !admDateStr.isBlank()) student.setAdmissionDate(LocalDate.parse(admDateStr));
+        String gradeIdStr = safeGet(record, "gradeId");
+        if (gradeIdStr != null && !gradeIdStr.isBlank()) student.setGradeId(Long.parseLong(gradeIdStr.trim()));
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
+        String parentFirstName = safeGet(record, "parentFirstName");
+        List<GuardianDTO> guardians = new ArrayList<>();
+        if (parentFirstName != null && !parentFirstName.isBlank()) {
+            ParentInfoDTO parent = new ParentInfoDTO();
+            parent.setFirstName(parentFirstName);
+            parent.setLastName(safeGet(record, "parentLastName"));
+            parent.setPhoneNumber(safeGet(record, "parentPhone"));
+            parent.setEmail(safeGet(record, "parentEmail"));
+            parent.setNationalIdOrPassport(safeGet(record, "parentNationalId"));
+            parent.setOccupation(safeGet(record, "parentOccupation"));
 
-            // Get header row to map column names
-            Row headerRow = sheet.getRow(0);
-            Map<String, Integer> columnMap = new HashMap<>();
+            String relStr = safeGet(record, "relationship");
+            GuardianRelationship rel = parseRelationship(relStr);
 
-            for (Cell cell : headerRow) {
-                columnMap.put(cell.getStringCellValue().toLowerCase().trim(), cell.getColumnIndex());
-            }
-
-            // Process data rows
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null)
-                    continue;
-
-                StudentRequestDTO dto = new StudentRequestDTO();
-                dto.setAdmissionNumber(getCellValueAsString(row.getCell(columnMap.get("admissionnumber"))));
-                dto.setFirstName(getCellValueAsString(row.getCell(columnMap.get("firstname"))));
-                dto.setLastName(getCellValueAsString(row.getCell(columnMap.get("lastname"))));
-                dto.setDateOfBirth(getCellValueAsDate(row.getCell(columnMap.get("dateofbirth"))));
-                dto.setAdmissionDate(getCellValueAsString(row.getCell(columnMap.get("admissiondate"))));
-                dto.setGrade(getCellValueAsLong(row.getCell(columnMap.get("gradeid"))));
-                dto.setGender(getCellValueAsString(row.getCell(columnMap.get("gender"))));
-
-                // Optional fields
-                if (columnMap.containsKey("studentimage")) {
-                    String imageValue = getCellValueAsString(row.getCell(columnMap.get("studentimage")));
-                    if (imageValue != null && !imageValue.isEmpty()) {
-                        dto.setStudentImage(imageValue);
-                    }
-                }
-
-                students.add(dto);
-            }
+            GuardianDTO guardian = new GuardianDTO();
+            guardian.setParent(parent);
+            guardian.setRelationship(rel);
+            guardian.setPrimaryContact(true);
+            guardian.setFeePayer(true);
+            guardians.add(guardian);
         }
 
-        return students;
+        CreateStudentRequestDTO dto = new CreateStudentRequestDTO();
+        dto.setStudent(student);
+        dto.setGuardians(guardians);
+        return dto;
+    }
+
+    private String safeGet(CSVRecord record, String key) {
+        try {
+            String val = record.get(key);
+            return (val == null || val.isBlank()) ? null : val.trim();
+        } catch (IllegalArgumentException e) {
+            return null; // column not present in file
+        }
+    }
+
+    private List<CreateStudentRequestDTO> parseBulkExcel(MultipartFile file) throws Exception {
+        List<CreateStudentRequestDTO> records = new ArrayList<>();
+
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            // Use first sheet that is named "Students" or just the first sheet
+            Sheet sheet = null;
+            for (int s = 0; s < workbook.getNumberOfSheets(); s++) {
+                if ("Students".equalsIgnoreCase(workbook.getSheetName(s))) {
+                    sheet = workbook.getSheetAt(s);
+                    break;
+                }
+            }
+            if (sheet == null) sheet = workbook.getSheetAt(0);
+
+            // Build header -> column index map (case-insensitive, space removed)
+            Row headerRow = sheet.getRow(0);
+            if (headerRow == null) throw new RuntimeException("Excel file has no header row");
+            Map<String, Integer> colMap = new HashMap<>();
+            for (Cell cell : headerRow) {
+                String key = cell.getStringCellValue().toLowerCase().replace(" ", "").trim();
+                colMap.put(key, cell.getColumnIndex());
+            }
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                // Skip fully blank rows
+                String admNumber = getCellValueAsString(row.getCell(colMap.getOrDefault("admissionnumber", -1)));
+                if (admNumber == null || admNumber.isBlank()) continue;
+
+                CreateStudentRequestDTO dto = buildFromExcelRow(row, colMap);
+                records.add(dto);
+            }
+        }
+        return records;
+    }
+
+    private CreateStudentRequestDTO buildFromExcelRow(Row row, Map<String, Integer> colMap) {
+        StudentInfoDTO student = new StudentInfoDTO();
+        student.setAdmissionNumber(excelStr(row, colMap, "admissionnumber"));
+        student.setFirstName(excelStr(row, colMap, "firstname"));
+        student.setMiddleName(excelStr(row, colMap, "middlename"));
+        student.setLastName(excelStr(row, colMap, "lastname"));
+        student.setGender(excelStr(row, colMap, "gender"));
+        student.setStreamName(excelStr(row, colMap, "streamname"));
+        student.setNationality(excelStr(row, colMap, "nationality"));
+        student.setBirthCertificateNumber(excelStr(row, colMap, "birthcertificatenumber"));
+        student.setDateOfBirth(getCellValueAsDate(row.getCell(colMap.getOrDefault("dateofbirth", -1))));
+        LocalDate admDate = getCellValueAsDate(row.getCell(colMap.getOrDefault("admissiondate", -1)));
+        student.setAdmissionDate(admDate);
+        student.setGradeId(getCellValueAsLong(row.getCell(colMap.getOrDefault("gradeid", -1))));
+
+        String img = excelStr(row, colMap, "studentimage");
+        if (img != null && !img.isBlank()) student.setStudentImage(img);
+
+        String parentFirstName = excelStr(row, colMap, "parentfirstname");
+        List<GuardianDTO> guardians = new ArrayList<>();
+        if (parentFirstName != null && !parentFirstName.isBlank()) {
+            ParentInfoDTO parent = new ParentInfoDTO();
+            parent.setFirstName(parentFirstName);
+            parent.setLastName(excelStr(row, colMap, "parentlastname"));
+            parent.setPhoneNumber(excelStr(row, colMap, "parentphone"));
+            parent.setEmail(excelStr(row, colMap, "parentemail"));
+            parent.setNationalIdOrPassport(excelStr(row, colMap, "parentnationalid"));
+            parent.setOccupation(excelStr(row, colMap, "parentoccupation"));
+            parent.setReceiveSms(true);
+
+            String relStr = excelStr(row, colMap, "relationship");
+            GuardianRelationship rel = parseRelationship(relStr);
+
+            GuardianDTO guardian = new GuardianDTO();
+            guardian.setParent(parent);
+            guardian.setRelationship(rel);
+            guardian.setPrimaryContact(true);
+            guardian.setFeePayer(true);
+            guardians.add(guardian);
+        }
+
+        CreateStudentRequestDTO dto = new CreateStudentRequestDTO();
+        dto.setStudent(student);
+        dto.setGuardians(guardians);
+        return dto;
+    }
+
+    private String excelStr(Row row, Map<String, Integer> colMap, String key) {
+        Integer idx = colMap.get(key);
+        if (idx == null || idx < 0) return null;
+        return getCellValueAsString(row.getCell(idx));
+    }
+
+    private GuardianRelationship parseRelationship(String value) {
+        if (value == null || value.isBlank()) return GuardianRelationship.GUARDIAN;
+        try {
+            return GuardianRelationship.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return GuardianRelationship.GUARDIAN;
+        }
     }
 
     private String getCellValueAsString(Cell cell) {
@@ -676,7 +778,6 @@ public class StudentServiceImpl implements StudentService {
     public CustomResponse<?> getStudentGuardians(Long studentId) {
         CustomResponse<List<com.EduePoa.EP.StudentRegistration.Response.StudentGuardianResponseDTO>> response = new CustomResponse<>();
         try {
-            // Verify student exists
             studentRepository.findById(studentId)
                     .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
 
@@ -725,7 +826,6 @@ public class StudentServiceImpl implements StudentService {
     public CustomResponse<?> getNemisStatus(Long studentId) {
         CustomResponse<com.EduePoa.EP.StudentRegistration.Response.NemisStatusResponseDTO> response = new CustomResponse<>();
         try {
-            // Verify student exists
             studentRepository.findById(studentId)
                     .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
 
@@ -780,71 +880,67 @@ public class StudentServiceImpl implements StudentService {
     }
 
     private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
-        StringBuilder csvContent = new StringBuilder();
+        StringBuilder csv = new StringBuilder();
 
-        // Add headers
-        csvContent.append("admissionNumber,firstName,lastName,dateOfBirth,admissionDate,gradeId,gender,studentImage\n");
+        csv.append("admissionNumber,firstName,middleName,lastName,dateOfBirth,admissionDate,gradeId,");
+        csv.append("gender,streamName,nationality,birthCertificateNumber,");
+        csv.append("parentFirstName,parentLastName,parentPhone,parentEmail,parentNationalId,parentOccupation,relationship\n");
 
-        // Add sample data rows
-        csvContent.append("STU001,John,Doe,2010-05-15,2024-01-10,1,Male,\n");
-        csvContent.append("STU002,Jane,Smith,2011-08-22,2024-01-10,1,Female,\n");
-        csvContent.append("STU003,Michael,Johnson,2010-12-03,2024-01-10,2,Male,\n");
+        csv.append("STU001,John,,Doe,2010-05-15,2024-01-10,1,Male,Form 1A,Kenyan,,");
+        csv.append("Mary,Doe,0712345678,mary.doe@email.com,12345678,Teacher,MOTHER\n");
 
-        // Add instructions as comments (CSV comments start with #)
-        csvContent.insert(0, "# Student Bulk Upload Template\n");
-        csvContent.insert(0, "# Instructions:\n");
-        csvContent.insert(0, "# 1. admissionNumber: Must be unique (e.g., STU001, STU002)\n");
-        csvContent.insert(0, "# 2. firstName: Student's first name (required)\n");
-        csvContent.insert(0, "# 3. lastName: Student's last name (required)\n");
-        csvContent.insert(0, "# 4. dateOfBirth: Format YYYY-MM-DD (required)\n");
-        csvContent.insert(0, "# 5. admissionDate: Format YYYY-MM-DD (required)\n");
-        csvContent.insert(0, "# 6. gradeId: Numeric ID of the grade (required)\n");
-        csvContent.insert(0, "# 7. gender: Male/Female (required)\n");
-        csvContent.insert(0, "# 8. studentImage: Base64 encoded image or URL (optional)\n");
-        csvContent.insert(0, "# \n");
-        csvContent.insert(0, "# Note: Delete these instruction lines before uploading\n");
-        csvContent.insert(0, "# Sample data is provided below. Replace with actual student data.\n");
-        csvContent.insert(0, "#\n");
+        csv.append("STU002,Jane,,Smith,2011-08-22,2024-01-10,1,Female,Form 1A,Kenyan,,");
+        csv.append("Peter,Smith,0723456789,peter.smith@email.com,98765432,Engineer,FATHER\n");
 
-        ByteArrayResource resource = new ByteArrayResource(csvContent.toString().getBytes(StandardCharsets.UTF_8));
+        csv.append("STU003,Michael,,Johnson,2010-12-03,2024-01-10,2,Male,Form 2B,Kenyan,,");
+        csv.append("Susan,Johnson,0734567890,,45678901,Nurse,MOTHER\n");
 
+        ByteArrayResource resource = new ByteArrayResource(csv.toString().getBytes(StandardCharsets.UTF_8));
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_bulk_upload_template.csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_parent_bulk_upload_template.csv")
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
                 .contentLength(resource.contentLength())
                 .body(resource);
     }
 
     private ResponseEntity<Resource> generateExcelTemplate() throws Exception {
         Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("Students");
 
-        // Create styles
-        CellStyle headerStyle = workbook.createCellStyle();
-        Font headerFont = workbook.createFont();
-        headerFont.setBold(true);
-        headerFont.setFontHeightInPoints((short) 12);
-        headerFont.setColor(IndexedColors.WHITE.getIndex());
-        headerStyle.setFont(headerFont);
-        headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        headerStyle.setBorderBottom(BorderStyle.THIN);
-        headerStyle.setBorderTop(BorderStyle.THIN);
-        headerStyle.setBorderRight(BorderStyle.THIN);
-        headerStyle.setBorderLeft(BorderStyle.THIN);
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        CellStyle studentHeaderStyle = workbook.createCellStyle();
+        Font studentHeaderFont = workbook.createFont();
+        studentHeaderFont.setBold(true);
+        studentHeaderFont.setFontHeightInPoints((short) 11);
+        studentHeaderFont.setColor(IndexedColors.WHITE.getIndex());
+        studentHeaderStyle.setFont(studentHeaderFont);
+        studentHeaderStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+        studentHeaderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        studentHeaderStyle.setBorderBottom(BorderStyle.THIN);
+        studentHeaderStyle.setBorderTop(BorderStyle.THIN);
+        studentHeaderStyle.setBorderRight(BorderStyle.THIN);
+        studentHeaderStyle.setBorderLeft(BorderStyle.THIN);
+        studentHeaderStyle.setAlignment(HorizontalAlignment.CENTER);
+        studentHeaderStyle.setWrapText(true);
 
-        CellStyle instructionStyle = workbook.createCellStyle();
-        Font instructionFont = workbook.createFont();
-        instructionFont.setItalic(true);
-        instructionFont.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
-        instructionStyle.setFont(instructionFont);
+        CellStyle parentHeaderStyle = workbook.createCellStyle();
+        Font parentHeaderFont = workbook.createFont();
+        parentHeaderFont.setBold(true);
+        parentHeaderFont.setFontHeightInPoints((short) 11);
+        parentHeaderFont.setColor(IndexedColors.WHITE.getIndex());
+        parentHeaderStyle.setFont(parentHeaderFont);
+        parentHeaderStyle.setFillForegroundColor(IndexedColors.DARK_GREEN.getIndex());
+        parentHeaderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        parentHeaderStyle.setBorderBottom(BorderStyle.THIN);
+        parentHeaderStyle.setBorderTop(BorderStyle.THIN);
+        parentHeaderStyle.setBorderRight(BorderStyle.THIN);
+        parentHeaderStyle.setBorderLeft(BorderStyle.THIN);
+        parentHeaderStyle.setAlignment(HorizontalAlignment.CENTER);
+        parentHeaderStyle.setWrapText(true);
 
-        CellStyle sampleDataStyle = workbook.createCellStyle();
-        sampleDataStyle.setBorderBottom(BorderStyle.THIN);
-        sampleDataStyle.setBorderTop(BorderStyle.THIN);
-        sampleDataStyle.setBorderRight(BorderStyle.THIN);
-        sampleDataStyle.setBorderLeft(BorderStyle.THIN);
+        CellStyle dataStyle = workbook.createCellStyle();
+        dataStyle.setBorderBottom(BorderStyle.THIN);
+        dataStyle.setBorderTop(BorderStyle.THIN);
+        dataStyle.setBorderRight(BorderStyle.THIN);
+        dataStyle.setBorderLeft(BorderStyle.THIN);
 
         CellStyle dateStyle = workbook.createCellStyle();
         dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("yyyy-mm-dd"));
@@ -853,130 +949,140 @@ public class StudentServiceImpl implements StudentService {
         dateStyle.setBorderRight(BorderStyle.THIN);
         dateStyle.setBorderLeft(BorderStyle.THIN);
 
-        // Create instructions sheet
-        Sheet instructionsSheet = workbook.createSheet("Instructions");
-        int instructionRow = 0;
+        Sheet sheet = workbook.createSheet("Students");
 
-        String[] instructions = {
-                "STUDENT BULK UPLOAD TEMPLATE - INSTRUCTIONS",
-                "",
-                "Column Descriptions:",
-                "1. admissionNumber - Unique identifier for the student (e.g., STU001, STU002) [REQUIRED]",
-                "2. firstName - Student's first name [REQUIRED]",
-                "3. lastName - Student's last name [REQUIRED]",
-                "4. dateOfBirth - Student's date of birth in YYYY-MM-DD format [REQUIRED]",
-                "5. admissionDate - Date of admission in YYYY-MM-DD format [REQUIRED]",
-                "6. gradeId - Numeric ID of the grade/class [REQUIRED]",
-                "7. gender - Student's gender (Male/Female) [REQUIRED]",
-                "8. studentImage - Base64 encoded image string or image URL [OPTIONAL]",
-                "",
-                "Important Notes:",
-                "- All fields marked as REQUIRED must be filled",
-                "- Admission numbers must be unique across all students",
-                "- Date format must be YYYY-MM-DD (e.g., 2010-05-15)",
-                "- Grade ID must exist in your system",
-                "- Delete or replace the sample data before uploading",
-                "- Maximum file size: 10MB",
-                "- Supported formats: .xlsx, .xls, .csv",
-                "",
-                "Sample Data:",
-                "The 'Students' sheet contains sample data to help you understand the format.",
-                "Replace this data with your actual student information.",
-                "",
-                "For any questions, please contact your system administrator."
-        };
-
-        for (String instruction : instructions) {
-            Row row = instructionsSheet.createRow(instructionRow++);
-            Cell cell = row.createCell(0);
-            cell.setCellValue(instruction);
-            if (instructionRow == 1) {
-                CellStyle titleStyle = workbook.createCellStyle();
-                Font titleFont = workbook.createFont();
-                titleFont.setBold(true);
-                titleFont.setFontHeightInPoints((short) 14);
-                titleStyle.setFont(titleFont);
-                cell.setCellStyle(titleStyle);
-            } else {
-                cell.setCellStyle(instructionStyle);
-            }
-        }
-        instructionsSheet.setColumnWidth(0, 100 * 256);
-
-        // Create header row
-        Row headerRow = sheet.createRow(0);
         String[] headers = {
-                "admissionNumber", "firstName", "lastName", "dateOfBirth",
-                "admissionDate", "gradeId", "gender", "studentImage"
+                // Student columns
+                "admissionNumber", "firstName", "middleName", "lastName",
+                "dateOfBirth", "admissionDate", "gradeId", "gender",
+                "streamName", "nationality", "birthCertificateNumber",
+                // Parent / Guardian columns
+                "parentFirstName", "parentLastName", "parentPhone",
+                "parentEmail", "parentNationalId", "parentOccupation", "relationship"
         };
 
+        int parentColStart = 11;
+        int genderColIdx  = 7;
+        int relColIdx     = 17;
+
+        Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
             cell.setCellValue(headers[i]);
-            cell.setCellStyle(headerStyle);
-
-            // Set column width
-            if (i == 3 || i == 4) { // Date columns
-                sheet.setColumnWidth(i, 15 * 256);
-            } else if (i == 7) { // Image column
-                sheet.setColumnWidth(i, 20 * 256);
-            } else {
-                sheet.setColumnWidth(i, 20 * 256);
-            }
+            cell.setCellStyle(i < parentColStart ? studentHeaderStyle : parentHeaderStyle);
+            sheet.setColumnWidth(i, 22 * 256);
         }
+        sheet.getRow(0).setHeight((short) 600);
 
-        // Add sample data
         Object[][] sampleData = {
-                { "STU001", "John", "Doe", LocalDate.of(2010, 5, 15), "2024-01-10", 1L, "Male", "" },
-                { "STU002", "Jane", "Smith", LocalDate.of(2011, 8, 22), "2024-01-10", 1L, "Female", "" },
-                { "STU003", "Michael", "Johnson", LocalDate.of(2010, 12, 3), "2024-01-10", 2L, "Male", "" }
+            {"STU001","John","","Doe",LocalDate.of(2010,5,15),LocalDate.of(2024,1,10),1L,"Male","Form 1A","Kenyan","",
+             "Mary","Doe","0712345678","mary.doe@email.com","12345678","Teacher","MOTHER"},
+            {"STU002","Jane","","Smith",LocalDate.of(2011,8,22),LocalDate.of(2024,1,10),1L,"Female","Form 1A","Kenyan","",
+             "Peter","Smith","0723456789","peter.smith@email.com","98765432","Engineer","FATHER"},
+            {"STU003","Michael","","Johnson",LocalDate.of(2010,12,3),LocalDate.of(2024,1,10),2L,"Male","Form 2B","Kenyan","",
+             "Susan","Johnson","0734567890","","45678901","Nurse","MOTHER"}
         };
 
         for (int i = 0; i < sampleData.length; i++) {
             Row row = sheet.createRow(i + 1);
-            Object[] rowData = sampleData[i];
-
-            for (int j = 0; j < rowData.length; j++) {
+            Object[] cols = sampleData[i];
+            for (int j = 0; j < cols.length; j++) {
                 Cell cell = row.createCell(j);
-                Object value = rowData[j];
-
-                if (value instanceof String) {
-                    cell.setCellValue((String) value);
-                    cell.setCellStyle(sampleDataStyle);
-                } else if (value instanceof Long) {
-                    cell.setCellValue((Long) value);
-                    cell.setCellStyle(sampleDataStyle);
-                } else if (value instanceof LocalDate) {
-                    cell.setCellValue((LocalDate) value);
+                Object val = cols[j];
+                if (val instanceof LocalDate) {
+                    cell.setCellValue((LocalDate) val);
                     cell.setCellStyle(dateStyle);
+                } else if (val instanceof Long) {
+                    cell.setCellValue((Long) val);
+                    cell.setCellStyle(dataStyle);
+                } else {
+                    cell.setCellValue(val == null ? "" : val.toString());
+                    cell.setCellStyle(dataStyle);
                 }
             }
         }
 
-        // Add data validation for gender column
-        DataValidationHelper validationHelper = sheet.getDataValidationHelper();
-        DataValidationConstraint constraint = validationHelper.createExplicitListConstraint(
-                new String[] { "Male", "Female" });
-        CellRangeAddressList addressList = new CellRangeAddressList(1, 1000, 6, 6);
-        DataValidation dataValidation = validationHelper.createValidation(constraint, addressList);
-        dataValidation.setShowErrorBox(true);
-        dataValidation.createErrorBox("Invalid Gender", "Please select Male or Female");
-        sheet.addValidationData(dataValidation);
+        DataValidationHelper dvHelper = sheet.getDataValidationHelper();
+        DataValidationConstraint genderConstraint = dvHelper.createExplicitListConstraint(new String[]{"Male","Female"});
+        CellRangeAddressList genderRange = new CellRangeAddressList(1, 1000, genderColIdx, genderColIdx);
+        DataValidation genderValidation = dvHelper.createValidation(genderConstraint, genderRange);
+        genderValidation.setShowErrorBox(true);
+        genderValidation.createErrorBox("Invalid Gender", "Please select Male or Female");
+        sheet.addValidationData(genderValidation);
 
-        // Freeze header row
+        DataValidationConstraint relConstraint = dvHelper.createExplicitListConstraint(
+                new String[]{"MOTHER","FATHER","GUARDIAN","SIBLING","OTHER"});
+        CellRangeAddressList relRange = new CellRangeAddressList(1, 1000, relColIdx, relColIdx);
+        DataValidation relValidation = dvHelper.createValidation(relConstraint, relRange);
+        relValidation.setShowErrorBox(true);
+        relValidation.createErrorBox("Invalid Relationship", "Select: MOTHER, FATHER, GUARDIAN, SIBLING, or OTHER");
+        sheet.addValidationData(relValidation);
+
         sheet.createFreezePane(0, 1);
+        sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, headers.length - 1));
 
-        // Write to byte array
+        Sheet instrSheet = workbook.createSheet("Instructions");
+        CellStyle instrStyle = workbook.createCellStyle();
+        Font instrFont = workbook.createFont();
+        instrFont.setItalic(true);
+        instrStyle.setFont(instrFont);
+
+        String[] instructions = {
+            "STUDENT + PARENT BULK UPLOAD TEMPLATE",
+            "",
+            "═══ STUDENT COLUMNS (Blue headers) ═══",
+            "admissionNumber     - Unique student ID e.g. STU001 [REQUIRED]",
+            "firstName           - Student first name [REQUIRED]",
+            "middleName          - Middle name [OPTIONAL]",
+            "lastName            - Student last name [REQUIRED]",
+            "dateOfBirth         - Format YYYY-MM-DD e.g. 2010-05-15 [REQUIRED]",
+            "admissionDate       - Format YYYY-MM-DD e.g. 2024-01-10 [REQUIRED]",
+            "gradeId             - Numeric grade/class ID from the system [REQUIRED]",
+            "gender              - Male or Female (dropdown) [REQUIRED]",
+            "streamName          - Stream/section e.g. Form 1A [OPTIONAL]",
+            "nationality         - e.g. Kenyan [OPTIONAL]",
+            "birthCertificateNumber - Birth certificate no. [OPTIONAL]",
+            "",
+            "═══ PARENT / GUARDIAN COLUMNS (Green headers) ═══",
+            "parentFirstName     - Parent/guardian first name [OPTIONAL]",
+            "parentLastName      - Parent/guardian last name [OPTIONAL]",
+            "parentPhone         - Phone number e.g. 0712345678 [OPTIONAL]",
+            "parentEmail         - Email address (used for portal login) [OPTIONAL]",
+            "parentNationalId    - National ID or Passport number [OPTIONAL]",
+            "parentOccupation    - Occupation [OPTIONAL]",
+            "relationship        - MOTHER / FATHER / GUARDIAN / SIBLING / OTHER (dropdown) [OPTIONAL]",
+            "",
+            "NOTES:",
+            "- Rows with a blank admissionNumber are skipped.",
+            "- If parentEmail is provided, a portal account is created (default password: 1234).",
+            "- Replace sample rows with your actual data before uploading.",
+            "- Maximum file size: 10 MB. Supported formats: .xlsx, .xls, .csv",
+        };
+
+        CellStyle titleStyle = workbook.createCellStyle();
+        Font titleFont = workbook.createFont();
+        titleFont.setBold(true);
+        titleFont.setFontHeightInPoints((short) 14);
+        titleStyle.setFont(titleFont);
+
+        for (int i = 0; i < instructions.length; i++) {
+            Row row = instrSheet.createRow(i);
+            Cell cell = row.createCell(0);
+            cell.setCellValue(instructions[i]);
+            cell.setCellStyle(i == 0 ? titleStyle : instrStyle);
+        }
+        instrSheet.setColumnWidth(0, 100 * 256);
+
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         workbook.write(outputStream);
         workbook.close();
 
         ByteArrayResource resource = new ByteArrayResource(outputStream.toByteArray());
-
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_bulk_upload_template.xlsx")
-                .contentType(
-                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=student_parent_bulk_upload_template.xlsx")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .contentLength(resource.contentLength())
                 .body(resource);
     }
@@ -988,7 +1094,6 @@ public class StudentServiceImpl implements StudentService {
         dto.setCreatedOn(feeStructure.getDatePosted());
         dto.setUpdatedOn(feeStructure.getDatePosted());
 
-        // Convert fee components
         List<FeeStructureResponseDTO.FeeItemDTO> feeItems = getFeeItemDTOS(feeStructure);
         dto.setFeeItems(feeItems);
 

@@ -14,7 +14,7 @@ public interface StudentService {
     CustomResponse<?>getFeeStructurePerStudent(Long studentId);
     CustomResponse<?>totalNumberStudents();
     CustomResponse<?>studentsPerGrade();
-//    CustomResponse<?>bulkUploads(MultipartFile file);
+    CustomResponse<?>bulkUploads(MultipartFile file);
     ResponseEntity<Resource> generateBulkUploadTemplate(String file);
     CustomResponse<?>getPerGrade(Long id);
     CustomResponse<?> getFeeStucturePerStudent(Long studentId);

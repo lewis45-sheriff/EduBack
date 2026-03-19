@@ -1,4 +1,4 @@
-package com.EduePoa.EP.StudentRegistration.Response;
+package com.EduePoa.EP.Parents.Response;
 
 import lombok.Builder;
 import lombok.Data;
@@ -18,4 +18,6 @@ public class ParentResponseDTO {
     private String occupation;
     private String address;
     private boolean portalAccessEnabled;
+    /** System user ID — populated only when portalAccessEnabled is true and a user account was provisioned. */
+    private Long userId;
 }

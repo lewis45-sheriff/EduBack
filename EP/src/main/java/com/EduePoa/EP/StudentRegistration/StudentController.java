@@ -46,12 +46,12 @@ public class StudentController {
         var response = studentService.studentsPerGrade();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
-//    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-//    public ResponseEntity<?> bulkUploadStudents(
-//            @RequestParam("file") MultipartFile file) {
-//        var response = studentService.bulkUploads(file);
-//        return ResponseEntity.status(response.getStatusCode()).body(response);
-//    }
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> bulkUploadStudents(
+            @RequestParam("file") MultipartFile file) {
+        var response = studentService.bulkUploads(file);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
     @GetMapping("/bulk-upload/template")
     public ResponseEntity<Resource> downloadBulkUploadTemplate(
@@ -63,7 +63,7 @@ public class StudentController {
         var response = studentService.getPerGrade(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
-    @GetMapping({"get-fee-structure-per-student-grouped/{studentId}", "get-fee-structure-per-studenr/{studentId}"})
+    @GetMapping("get-fee-structure-per-student-grouped/{studentId}")
     public ResponseEntity<?> getFeeStucturePerStudent(@PathVariable Long studentId) {
         var response = studentService. getFeeStucturePerStudent(studentId);
         return ResponseEntity.status(response.getStatusCode()).body(response);

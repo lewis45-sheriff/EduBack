@@ -22,6 +22,11 @@ public class UserController {
         var response = userService.getAllUsers();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-all-parents")
+    ResponseEntity<?>getAllParents(){
+        var response = userService.getAllParents();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 
 

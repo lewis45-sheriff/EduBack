@@ -1,5 +1,6 @@
 package com.EduePoa.EP.StudentRegistration;
 
+import com.EduePoa.EP.Parents.Parent;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;

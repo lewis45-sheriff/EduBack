@@ -8,7 +8,7 @@ import com.EduePoa.EP.Communications.Requests.*;
 import com.EduePoa.EP.Communications.Responses.*;
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
-import com.EduePoa.EP.StudentRegistration.Parent;
+import com.EduePoa.EP.Parents.Parent;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentGuardian;
 import com.EduePoa.EP.StudentRegistration.StudentGuardianRepository;

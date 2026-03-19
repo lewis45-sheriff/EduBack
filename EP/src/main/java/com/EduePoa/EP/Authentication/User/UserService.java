@@ -95,7 +95,7 @@ public class UserService {
 
             List<UserResponse> userResponses = users.stream()
                     .map(UserService::getUserResponse)
-                    .collect(Collectors.toList());
+                    .toList();
 
             response.setEntity(userResponses);
             response.setMessage("Users retrieved successfully.");
@@ -108,6 +108,33 @@ public class UserService {
         return response;
     }
 
+    public CustomResponse<?> getAllParents() {
+        CustomResponse<List<UserResponse>> response = new CustomResponse<>();
+        try {
+            List<User> userList = userRepository.findParents();
+
+            if (userList == null || userList.isEmpty()) {
+                response.setEntity(List.of());
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setMessage("No parent users found.");
+                return response;
+            }
+
+            List<UserResponse> userResponseList = userList.stream()
+                    .map(UserService::getUserResponse)
+                    .toList();
+
+            response.setEntity(userResponseList);
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Parents retrieved successfully.");
+
+        } catch (Exception e) {
+            response.setEntity(null);
+            response.setMessage("Failed to retrieve parents: " + e.getMessage());
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
 
 
     private static UserResponse getUserResponse(User savedUser) {

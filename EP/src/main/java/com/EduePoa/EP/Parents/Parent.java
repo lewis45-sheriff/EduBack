@@ -1,4 +1,4 @@
-package com.EduePoa.EP.StudentRegistration;
+package com.EduePoa.EP.Parents;
 
 import com.EduePoa.EP.Authentication.User.User;
 import jakarta.persistence.*;
@@ -38,9 +38,7 @@ public class Parent {
     private boolean receiveSms = true;
     private boolean receiveEmail = false;
 
-    /**
-     * Linked system user (allows portal login). Null if portal access is not enabled.
-     */
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
