@@ -54,7 +54,7 @@
             f.balance AS totalBalance,
             f.term AS currTerm,
             f.year AS currTermYear,
-            (SELECT COALESCE(SUM(CASE WHEN f2.balance > 0 THEN f2.balance ELSE 0 END), 0)
+            (SELECT COALESCE(SUM(f2.balance), 0)
              FROM finance f2
              WHERE f2.student_id = f.student_id
                AND (
@@ -110,6 +110,13 @@
     <variable name="PaymentCount" class="java.lang.Integer" calculation="Count">
         <variableExpression><![CDATA[$F{rNo}]]></variableExpression>
         <initialValueExpression><![CDATA[0]]></initialValueExpression>
+    </variable>
+
+    <variable name="OverallBalance" class="java.math.BigDecimal" calculation="Nothing">
+        <variableExpression><![CDATA[
+            ($F{balanceForward} == null ? java.math.BigDecimal.ZERO : $F{balanceForward})
+                .add($F{totalBalance} == null ? java.math.BigDecimal.ZERO : $F{totalBalance})
+        ]]></variableExpression>
     </variable>
 
     <background>
@@ -444,7 +451,7 @@
 
             <staticText>
                 <reportElement style="MetricLabel" x="395" y="18" width="145" height="12" uuid="56b0e586-cd5a-496c-bbc9-8b7c34f32cf7"/>
-                <text><![CDATA[Statement Status]]></text>
+                <text><![CDATA[Overall Account Status]]></text>
             </staticText>
             <textField evaluationTime="Report">
                 <reportElement x="395" y="32" width="145" height="24" forecolor="#0F4C81" uuid="01bcec7f-f0e4-4862-a4e8-62bbd5ad20e8"/>
@@ -452,9 +459,9 @@
                     <font fontName="Arial" size="13" isBold="true"/>
                 </textElement>
                 <textFieldExpression><![CDATA[
-                    $F{totalBalance} == null ? "No Data" :
-                    ($F{totalBalance}.compareTo(java.math.BigDecimal.ZERO) > 0 ? "Outstanding" :
-                    ($F{totalBalance}.compareTo(java.math.BigDecimal.ZERO) < 0 ? "Credit Balance" : "Cleared"))
+                    $V{OverallBalance} == null ? "No Data" :
+                    ($V{OverallBalance}.compareTo(java.math.BigDecimal.ZERO) > 0 ? "Outstanding" :
+                    ($V{OverallBalance}.compareTo(java.math.BigDecimal.ZERO) < 0 ? "Credit Balance" : "Cleared"))
                 ]]></textFieldExpression>
             </textField>
 
@@ -477,15 +484,15 @@
                     <font fontName="Arial" size="10"/>
                 </textElement>
                 <textFieldExpression><![CDATA[
-                    $F{totalBalance} == null
+                    $V{OverallBalance} == null
                         ? "No fee record is available for the selected term."
-                        : ($F{totalBalance}.compareTo(java.math.BigDecimal.ZERO) == 0
-                            ? "The student's fee account is fully cleared for the selected term. Keep this statement for your records."
-                            : ($F{totalBalance}.compareTo(java.math.BigDecimal.ZERO) < 0
-                                ? "The student's account has a credit balance for this term. Please confirm with the accounts office how the excess payment should be carried forward."
+                        : ($V{OverallBalance}.compareTo(java.math.BigDecimal.ZERO) == 0
+                            ? "The student's fee account is fully cleared after applying all balances brought forward. Keep this statement for your records."
+                            : ($V{OverallBalance}.compareTo(java.math.BigDecimal.ZERO) < 0
+                                ? "The student's account has a credit balance brought forward from previous payments. Please confirm with the accounts office how the excess payment will be applied."
                                 : ($V{PaymentCount} == null || $V{PaymentCount}.intValue() == 0
-                                    ? "No payment has been posted for this term yet. Please liaise with the accounts office to clear the outstanding balance before the close of term."
-                                    : "Payments have been posted for this term. Please clear the remaining balance and contact the accounts office if you need a payment plan or reconciliation.")))
+                                    ? "No payment has been posted for this term yet. Please liaise with the accounts office to clear the outstanding balance after the balance brought forward has been applied."
+                                    : "Payments have been posted for this term. Please clear the remaining overall balance and contact the accounts office if you need a payment plan or reconciliation.")))
                 ]]></textFieldExpression>
             </textField>
 
