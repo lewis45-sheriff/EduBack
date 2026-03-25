@@ -6,13 +6,14 @@ import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Communications.Enums.*;
 import com.EduePoa.EP.Communications.Requests.*;
 import com.EduePoa.EP.Communications.Responses.*;
-import com.EduePoa.EP.Grade.Grade;
+import com.EduePoa.EP.Communications.SMS.SmsDispatchResult;
+import com.EduePoa.EP.Communications.SMS.SmsGatewayService;
 import com.EduePoa.EP.Grade.GradeRepository;
-import com.EduePoa.EP.Parents.Parent;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentGuardian;
 import com.EduePoa.EP.StudentRegistration.StudentGuardianRepository;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
+import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +45,7 @@ public class CommunicationServiceImpl implements CommunicationService {
     private final UserRepository userRepository;
     private final GradeRepository gradeRepository;
     private final AuditService auditService;
+    private final SmsGatewayService smsGatewayService;
 
     // ==================== ANNOUNCEMENT METHODS ====================
 
@@ -248,6 +250,12 @@ public class CommunicationServiceImpl implements CommunicationService {
             messageRecipientRepository.saveAll(recipients);
             message.setRecipients(recipients);
 
+            // ── Dispatch real SMS if message type requires it ──────────────
+            if (request.getMessageType() == MessageType.SMS || request.getMessageType() == MessageType.ALL) {
+                dispatchSmsToRecipients(message, recipients, request.getContent());
+                messageRecipientRepository.saveAll(recipients); // persist updated delivery statuses
+            }
+
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage(
                     "Message " + (request.getScheduledAt() != null ? "scheduled" : "sent") + " successfully");
@@ -286,6 +294,12 @@ public class CommunicationServiceImpl implements CommunicationService {
                     request.getScheduledAt());
             messageRecipientRepository.saveAll(recipients);
             message.setRecipients(recipients);
+
+            // ── Dispatch real SMS if message type requires it ──────────────
+            if (request.getMessageType() == MessageType.SMS || request.getMessageType() == MessageType.ALL) {
+                dispatchSmsToRecipients(message, recipients, request.getContent());
+                messageRecipientRepository.saveAll(recipients); // persist updated delivery statuses
+            }
 
             response.setStatusCode(HttpStatus.CREATED.value());
             response.setMessage(
@@ -670,5 +684,148 @@ public class CommunicationServiceImpl implements CommunicationService {
         }
 
         return recipients;
+    }
+
+    @Override
+    @Transactional
+    public CustomResponse<?> sendSmsToParentOfStudent(Long studentId, String content, String username) {
+        CustomResponse<MessageResponse> response = new CustomResponse<>();
+        try {
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student with ID " + studentId + " not found"));
+
+            StudentGuardian guardian = studentGuardianRepository.findByStudentId(studentId).stream()
+                    .filter(StudentGuardian::isPrimaryContact)
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("No primary guardian found for student ID " + studentId));
+
+            var parent = guardian.getParent();
+            String phone = parent.getPhoneNumber();
+            if (phone == null || phone.isBlank()) {
+                throw new RuntimeException("Parent " + parent.getFirstName() + " has no phone number on record");
+            }
+
+            Message message = messageRepository.save(Message.builder()
+                    .subject("SMS to parent of " + student.getFirstName() + " " + student.getLastName())
+                    .content(content)
+                    .messageType(MessageType.SMS)
+                    .status(MessageStatus.SENT)
+                    .sentAt(LocalDateTime.now())
+                    .createdBy(username)
+                    .deletedFlag('N')
+                    .build());
+
+            SmsDispatchResult result = smsGatewayService.sendSms(phone, content);
+
+            MessageRecipient recipient = MessageRecipient.builder()
+                    .recipientType(RecipientType.PARENT)
+                    .recipientId(parent.getId())
+                    .recipientName(parent.getFirstName() + " " + parent.getLastName())
+                    .phone(phone)
+                    .email(parent.getEmail())
+                    .deliveryStatus(result.isSuccess() ? DeliveryStatus.DELIVERED : DeliveryStatus.FAILED)
+                    .deliveredAt(result.isSuccess() ? LocalDateTime.now() : null)
+                    .message(message)
+                    .build();
+
+            messageRecipientRepository.save(recipient);
+            message.setRecipients(List.of(recipient));
+
+            auditService.log("COMMUNICATION", "SMS sent to parent of student ID:", String.valueOf(studentId),
+                    "result:", result.isSuccess() ? "SUCCESS" : result.getErrorMessage());
+
+            response.setStatusCode(result.isSuccess() ? HttpStatus.CREATED.value() : HttpStatus.PARTIAL_CONTENT.value());
+            response.setMessage(result.isSuccess()
+                    ? "SMS sent successfully to " + parent.getFirstName() + " (" + phone + ")"
+                    : "SMS dispatch failed: " + result.getErrorMessage());
+            response.setEntity(mapToMessageResponse(message));
+
+        } catch (Exception e) {
+            log.error("Error sending SMS to parent of student {}: ", studentId, e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error: " + e.getMessage());
+        }
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public CustomResponse<?> sendSmsToAllParents(String content, String username) {
+        CustomResponse<MessageResponse> response = new CustomResponse<>();
+        try {
+            Message message = messageRepository.save(Message.builder()
+                    .subject("Bulk SMS to all parents")
+                    .content(content)
+                    .messageType(MessageType.SMS)
+                    .status(MessageStatus.SENT)
+                    .sentAt(LocalDateTime.now())
+                    .createdBy(username)
+                    .deletedFlag('N')
+                    .build());
+
+            List<Student> students = studentRepository.findAllByIsDeleted(false);
+            List<MessageRecipient> recipients = new ArrayList<>();
+
+            for (Student student : students) {
+                studentGuardianRepository.findByStudentId(student.getId()).stream()
+                        .filter(StudentGuardian::re)
+                        .findFirst()
+                        .map(StudentGuardian::getParent)
+                        .ifPresent(parent -> {
+                            String phone = parent.getPhoneNumber();
+                            if (phone != null && !phone.isBlank()) {
+                                SmsDispatchResult result = smsGatewayService.sendSms(phone, content);
+                                recipients.add(MessageRecipient.builder()
+                                        .recipientType(RecipientType.PARENT)
+                                        .recipientId(parent.getId())
+                                        .recipientName(parent.getFirstName() + " " + parent.getLastName())
+                                        .phone(phone)
+                                        .email(parent.getEmail())
+                                        .deliveryStatus(result.isSuccess() ? DeliveryStatus.DELIVERED : DeliveryStatus.FAILED)
+                                        .deliveredAt(result.isSuccess() ? LocalDateTime.now() : null)
+                                        .message(message)
+                                        .build());
+                            }
+                        });
+            }
+
+            messageRecipientRepository.saveAll(recipients);
+            message.setRecipients(recipients);
+
+            long sent = recipients.stream().filter(r -> r.getDeliveryStatus() == DeliveryStatus.DELIVERED).count();
+            long failed = recipients.size() - sent;
+
+            auditService.log("COMMUNICATION", "Bulk SMS to all parents — sent:", String.valueOf(sent),
+                    "failed:", String.valueOf(failed));
+
+            response.setStatusCode(HttpStatus.CREATED.value());
+            response.setMessage("Bulk SMS dispatched — " + sent + " delivered, " + failed + " failed out of " + recipients.size() + " parents");
+            response.setEntity(mapToMessageResponse(message));
+
+        } catch (Exception e) {
+            log.error("Error sending bulk SMS to all parents: ", e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error: " + e.getMessage());
+        }
+        return response;
+    }
+
+
+    private void dispatchSmsToRecipients(Message message, List<MessageRecipient> recipients, String content) {
+        for (MessageRecipient recipient : recipients) {
+            String phone = recipient.getPhone();
+            if (phone == null || phone.isBlank()) {
+                log.warn("[SMS] Recipient {} has no phone number — skipping", recipient.getRecipientName());
+                recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+                continue;
+            }
+            SmsDispatchResult result = smsGatewayService.sendSms(phone, content);
+            recipient.setDeliveryStatus(result.isSuccess() ? DeliveryStatus.DELIVERED : DeliveryStatus.FAILED);
+            if (result.isSuccess()) {
+                recipient.setDeliveredAt(LocalDateTime.now());
+            }
+            log.info("[SMS] {} → {} [{}]", message.getSubject(), phone,
+                    result.isSuccess() ? "OK" : result.getErrorMessage());
+        }
     }
 }

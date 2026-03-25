@@ -9,6 +9,7 @@ import com.EduePoa.EP.Communications.Requests.AnnouncementCreateRequest;
 import com.EduePoa.EP.Communications.Requests.AnnouncementUpdateRequest;
 import com.EduePoa.EP.Communications.Requests.MessageBulkSendRequest;
 import com.EduePoa.EP.Communications.Requests.MessageSendRequest;
+import com.EduePoa.EP.Communications.Requests.SmsSendRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +23,6 @@ public class CommunicationController {
 
     private final CommunicationService communicationService;
 
-    // ==================== ANNOUNCEMENT ENDPOINTS ====================
 
     @GetMapping("announcements")
     public ResponseEntity<?> getAllAnnouncements(@RequestParam(required = false) AnnouncementStatus status, @RequestParam(required = false) AnnouncementPriority priority, @RequestParam(required = false) TargetAudience targetAudience, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
@@ -56,7 +56,6 @@ public class CommunicationController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    // ==================== MESSAGE ENDPOINTS ====================
 
     @GetMapping("messages")
     public ResponseEntity<?> getAllMessages(@RequestParam(required = false) MessageStatus status, @RequestParam(required = false) MessageType messageType, @RequestParam(required = false) String startDate, @RequestParam(required = false) String endDate, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
@@ -101,6 +100,20 @@ public class CommunicationController {
     @DeleteMapping("scheduled-messages/{id}")
     public ResponseEntity<?> cancelScheduledMessage(@PathVariable Long id) {
         var response = communicationService.cancelScheduledMessage(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+
+    @PostMapping("sms/send-to-parent/{studentId}")
+    public ResponseEntity<?> sendSmsToParent(@PathVariable Long studentId, @Valid @RequestBody SmsSendRequest request, Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : "system";
+        var response = communicationService.sendSmsToParentOfStudent(studentId, request.getContent(), username);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @PostMapping("sms/send-to-all-parents")
+    public ResponseEntity<?> sendSmsToAllParents(@Valid @RequestBody SmsSendRequest request, Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : "system";
+        var response = communicationService.sendSmsToAllParents(request.getContent(), username);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 }

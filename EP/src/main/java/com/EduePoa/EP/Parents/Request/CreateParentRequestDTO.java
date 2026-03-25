@@ -33,6 +33,7 @@ public class CreateParentRequestDTO {
         dto.setPhoneNumber(phoneNumber);
         dto.setAlternatePhoneNumber(alternatePhoneNumber);
         dto.setEmail(email);
+
         dto.setNationalIdOrPassport(nationalIdOrPassport);
         dto.setOccupation(occupation);
         dto.setAddress(address);

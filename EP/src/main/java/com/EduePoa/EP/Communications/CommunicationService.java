@@ -13,8 +13,6 @@ import com.EduePoa.EP.Communications.Responses.*;
 import com.EduePoa.EP.Utils.CustomResponse;
 
 public interface CommunicationService {
-
-    // Announcement methods
     CustomResponse<?> createAnnouncement(AnnouncementCreateRequest request, String username);
 
     CustomResponse<?> updateAnnouncement(Long id, AnnouncementUpdateRequest request);
@@ -25,7 +23,6 @@ public interface CommunicationService {
 
     CustomResponse<?> getAllAnnouncements(AnnouncementStatus status, AnnouncementPriority priority, TargetAudience targetAudience, int page, int size);
 
-    // Message methods
     CustomResponse<?> sendMessage(MessageSendRequest request, String username);
 
     CustomResponse<?> sendBulkMessage(MessageBulkSendRequest request, String username);
@@ -34,10 +31,13 @@ public interface CommunicationService {
 
     CustomResponse<?> getAllMessages(MessageStatus status, MessageType messageType, String startDate, String endDate, int page, int size);
 
-    // Delivery tracking methods
     CustomResponse<?> getDeliveryReport(Long messageId);
 
     CustomResponse<?> getScheduledMessages();
 
     CustomResponse<?> cancelScheduledMessage(Long id);
+
+    CustomResponse<?> sendSmsToParentOfStudent(Long studentId, String content, String username);
+
+    CustomResponse<?> sendSmsToAllParents(String content, String username);
 }

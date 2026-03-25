@@ -19,6 +19,7 @@
 	<property name="com.jaspersoft.studio.data.sql.tables" value=""/>
 	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="edu_tech"/>
 
+
 	<!-- Enhanced School-Themed Styles -->
 	<style name="TitleStyle" fontName="Arial" fontSize="22" isBold="true" forecolor="#FFFFFF"/>
 	<style name="SubTitleStyle" fontName="Arial" fontSize="12" forecolor="#E3F2FD"/>
