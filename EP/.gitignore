@@ -37,3 +37,4 @@ build/
 .env.local
 .env.*.local
 docker-compose.override.yml
+application.properties
