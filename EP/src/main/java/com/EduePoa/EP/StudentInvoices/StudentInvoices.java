@@ -1,5 +1,6 @@
 package com.EduePoa.EP.StudentInvoices;
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import jakarta.persistence.*;
@@ -22,7 +23,7 @@ import java.time.Year;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudentInvoices {
+public class StudentInvoices extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

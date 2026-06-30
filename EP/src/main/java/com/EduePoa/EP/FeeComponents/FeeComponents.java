@@ -2,6 +2,7 @@ package com.EduePoa.EP.FeeComponents;
 
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -21,7 +22,7 @@ import java.time.LocalDateTime;
 @Builder
 @Where(clause = "deleted = false")
 
-public class FeeComponents {
+public class FeeComponents extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,9 +1,9 @@
 package com.EduePoa.EP.Finance;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,7 +13,7 @@ import java.time.Year;
 import java.util.List;
 import java.util.Optional;
 @Repository
-public interface FinanceRepository extends JpaRepository<Finance,Long> {
+public interface FinanceRepository extends TenantAwareRepository<Finance, Long> {
     Optional<Finance> findByStudentId(Long studentId);
     Optional<Finance> findByStudentIdAndTermAndYear(Long studentId, Term term, Year year);
     List<Finance> findByBalanceNot(BigDecimal balance);

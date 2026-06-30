@@ -1,5 +1,7 @@
 package com.EduePoa.EP.Communications.SMS;
 
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
+import com.EduePoa.EP.Multitenancy.service.TenantConfigurationService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -17,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 public class AfricasTalkingSmsService implements SmsGatewayService {
 
     private final SmsConfig smsConfig;
+    private final TenantConfigurationService tenantConfigurationService;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -36,13 +39,16 @@ public class AfricasTalkingSmsService implements SmsGatewayService {
         String normalised = normalisePhone(phoneNumber);
         log.info("[SMS] Dispatching to {} via Africa's Talking", normalised);
 
+        // Resolve tenant-specific SMS config with fallback to application-level defaults
+        String senderId = resolveSenderId();
+        String apiKey = resolveApiKey();
+
         try {
             FormBody.Builder formBuilder = new FormBody.Builder()
                     .add("username", smsConfig.getUsername())
                     .add("to", normalised)
                     .add("message", message);
 
-            String senderId = smsConfig.getSms().getSenderId();
             if (senderId != null && !senderId.isBlank()) {
                 formBuilder.add("from", senderId);
             }
@@ -50,7 +56,7 @@ public class AfricasTalkingSmsService implements SmsGatewayService {
             Request request = new Request.Builder()
                     .url(smsConfig.getSms().getUrl())
                     .addHeader("Accept", "application/json")
-                    .addHeader("apiKey", smsConfig.getApiKey())
+                    .addHeader("apiKey", apiKey)
                     .post(formBuilder.build())
                     .build();
 
@@ -73,6 +79,38 @@ public class AfricasTalkingSmsService implements SmsGatewayService {
             log.error("[SMS] Unexpected error dispatching SMS: {}", e.getMessage(), e);
             return SmsDispatchResult.failed("Unexpected error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Resolves the SMS sender ID from tenant-specific configuration.
+     * Falls back to the application-level SmsConfig if no tenant config is set or TenantContext is absent.
+     */
+    private String resolveSenderId() {
+        if (TenantContext.isSet()) {
+            String tenantId = TenantContext.getCurrentTenant();
+            String tenantSenderId = tenantConfigurationService.getConfigOrDefault(tenantId, "sms.sender_id", null);
+            if (tenantSenderId != null && !tenantSenderId.isBlank()) {
+                return tenantSenderId;
+            }
+        }
+        // Fallback to application-level config
+        return smsConfig.getSms().getSenderId();
+    }
+
+    /**
+     * Resolves the SMS API key from tenant-specific configuration.
+     * Falls back to the application-level SmsConfig if no tenant config is set or TenantContext is absent.
+     */
+    private String resolveApiKey() {
+        if (TenantContext.isSet()) {
+            String tenantId = TenantContext.getCurrentTenant();
+            String tenantApiKey = tenantConfigurationService.getConfigOrDefault(tenantId, "sms.api_key", null);
+            if (tenantApiKey != null && !tenantApiKey.isBlank()) {
+                return tenantApiKey;
+            }
+        }
+        // Fallback to application-level config
+        return smsConfig.getApiKey();
     }
 
 

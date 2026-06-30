@@ -1,13 +1,13 @@
 package com.EduePoa.EP.StudentRegistration;
 
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import com.EduePoa.EP.StudentRegistration.Response.StudentsPerGradeDTO;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface StudentRepository extends JpaRepository<Student, Long> {
+public interface StudentRepository extends TenantAwareRepository<Student, Long> {
     boolean existsByAdmissionNumber(String admissionNumber);
 
     // String findLastAdmissionNumberForYear(String year);

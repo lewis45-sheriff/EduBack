@@ -1,8 +1,8 @@
 package com.EduePoa.EP.Procurement.Inventory;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface StockRequisitionRepository extends JpaRepository<StockRequisition, Long> {}
+public interface StockRequisitionRepository extends TenantAwareRepository<StockRequisition, Long> {}
 

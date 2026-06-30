@@ -1,9 +1,9 @@
 package com.EduePoa.EP.Procurement.SupplierInvoice;
 
 import com.EduePoa.EP.Authentication.Enum.InvoiceStatus;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice, Long> {
+public interface SupplierInvoiceRepository extends TenantAwareRepository<SupplierInvoice, Long> {
 
     // Existing methods
     // Note: findByInvoiceNumber from original is implicitly replaced by

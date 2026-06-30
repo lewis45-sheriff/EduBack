@@ -1,11 +1,14 @@
 package com.EduePoa.EP.Scoring;
 
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Entity
 @Data
-public class ExamType {
+@EqualsAndHashCode(callSuper = true)
+public class ExamType extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private  Long id;

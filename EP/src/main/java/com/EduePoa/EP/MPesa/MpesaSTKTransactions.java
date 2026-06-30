@@ -1,5 +1,6 @@
 package com.EduePoa.EP.MPesa;
 
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
@@ -14,14 +15,14 @@ import java.sql.Timestamp;
 
 @ToString
 @Data
-@EqualsAndHashCode(of = {"id"})
+@EqualsAndHashCode(callSuper = false, of = {"id"})
 @DynamicUpdate
 @Entity
 @Table(name = "mpesa_stk_transaction", uniqueConstraints = {
         @UniqueConstraint(name = "mpesa_transaction_id", columnNames = {"id"}),
         @UniqueConstraint(name = "mpesa_transaction_merchant_request_id", columnNames = {"merchant_request_id"})
 })
-public class    MpesaSTKTransactions implements Serializable {
+public class    MpesaSTKTransactions extends TenantScopedEntity implements Serializable {
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -113,7 +113,10 @@ public enum Permissions {
 
     // System Configuration
     SETTINGS_MANAGE("settings:manage", "Update school info, branding, general settings"),
-    AUDIT_READ("audit:read", "View system logs");
+    AUDIT_READ("audit:read", "View system logs"),
+
+    // Tenant Management (Platform_Admin)
+    MANAGE_TENANTS("tenant:manage", "Create, update, suspend, reactivate, and decommission tenants");
 
     private final String permission;
     private final String description;

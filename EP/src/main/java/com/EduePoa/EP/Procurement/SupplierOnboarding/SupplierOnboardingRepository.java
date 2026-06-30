@@ -1,12 +1,12 @@
 package com.EduePoa.EP.Procurement.SupplierOnboarding;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
-public interface SupplierOnboardingRepository extends JpaRepository<SupplierOnboarding, Long> {
+public interface SupplierOnboardingRepository extends TenantAwareRepository<SupplierOnboarding, Long> {
     Optional<SupplierOnboarding> findByUser_Id(Long userId);
 
     Optional<SupplierOnboarding> findByBusinessRegistrationNumber(String registrationNumber);

@@ -1,6 +1,7 @@
 package com.EduePoa.EP.FinanceTransaction;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -18,7 +19,7 @@ import java.time.Year;
 @AllArgsConstructor
 @NoArgsConstructor
 @Table(name = "finance_transactions")
-public class FinanceTransaction {
+public class FinanceTransaction extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

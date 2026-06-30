@@ -1,10 +1,12 @@
 package com.EduePoa.EP.Procurement.Inventory;
 
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -15,10 +17,11 @@ import java.time.LocalDateTime;
         @Index(name = "idx_inv_txn_ref", columnList = "reference_type, reference_id")
 })
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class InventoryTransaction {
+public class InventoryTransaction extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -22,7 +22,7 @@ public class RolePermission {
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "permission", nullable = false)
+    @Column(name = "permission", nullable = false, length = 50)
     private Permissions permission;
 
     public RolePermission(Role role, Permissions permission) {

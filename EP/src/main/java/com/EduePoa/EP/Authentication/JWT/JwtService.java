@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Authentication.JWT;
 
 import com.EduePoa.EP.Authentication.User.UserRepository;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.Utils.CustomResponse;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
@@ -48,6 +49,14 @@ public class JwtService {
     }
 
     public String generateJwtToken(Map<String, Object> extraClaims, UserDetails userDetails, long expirationTime) {
+        // Automatically include tenant_id claim if the user is a tenant-scoped entity
+        if (userDetails instanceof TenantScopedEntity tenantScoped) {
+            String tenantId = tenantScoped.getTenantId();
+            if (tenantId != null && !tenantId.isBlank()) {
+                extraClaims.put("tenant_id", tenantId);
+            }
+        }
+
         return Jwts
                 .builder()
                 .setClaims(extraClaims)
@@ -56,6 +65,21 @@ public class JwtService {
                 .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    /**
+     * Extracts the tenant_id claim from a JWT token.
+     *
+     * @param token the JWT token
+     * @return the tenant_id claim value, or null if not present
+     */
+    public String extractTenantId(String token) {
+        try {
+            return extractClaim(token, claims -> claims.get("tenant_id", String.class));
+        } catch (Exception e) {
+            log.error("Failed to extract tenant_id from JWT: {}", e.getMessage());
+            return null;
+        }
     }
 
     // Validate Access Token

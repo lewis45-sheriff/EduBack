@@ -10,8 +10,11 @@ import com.EduePoa.EP.MpesaPaybill.Requests.RegisterRequest;
 import com.EduePoa.EP.MpesaPaybill.Requests.ValidationRequest;
 import com.EduePoa.EP.MpesaPaybill.Response.ConfirmationResponse;
 import com.EduePoa.EP.MpesaPaybill.Response.ValidationResponse;
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
+import com.EduePoa.EP.Multitenancy.service.MpesaCallbackTenantResolver;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +31,7 @@ import java.util.Base64;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MpesaPaybillService {
     @Value("${mpesapaybill.app.key}")
     private String appKeY;
@@ -40,6 +44,7 @@ public class MpesaPaybillService {
     private final MpesaPaybillRepository mpesaPaybillRepository;
     private final FinanceRepository financeRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
+    private final MpesaCallbackTenantResolver mpesaCallbackTenantResolver;
 
 
 
@@ -232,6 +237,26 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
             System.out.println("Customer: " + request.getFirstName() + " " + request.getLastName());
             System.out.println("================================");
 
+            // Resolve tenant from callback payload (shortcode or account reference)
+            boolean tenantResolved = mpesaCallbackTenantResolver.resolveAndSetTenant(
+                    request.getBusinessShortCode(),
+                    request.getBillRefNumber());
+
+            if (!tenantResolved) {
+                log.error("Cannot process M-Pesa callback: unable to resolve tenant. " +
+                                "TransID={}, ShortCode={}, BillRefNumber={}",
+                        request.getTransID(), request.getBusinessShortCode(), request.getBillRefNumber());
+
+                ConfirmationResponse confirmationResponse = new ConfirmationResponse();
+                confirmationResponse.setResultCode("0");
+                confirmationResponse.setResultDesc("Success");
+
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setEntity(confirmationResponse);
+                response.setMessage("Payment acknowledged but tenant could not be resolved");
+                return response;
+            }
+
             // Create confirmation response
             ConfirmationResponse confirmationResponse = new ConfirmationResponse();
 
@@ -354,6 +379,9 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
             response.setMessage("Payment acknowledged with processing error");
 
             saveFailedTransaction(request, e.getMessage());
+        } finally {
+            // Always clear tenant context to prevent leakage between requests
+            TenantContext.clear();
         }
         return response;
     }

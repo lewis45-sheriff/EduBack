@@ -3,16 +3,16 @@ package com.EduePoa.EP.Communications;
 import com.EduePoa.EP.Communications.Enums.AnnouncementPriority;
 import com.EduePoa.EP.Communications.Enums.AnnouncementStatus;
 import com.EduePoa.EP.Communications.Enums.TargetAudience;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface AnnouncementRepository extends JpaRepository<Announcement, Long> {
+public interface AnnouncementRepository extends TenantAwareRepository<Announcement, Long> {
 
     Optional<Announcement> findByIdAndDeletedFlag(Long id, char deletedFlag);
 

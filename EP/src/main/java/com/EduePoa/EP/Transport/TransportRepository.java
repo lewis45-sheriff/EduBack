@@ -1,8 +1,8 @@
 package com.EduePoa.EP.Transport;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 
-public interface TransportRepository extends JpaRepository<Transport, Long> {
+public interface TransportRepository extends TenantAwareRepository<Transport, Long> {
     Long countByStatus(String status);
 
     boolean existsByVehicleNumber(String vehicleNumber);

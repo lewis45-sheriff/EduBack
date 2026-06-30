@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Expenses;
 
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +18,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Expenses {
+public class Expenses extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

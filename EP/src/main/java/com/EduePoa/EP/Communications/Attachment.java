@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Communications;
 
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,7 +12,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @Table(name = "attachments")
-public class Attachment {
+public class Attachment extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

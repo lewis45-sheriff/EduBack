@@ -1,15 +1,15 @@
 package com.EduePoa.EP.Procurement.DeliveryNote;
 
 import com.EduePoa.EP.Authentication.Enum.DeliveryNoteStatus;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface DeliveryNoteRepository extends JpaRepository<DeliveryNote, Long> {
+public interface DeliveryNoteRepository extends TenantAwareRepository<DeliveryNote, Long> {
 
     List<DeliveryNote> findByPurchaseOrderId(Long purchaseOrderId);
 

@@ -1,18 +1,21 @@
 package com.EduePoa.EP.Procurement.Inventory;
 
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "stock_requisition_items")
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StockRequisitionItem {
+public class StockRequisitionItem extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

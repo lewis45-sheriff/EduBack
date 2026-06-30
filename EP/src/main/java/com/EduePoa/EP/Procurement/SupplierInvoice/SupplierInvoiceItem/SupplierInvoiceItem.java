@@ -1,11 +1,13 @@
 package com.EduePoa.EP.Procurement.SupplierInvoice.SupplierInvoiceItem;
 
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.Procurement.PurchaseOrderGeneration.PurchaseOrderItem.PurchaseOrderItem;
 import com.EduePoa.EP.Procurement.SupplierInvoice.SupplierInvoice;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -13,10 +15,11 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "supplier_invoice_items")
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SupplierInvoiceItem {
+public class SupplierInvoiceItem extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

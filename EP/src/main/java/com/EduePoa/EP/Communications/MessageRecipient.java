@@ -2,6 +2,7 @@ package com.EduePoa.EP.Communications;
 
 import com.EduePoa.EP.Communications.Enums.DeliveryStatus;
 import com.EduePoa.EP.Communications.Enums.RecipientType;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -15,7 +16,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Table(name = "message_recipients")
-public class MessageRecipient {
+public class MessageRecipient extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

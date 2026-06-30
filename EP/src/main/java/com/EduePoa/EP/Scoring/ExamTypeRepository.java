@@ -1,9 +1,9 @@
 package com.EduePoa.EP.Scoring;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface ExamTypeRepository extends JpaRepository<ExamType, Long> {
+public interface ExamTypeRepository extends TenantAwareRepository<ExamType, Long> {
     boolean existsByName(String name);
 }

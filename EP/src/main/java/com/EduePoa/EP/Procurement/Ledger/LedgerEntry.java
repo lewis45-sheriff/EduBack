@@ -3,10 +3,12 @@ package com.EduePoa.EP.Procurement.Ledger;
 
 import com.EduePoa.EP.Authentication.Enum.TransactionType;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -14,12 +16,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 @Entity
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "ledger_entries", indexes = {@Index(name = "idx_ledger_date", columnList = "transactionDate"), @Index(name = "idx_ledger_ref", columnList = "referenceType, referenceId")})
-public class LedgerEntry {
+public class LedgerEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

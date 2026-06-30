@@ -3,6 +3,7 @@ package com.EduePoa.EP.FeeStructure;
 import com.EduePoa.EP.FeeComponents.FeeComponents;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
 import com.EduePoa.EP.Grade.Grade;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
@@ -19,7 +20,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class FeeStructure {
+public class FeeStructure extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

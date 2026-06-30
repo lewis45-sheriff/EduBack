@@ -1,8 +1,8 @@
 package com.EduePoa.EP.StudentInvoices;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import com.EduePoa.EP.StudentRegistration.Student;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.math.BigDecimal;
@@ -10,7 +10,7 @@ import java.time.Year;
 import java.util.List;
 import java.util.Optional;
 
-public interface StudentInvoicesRepository extends JpaRepository<StudentInvoices, Long> {
+public interface StudentInvoicesRepository extends TenantAwareRepository<StudentInvoices, Long> {
     org.springframework.data.domain.Page<StudentInvoices> findByBalanceGreaterThan(BigDecimal balance,
             org.springframework.data.domain.Pageable pageable);
 

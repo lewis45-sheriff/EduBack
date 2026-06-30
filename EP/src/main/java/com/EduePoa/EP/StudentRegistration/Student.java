@@ -3,18 +3,21 @@ package com.EduePoa.EP.StudentRegistration;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import com.EduePoa.EP.Grade.Grade;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.Year;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @RequiredArgsConstructor
-public class Student {
+public class Student extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

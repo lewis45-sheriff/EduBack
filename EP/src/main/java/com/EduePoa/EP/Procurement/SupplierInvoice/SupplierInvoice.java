@@ -3,6 +3,7 @@ package com.EduePoa.EP.Procurement.SupplierInvoice;
 
 import com.EduePoa.EP.Authentication.Enum.InvoiceStatus;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.Procurement.DeliveryNote.DeliveryNote;
 import com.EduePoa.EP.Procurement.PurchaseOrderGeneration.PurchaseOrder;
 import com.EduePoa.EP.Procurement.SupplierInvoice.SupplierInvoiceItem.SupplierInvoiceItem;
@@ -11,6 +12,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -21,11 +23,12 @@ import java.util.List;
 @Entity
 @Table(name = "supplier_invoices")
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 //@EntityListeners(AuditingEntityListener.class)
-public class SupplierInvoice {
+public class SupplierInvoice extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

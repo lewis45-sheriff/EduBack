@@ -4,17 +4,20 @@ package com.EduePoa.EP.Scoring;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Grade.Grade;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.academics.entity.AcademicSubject;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.Year;
 
 @Entity
 @Data
-public class StudentsScore {
+@EqualsAndHashCode(callSuper = true)
+public class StudentsScore extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

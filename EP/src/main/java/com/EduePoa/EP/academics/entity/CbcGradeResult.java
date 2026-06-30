@@ -2,18 +2,21 @@ package com.EduePoa.EP.academics.entity;
 
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import java.time.Year;
 
 
 @Entity
 @Data
+@EqualsAndHashCode(callSuper = true)
 @Table(name = "cbc_grade_result", uniqueConstraints = @UniqueConstraint(columnNames = { "student_id",
         "academic_subject_id", "term", "year" }))
-public class CbcGradeResult {
+public class CbcGradeResult extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,12 +1,14 @@
 package com.EduePoa.EP.Transport.TransportTransactions;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.Transport.Transport;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -15,9 +17,10 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "transport_transactions")
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
-public class TransportTransactions {
+public class TransportTransactions extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -21,6 +21,7 @@ public class AuthResponse {
     private String phoneNumber;
     private Boolean passwordReset;
     private String role;
+    private String tenantId;
     private List<PermissionDTO> permissions;
 
 

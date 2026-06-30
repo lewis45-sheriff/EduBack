@@ -2,6 +2,7 @@ package com.EduePoa.EP.Authentication.Role;
 
 import com.EduePoa.EP.Authentication.Enum.Permissions;
 import com.EduePoa.EP.Authentication.Enum.Status;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -18,14 +19,17 @@ import java.util.Set;
 @Data
 @RequiredArgsConstructor
 @Entity
-@EqualsAndHashCode(exclude = "rolePermissions")
+@EqualsAndHashCode(callSuper = false, exclude = "rolePermissions")
 @ToString(exclude = "rolePermissions")
-public class Role {
+@Table(uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"name", "tenant_id"})
+})
+public class Role extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, name = "name")
+    @Column(name = "name")
     private String name;
 
     @OneToMany(mappedBy = "role", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)

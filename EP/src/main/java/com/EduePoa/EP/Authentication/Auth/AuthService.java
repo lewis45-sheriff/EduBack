@@ -13,6 +13,7 @@ import com.EduePoa.EP.Authentication.JWT.JwtService;
 import com.EduePoa.EP.Authentication.Role.Response.PermissionDTO;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
 import com.EduePoa.EP.Utils.CustomResponse;
 import com.EduePoa.EP.Utils.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,6 +62,27 @@ public class AuthService {
             User user = userRepository.findByEmail(loginRequest.getEmail())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+            // Set tenant context from the user's stored tenant_id so that any
+            // entity updates during login (OTP, token, etc.) pass TenantEntityListener validation
+            if (user.getTenantId() != null) {
+                TenantContext.setCurrentTenant(user.getTenantId());
+            }
+
+            // Validate user-tenant association if tenantId is provided in the login request
+            if (loginRequest.getTenantId() != null && !loginRequest.getTenantId().isBlank()) {
+                String requestedTenantId = loginRequest.getTenantId();
+                String userTenantId = user.getTenantId();
+
+                if (userTenantId == null || !userTenantId.equals(requestedTenantId)) {
+                    log.warn("Tenant mismatch on login: user '{}' belongs to tenant '{}' but login requested tenant '{}'",
+                            user.getEmail(), userTenantId, requestedTenantId);
+                    response.setStatusCode(HttpStatus.FORBIDDEN.value());
+                    response.setMessage("User does not belong to the specified tenant");
+                    response.setEntity(null);
+                    return response;
+                }
+            }
+
             if (user.getStatus().equals(Status.INACTIVE)) {
                 response.setStatusCode(HttpStatus.FORBIDDEN.value());
                 response.setMessage("User Account is Inactive. Please Contact System Admin");
@@ -78,6 +100,7 @@ public class AuthService {
                         .lastname(user.getLastName())
                         .phoneNumber(user.getPhoneNumber())
                         .role(user.getRole().getName())
+                        .tenantId(user.getTenantId())
                         .passwordReset(true)
                         .build();
 
@@ -144,6 +167,7 @@ public class AuthService {
                     .lastname(user.getLastName())
                     .role(user.getRole().getName())
                     .phoneNumber(user.getPhoneNumber())
+                    .tenantId(user.getTenantId())
                     .passwordReset(false)
                     .permissions(permissionDTOs)
                     .build();
@@ -167,6 +191,9 @@ public class AuthService {
             response.setMessage("An error occurred during login. Please try again.");
             response.setEntity(null);
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        } finally {
+            // Clear tenant context set during login to prevent leakage
+            TenantContext.clear();
         }
 
         return response;
@@ -217,6 +244,11 @@ public class AuthService {
             User user = userRepository.findByEmail(resetPassword.getEmail())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + resetPassword.getEmail()));
 
+            // Set tenant context from user's stored tenant_id (reset-password is a public endpoint)
+            if (user.getTenantId() != null) {
+                TenantContext.setCurrentTenant(user.getTenantId());
+            }
+
             // Check if user account is active
             if (user.getStatus().equals(Status.INACTIVE)) {
                 response.setStatusCode(HttpStatus.FORBIDDEN.value());
@@ -261,6 +293,8 @@ public class AuthService {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             response.setEntity(null);
             response.setMessage("An error occurred while resetting password: " + e.getMessage());
+        } finally {
+            TenantContext.clear();
         }
         return response;
     }

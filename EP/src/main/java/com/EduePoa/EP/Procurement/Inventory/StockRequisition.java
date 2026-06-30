@@ -3,10 +3,12 @@ package com.EduePoa.EP.Procurement.Inventory;
 
 import com.EduePoa.EP.Authentication.Enum.RequisitionStatus;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -17,10 +19,11 @@ import java.util.List;
         @Index(name = "idx_requisition_status", columnList = "status")
 })
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StockRequisition {
+public class StockRequisition extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

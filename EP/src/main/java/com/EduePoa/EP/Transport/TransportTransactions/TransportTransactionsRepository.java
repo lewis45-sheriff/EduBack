@@ -1,14 +1,14 @@
 package com.EduePoa.EP.Transport.TransportTransactions;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import com.EduePoa.EP.Transport.Transport;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface TransportTransactionsRepository extends JpaRepository<TransportTransactions, Long> {
+public interface TransportTransactionsRepository extends TenantAwareRepository<TransportTransactions, Long> {
         List<TransportTransactions> findByTransport(Transport transport);
 
         @Query("SELECT COALESCE(SUM(t.amount), 0.0) FROM TransportTransactions t")

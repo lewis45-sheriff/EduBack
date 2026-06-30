@@ -3,6 +3,7 @@ package com.EduePoa.EP.Procurement.PurchaseOrderGeneration;
 
 import com.EduePoa.EP.Authentication.Enum.PurchaseOrderStatus;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.Procurement.PurchaseOrderGeneration.PurchaseOrderItem.PurchaseOrderItem;
 import com.EduePoa.EP.Procurement.SupplierOnboarding.SupplierOnboarding;
 import jakarta.persistence.*;
@@ -20,7 +21,7 @@ import java.util.List;
 @Getter
 @Setter
 //@EntityListeners(AuditingEntityListener.class)
-public class PurchaseOrder {
+public class PurchaseOrder extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

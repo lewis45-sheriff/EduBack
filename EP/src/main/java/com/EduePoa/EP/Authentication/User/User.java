@@ -2,6 +2,7 @@ package com.EduePoa.EP.Authentication.User;
 
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.Authentication.Role.Role;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
@@ -20,8 +21,13 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
 @Entity
-public class User implements UserDetails {
+@Table(uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"email", "tenant_id"})
+})
+public class User extends TenantScopedEntity implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -34,7 +40,6 @@ public class User implements UserDetails {
     private String firstName;
     private String lastName;
 
-    @Column(unique = true)
     private String email;
     private String password;
     private String token;

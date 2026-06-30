@@ -3,11 +3,13 @@ package com.EduePoa.EP.Procurement.SupplierOnboarding;
 
 import com.EduePoa.EP.Authentication.Enum.SupplierStatus;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -18,11 +20,12 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "suppliers")
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class SupplierOnboarding {
+public class SupplierOnboarding extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

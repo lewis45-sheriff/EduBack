@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Authentication.Config;
 
 import com.EduePoa.EP.Authentication.JWT.JwtAuthFilter;
+import com.EduePoa.EP.Multitenancy.config.TenantResolverFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthenticationFilter;
+    private final TenantResolverFilter tenantResolverFilter;
     private final AuthenticationProvider authenticationProvider;
     private final CustomPermissionEvaluator customPermissionEvaluator;
 
@@ -46,6 +48,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh-token",
                                 "/api/v1/bank/post-transactions/",
                                 "/api/v1/process-call-back",
+                                "/api/v1/transactions/c2b/confirmation",
+                                "/api/v1/payments/stk-callback",
                                 "/api/v1/validate"
                         ).permitAll()
                         // All other endpoints require authentication
@@ -56,7 +60,8 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authenticationProvider(authenticationProvider)
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(tenantResolverFilter, JwtAuthFilter.class);
 
         return httpSecurity.build();
     }

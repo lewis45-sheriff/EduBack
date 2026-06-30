@@ -3,6 +3,7 @@ package com.EduePoa.EP.Communications;
 import com.EduePoa.EP.Communications.Enums.AnnouncementPriority;
 import com.EduePoa.EP.Communications.Enums.AnnouncementStatus;
 import com.EduePoa.EP.Communications.Enums.TargetAudience;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -19,7 +20,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Table(name = "announcements")
-public class Announcement {
+public class Announcement extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,8 +1,12 @@
 package com.EduePoa.EP.Reports;
 
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
+import com.EduePoa.EP.Multitenancy.service.TenantConfigurationService;
 import com.EduePoa.EP.Utils.CustomResponse;
 import com.google.gson.Gson;
+import lombok.extern.slf4j.Slf4j;
 import net.sf.jasperreports.engine.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,6 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class ReportsService {
 
     @Value("${spring.datasource.url}")
@@ -29,12 +34,73 @@ public class ReportsService {
     @Value("${report_path}")
     String path;
 
+    @Autowired
+    private TenantConfigurationService tenantConfigurationService;
+
+    // Config keys for tenant branding
+    private static final String CONFIG_SCHOOL_NAME = "reports.school_name";
+    private static final String CONFIG_LOGO_URL = "reports.logo_url";
+    private static final String CONFIG_ADDRESS = "reports.address";
+
+    /**
+     * Retrieves tenant branding parameters (school name, logo URL, address) from
+     * TenantConfigurationService for the current tenant context.
+     * <p>
+     * Returns a map with keys: "SchoolName", "Logo", "SchoolAddress".
+     * Values are null if the tenant has not configured them.
+     * Falls back gracefully if TenantContext is not set (returns empty map).
+     *
+     * @return map of branding parameters for the current tenant
+     */
+    public Map<String, String> getTenantBranding() {
+        Map<String, String> branding = new HashMap<>();
+
+        if (!TenantContext.isSet()) {
+            log.debug("TenantContext not set; skipping tenant branding injection");
+            return branding;
+        }
+
+        String tenantId = TenantContext.getCurrentTenant();
+
+        String schoolName = tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_SCHOOL_NAME, null);
+        String logoUrl = tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_LOGO_URL, null);
+        String address = tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_ADDRESS, null);
+
+        if (schoolName != null) {
+            branding.put("SchoolName", schoolName);
+        }
+        if (logoUrl != null) {
+            branding.put("Logo", logoUrl);
+        }
+        if (address != null) {
+            branding.put("SchoolAddress", address);
+        }
+
+        log.debug("Resolved tenant branding for tenant '{}': schoolName={}, logo={}, address={}",
+                tenantId, schoolName, logoUrl != null ? "[set]" : "[not set]", address);
+
+        return branding;
+    }
+
     private Map<String, Object> setParameters(ReportModel reportRequestObject) {
         Map<String, Object> parameters = new HashMap<>();
 
         parameters.put("file_name", reportRequestObject.fileName);
         parameters.put("report_path", path);
         parameters.put("Logo", resolveLogoPath(null));
+
+        // Inject tenant branding from TenantConfigurationService
+        Map<String, String> branding = getTenantBranding();
+        if (branding.containsKey("SchoolName")) {
+            parameters.put("SchoolName", branding.get("SchoolName"));
+        }
+        if (branding.containsKey("Logo")) {
+            // Tenant-configured logo overrides the default
+            parameters.put("Logo", branding.get("Logo"));
+        }
+        if (branding.containsKey("SchoolAddress")) {
+            parameters.put("SchoolAddress", branding.get("SchoolAddress"));
+        }
 
         return parameters;
     }
@@ -84,6 +150,21 @@ public class ReportsService {
         parameters.put("termID", termCode);
         parameters.put("year", request.getYear().longValue());
         parameters.put("Logo", resolveLogoPath(request.getLogoPath()));
+
+        // Inject tenant branding as defaults
+        Map<String, String> branding = getTenantBranding();
+        if (branding.containsKey("SchoolName")) {
+            parameters.put("SchoolName", branding.get("SchoolName"));
+        }
+        if (branding.containsKey("Logo") && !StringUtils.hasText(request.getLogoPath())) {
+            // Only override logo if the request didn't specify one
+            parameters.put("Logo", branding.get("Logo"));
+        }
+        if (branding.containsKey("SchoolAddress")) {
+            parameters.put("SchoolAddress", branding.get("SchoolAddress"));
+        }
+
+        // Request-provided values override tenant branding (backward compatibility)
         if (StringUtils.hasText(request.getSchoolName())) {
             parameters.put("SchoolName", request.getSchoolName());
         }

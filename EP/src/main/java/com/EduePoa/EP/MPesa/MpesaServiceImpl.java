@@ -8,6 +8,8 @@ import com.EduePoa.EP.FinanceTransaction.FinanceTransaction;
 import com.EduePoa.EP.FinanceTransaction.FinanceTransactionRepository;
 import com.EduePoa.EP.FinanceTransaction.FinanceTransactionService;
 import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
+import com.EduePoa.EP.Multitenancy.service.TenantConfigurationService;
 import com.EduePoa.EP.StudentInvoices.StudentInvoices;
 import com.EduePoa.EP.StudentInvoices.StudentInvoicesRepository;
 import com.EduePoa.EP.StudentRegistration.Student;
@@ -58,6 +60,8 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
     private FinanceTransactionService financeTransactionService;
     @Autowired
     private AuditService auditService;
+    @Autowired
+    private TenantConfigurationService tenantConfigurationService;
 
     @Value("${mpesa.app.key}")
     private String appKeY;
@@ -112,11 +116,45 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
     private String baseUrl;
 
     Gson gson = new Gson();
-    // private final RestTemplate restTemplate;
-    //
-    // public MpesaServiceImpl(RestTemplate restTemplate) {
-    // this.restTemplate = restTemplate;
-    // }
+
+    /**
+     * Resolves the M-Pesa shortcode for the current tenant.
+     * Uses TenantConfigurationService if TenantContext is set, otherwise falls back
+     * to the application.properties value (for backward compatibility during migration).
+     */
+    private String resolveShortCode() {
+        if (TenantContext.isSet()) {
+            return tenantConfigurationService.getRequiredConfig("mpesa.shortcode");
+        }
+        log.warn("TenantContext not set, falling back to application.properties for mpesa.shortcode");
+        return shortCode;
+    }
+
+    /**
+     * Resolves the M-Pesa passkey for the current tenant.
+     * Uses TenantConfigurationService if TenantContext is set, otherwise falls back
+     * to the application.properties value (for backward compatibility during migration).
+     */
+    private String resolvePasskey() {
+        if (TenantContext.isSet()) {
+            return tenantConfigurationService.getRequiredConfig("mpesa.passkey");
+        }
+        log.warn("TenantContext not set, falling back to application.properties for mpesa.passkey");
+        return password;
+    }
+
+    /**
+     * Resolves the M-Pesa STK callback URL for the current tenant.
+     * Uses TenantConfigurationService if TenantContext is set, otherwise falls back
+     * to the application.properties value (for backward compatibility during migration).
+     */
+    private String resolveCallbackUrl() {
+        if (TenantContext.isSet()) {
+            return tenantConfigurationService.getRequiredConfig("mpesa.callback_url");
+        }
+        log.warn("TenantContext not set, falling back to application.properties for mpesa.callback_url");
+        return callBackUrl;
+    }
 
     // Generate M-Pesa Access Token
 
@@ -159,7 +197,7 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
             MediaType mediaType = MediaType.parse("application/json");
 
             // Log initial information
-            log.info(String.format("Short code: %s", shortCode));
+            log.info(String.format("Short code: %s", resolveShortCode()));
 
             // Prepare request body
             String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
@@ -373,7 +411,7 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
             String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
             JSONObject requestBody = createRequestBody(amount, formattedPhone, timestamp);
 
-            log.info("Short code: {}", shortCode);
+            log.info("Short code: {}", resolveShortCode());
             log.info("Initiate STK Push Request Body: {}", requestBody);
 
             // Convert request body to JSON
@@ -499,16 +537,20 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
     }
 
     private JSONObject createRequestBody(Double amount, String phoneNumber, String timestamp) {
+        String resolvedShortCode = resolveShortCode();
+        String resolvedPasskey = resolvePasskey();
+        String resolvedCallbackUrl = resolveCallbackUrl();
+
         JSONObject requestBody = new JSONObject();
-        requestBody.put("BusinessShortCode", shortCode);
-        requestBody.put("Password", generatePassword(shortCode, password, timestamp));
+        requestBody.put("BusinessShortCode", resolvedShortCode);
+        requestBody.put("Password", generatePassword(resolvedShortCode, resolvedPasskey, timestamp));
         requestBody.put("Timestamp", timestamp);
         requestBody.put("Amount", amount);
         requestBody.put("TransactionType", transactionType);
         requestBody.put("PartyA", phoneNumber);
-        requestBody.put("PartyB", shortCode);
+        requestBody.put("PartyB", resolvedShortCode);
         requestBody.put("PhoneNumber", phoneNumber);
-        requestBody.put("CallBackURL", callBackUrl);
+        requestBody.put("CallBackURL", resolvedCallbackUrl);
         requestBody.put("AccountReference", "SCHOOLFEE");
         requestBody.put("TransactionDesc", "School Fee Payment");
         return requestBody;
@@ -608,6 +650,17 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
             }
 
             MpesaSTKTransactions mpesaTxn = txnOpt.get();
+
+            // Resolve tenant from the stored transaction's tenant_id
+            String transactionTenantId = mpesaTxn.getTenantId();
+            if (transactionTenantId != null && !transactionTenantId.isBlank()) {
+                TenantContext.setCurrentTenant(transactionTenantId);
+                log.info("STK callback tenant resolved from transaction record: tenant='{}'", transactionTenantId);
+            } else {
+                log.warn("STK callback: transaction has no tenant_id. MerchantRequestID: {}",
+                        callbackData.merchantRequestId);
+            }
+
             Student student = mpesaTxn.getAccountReference();
 
             updateMpesaCallbackFields(mpesaTxn, callbackData);
@@ -712,6 +765,9 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
             response.setMessage("Error processing M-Pesa payment: " + e.getMessage());
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             response.setEntity(null);
+        } finally {
+            // Always clear tenant context to prevent leakage between requests
+            TenantContext.clear();
         }
 
         return response;
@@ -859,7 +915,7 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
      String access_token = generateToken();
      String endpoint = baseUrl+"/transactions/c2b";
      JSONObject jsonObject = new JSONObject();
-     jsonObject.put("ShortCode",shortCode);
+     jsonObject.put("ShortCode",resolveShortCode());
      jsonObject.put("ResponseType","Completed");
      jsonObject.put("ConfirmationURL",endpoint+"/confirmation");
      jsonObject.put("ValidationURL",endpoint+"/validation");

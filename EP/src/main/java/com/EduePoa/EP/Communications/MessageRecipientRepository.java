@@ -1,13 +1,13 @@
 package com.EduePoa.EP.Communications;
 
 import com.EduePoa.EP.Communications.Enums.DeliveryStatus;
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface MessageRecipientRepository extends JpaRepository<MessageRecipient, Long> {
+public interface MessageRecipientRepository extends TenantAwareRepository<MessageRecipient, Long> {
 
     List<MessageRecipient> findByMessageId(Long messageId);
 

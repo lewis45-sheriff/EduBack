@@ -3,6 +3,7 @@ package com.EduePoa.EP.Procurement.DeliveryNote;
 
 import com.EduePoa.EP.Authentication.Enum.DeliveryNoteStatus;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.Procurement.DeliveryNote.DeliveryNoteItem.DeliveryNoteItem;
 import com.EduePoa.EP.Procurement.PurchaseOrderGeneration.PurchaseOrder;
 import jakarta.persistence.*;
@@ -20,7 +21,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 // REMOVE @EntityListeners(AuditingEntityListener.class) ← DELETE THIS
-public class DeliveryNote {
+public class DeliveryNote extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

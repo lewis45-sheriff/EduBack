@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Transport.AssignTransport;
 
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.Transport.Transport;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -15,7 +16,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AssignTransport {
+public class AssignTransport extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

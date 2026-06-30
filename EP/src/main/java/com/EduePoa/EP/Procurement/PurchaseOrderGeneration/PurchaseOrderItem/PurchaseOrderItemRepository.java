@@ -1,6 +1,6 @@
 package com.EduePoa.EP.Procurement.PurchaseOrderGeneration.PurchaseOrderItem;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 
-public interface PurchaseOrderItemRepository extends JpaRepository<PurchaseOrderItem,Long> {
+public interface PurchaseOrderItemRepository extends TenantAwareRepository<PurchaseOrderItem, Long> {
 }

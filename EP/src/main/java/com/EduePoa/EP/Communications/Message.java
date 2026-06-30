@@ -2,6 +2,7 @@ package com.EduePoa.EP.Communications;
 
 import com.EduePoa.EP.Communications.Enums.MessageStatus;
 import com.EduePoa.EP.Communications.Enums.MessageType;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -17,7 +18,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Table(name = "messages")
-public class Message {
+public class Message extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

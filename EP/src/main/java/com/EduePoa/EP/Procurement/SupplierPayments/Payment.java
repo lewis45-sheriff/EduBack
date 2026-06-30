@@ -3,12 +3,14 @@ package com.EduePoa.EP.Procurement.SupplierPayments;
 import com.EduePoa.EP.Authentication.Enum.PaymentMethod;
 import com.EduePoa.EP.Authentication.Enum.PaymentStatus;
 import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.Procurement.SupplierInvoice.SupplierInvoice;
 import com.EduePoa.EP.Procurement.SupplierOnboarding.SupplierOnboarding;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -18,11 +20,12 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "supplier_payments")
 @Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 //@EntityListeners(AuditingEntityListener.class)
-public class Payment {
+public class Payment extends TenantScopedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
