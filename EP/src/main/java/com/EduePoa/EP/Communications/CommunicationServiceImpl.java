@@ -768,7 +768,7 @@ public class CommunicationServiceImpl implements CommunicationService {
 
             for (Student student : students) {
                 studentGuardianRepository.findByStudentId(student.getId()).stream()
-                        .filter(StudentGuardian::re)
+                        .filter(StudentGuardian::isPrimaryContact)
                         .findFirst()
                         .map(StudentGuardian::getParent)
                         .ifPresent(parent -> {
