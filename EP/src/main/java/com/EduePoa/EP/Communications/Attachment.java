@@ -4,6 +4,7 @@ import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Filter;
 
 @Entity
 @Getter
@@ -12,6 +13,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @Table(name = "attachments")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class Attachment extends TenantScopedEntity {
 
     @Id

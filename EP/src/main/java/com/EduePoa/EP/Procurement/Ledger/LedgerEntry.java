@@ -10,6 +10,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Filter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "ledger_entries", indexes = {@Index(name = "idx_ledger_date", columnList = "transactionDate"), @Index(name = "idx_ledger_ref", columnList = "referenceType, referenceId")})
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class LedgerEntry extends TenantScopedEntity {
 
     @Id

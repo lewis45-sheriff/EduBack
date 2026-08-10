@@ -2,6 +2,7 @@ package com.EduePoa.EP.Multitenancy.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -10,6 +11,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 @Slf4j
@@ -106,6 +109,29 @@ public class TenantExceptionHandler {
                 "TENANT_CONFIG_MISSING",
                 ex.getMessage(),
                 ex.getTenantId(),
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        String message = "A record with this value already exists";
+
+        // Extract the duplicate value from the error message
+        String rootMessage = ex.getMostSpecificCause().getMessage();
+        Pattern pattern = Pattern.compile("Duplicate entry '(.+?)' for key");
+        Matcher matcher = pattern.matcher(rootMessage);
+        if (matcher.find()) {
+            message = "Duplicate entry: '" + matcher.group(1) + "' already exists";
+        }
+
+        log.warn("Data integrity violation on {}: {}", request.getRequestURI(), rootMessage);
+        return buildErrorResponse(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_ENTRY",
+                message,
+                TenantContext.getCurrentTenant(),
                 request.getRequestURI()
         );
     }

@@ -9,6 +9,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.annotations.Filter;
 
 import java.time.LocalDate;
 import java.time.Year;
@@ -17,6 +18,7 @@ import java.time.Year;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @RequiredArgsConstructor
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class Student extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

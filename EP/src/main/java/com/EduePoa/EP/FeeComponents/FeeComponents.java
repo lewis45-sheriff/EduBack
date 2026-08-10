@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.Where;
 
 import java.math.BigDecimal;
@@ -21,7 +22,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Where(clause = "deleted = false")
-
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class FeeComponents extends TenantScopedEntity {
 
     @Id

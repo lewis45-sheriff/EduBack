@@ -42,7 +42,7 @@ public class CreateAdmin implements ApplicationRunner {
         ensureDefaultTenantExists();
         addAdminRole();
         addAdmin();
-        addParentsRole();
+//        addParentsRole();
         addSupplier();
         addPlatformAdminRole();
         addPlatformAdmin();
@@ -80,19 +80,19 @@ public class CreateAdmin implements ApplicationRunner {
             TenantContext.clear();
         }
     }
-    void addParentsRole() {
-        try {
-            TenantContext.setCurrentTenant("bureti-high");
-            if (roleRepository.findByName("ROLE_PARENT").isEmpty()) {
-                log.info("Creating ROLE_PARENT role on " + LocalDateTime.now());
-                roleService.createRole("ROLE_PARENT");
-            } else {
-                log.info("ROLE_PARENT role already exists.");
-            }
-        } finally {
-            TenantContext.clear();
-        }
-    }
+//    void addParentsRole() {
+//        try {
+//            TenantContext.setCurrentTenant("bureti-high");
+//            if (roleRepository.findByName("ROLE_PARENT").isEmpty()) {
+//                log.info("Creating ROLE_PARENT role on " + LocalDateTime.now());
+//                roleService.createRole("ROLE_PARENT");
+//            } else {
+//                log.info("ROLE_PARENT role already exists.");
+//            }
+//        } finally {
+//            TenantContext.clear();
+//        }
+//    }
     void addSupplier() {
         try {
             TenantContext.setCurrentTenant("bureti-high");

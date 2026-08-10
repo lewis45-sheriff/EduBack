@@ -176,8 +176,14 @@ public class StudentServiceImpl implements StudentService {
                             // Check if user with that email already exists
                             if (!userRepository.existsByEmail(pDto.getEmail())) {
                                 Role parentRole = roleRepository.findByName("ROLE_PARENT")
-                                        .orElseThrow(() -> new RuntimeException(
-                                                "PARENT role not found. Please create it in the database."));
+                                        .orElseGet(() -> {
+                                            Role newRole = new Role();
+                                            newRole.setName("ROLE_PARENT");
+                                            newRole.setEnabledFlag('Y');
+                                            newRole.setDeletedFlag('N');
+                                            newRole.setStatus(Status.ACTIVE);
+                                            return roleRepository.save(newRole);
+                                        });
 
                                 User user = new User();
                                 user.setFirstName(pDto.getFirstName());

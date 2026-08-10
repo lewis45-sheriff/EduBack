@@ -1,6 +1,6 @@
 package com.EduePoa.EP.BankIntergration;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface BankRepository extends JpaRepository<Bank, Long > {
+public interface BankRepository extends TenantAwareRepository<Bank, Long> {
 //    Boolean existsByTransId(String transId);
 //    Optional<Bank> findByTransId(String transId);
 //

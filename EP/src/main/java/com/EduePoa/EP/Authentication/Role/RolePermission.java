@@ -1,5 +1,7 @@
 package com.EduePoa.EP.Authentication.Role;
+
 import com.EduePoa.EP.Authentication.Enum.Permissions;
+import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -10,9 +12,9 @@ import lombok.ToString;
 @NoArgsConstructor
 @Entity
 @Table(name = "role_permissions")
-@EqualsAndHashCode(exclude = "role")
+@EqualsAndHashCode(callSuper = false, exclude = "role")
 @ToString(exclude = "role")
-public class RolePermission {
+public class RolePermission extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

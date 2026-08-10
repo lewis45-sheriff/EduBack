@@ -8,6 +8,7 @@ import com.EduePoa.EP.Procurement.DeliveryNote.DeliveryNoteItem.DeliveryNoteItem
 import com.EduePoa.EP.Procurement.PurchaseOrderGeneration.PurchaseOrder;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Filter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -21,6 +22,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 // REMOVE @EntityListeners(AuditingEntityListener.class) ← DELETE THIS
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class DeliveryNote extends TenantScopedEntity {
 
     @Id

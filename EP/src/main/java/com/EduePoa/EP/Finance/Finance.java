@@ -4,6 +4,7 @@ import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Filter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ import java.time.Year;
 @AllArgsConstructor
 @NoArgsConstructor
 @Table(name = "finance")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class Finance extends TenantScopedEntity {
 
     @Id

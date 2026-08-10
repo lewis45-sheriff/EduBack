@@ -19,7 +19,7 @@ import org.hibernate.annotations.ParamDef;
  */
 @MappedSuperclass
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = String.class))
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 @EntityListeners(TenantEntityListener.class)
 @Getter
 @Setter

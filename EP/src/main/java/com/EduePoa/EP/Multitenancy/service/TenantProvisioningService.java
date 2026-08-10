@@ -43,6 +43,7 @@ public class TenantProvisioningService {
             // Set tenant context so TenantEntityListener populates tenant_id on User/Role
             TenantContext.setCurrentTenant(tenantIdentifier);
 
+            createDefaultRoles(tenant);
             createDefaultAdminUser(tenant);
             initializeDefaultConfiguration(tenantIdentifier);
 
@@ -55,6 +56,34 @@ public class TenantProvisioningService {
             } else {
                 TenantContext.clear();
             }
+        }
+    }
+
+    /**
+     * Creates default roles (ROLE_PARENT, SUPPLIER) for the new tenant.
+     * These roles are needed by other modules when creating parents/suppliers.
+     */
+    private void createDefaultRoles(Tenant tenant) {
+        // Create ROLE_PARENT if it doesn't exist for this tenant
+        if (roleRepository.findByName("ROLE_PARENT").isEmpty()) {
+            Role parentRole = new Role();
+            parentRole.setName("ROLE_PARENT");
+            parentRole.setEnabledFlag('Y');
+            parentRole.setDeletedFlag('N');
+            parentRole.setStatus(Status.ACTIVE);
+            roleRepository.save(parentRole);
+            log.info("ROLE_PARENT created for tenant: {}", tenant.getTenantIdentifier());
+        }
+
+        // Create SUPPLIER role if it doesn't exist for this tenant
+        if (roleRepository.findByName("SUPPLIER").isEmpty()) {
+            Role supplierRole = new Role();
+            supplierRole.setName("SUPPLIER");
+            supplierRole.setEnabledFlag('Y');
+            supplierRole.setDeletedFlag('N');
+            supplierRole.setStatus(Status.ACTIVE);
+            roleRepository.save(supplierRole);
+            log.info("SUPPLIER role created for tenant: {}", tenant.getTenantIdentifier());
         }
     }
 

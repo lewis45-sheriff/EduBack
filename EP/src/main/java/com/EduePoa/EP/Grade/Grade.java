@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.Where;
 
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Where(clause = "deleted_flag = 'N'")
-
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class Grade extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,7 +31,7 @@ public class Grade extends TenantScopedEntity {
     @JsonIgnore
     private Integer gradeNumber;
 
-    @Column(unique = true)
+    @Column
     private String name;
 
     @JsonIgnore

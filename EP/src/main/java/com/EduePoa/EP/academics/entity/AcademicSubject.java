@@ -4,11 +4,13 @@ import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.hibernate.annotations.Filter;
 
 @Entity
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Table(name = "academic_subject")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class AcademicSubject extends TenantScopedEntity {
 
     @Id

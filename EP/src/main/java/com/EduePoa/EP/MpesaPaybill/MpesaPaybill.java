@@ -8,11 +8,13 @@ import jakarta.persistence.Id;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.annotations.Filter;
 
 @Entity
 @Data
 @EqualsAndHashCode(callSuper = false)
 @RequiredArgsConstructor
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class MpesaPaybill extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

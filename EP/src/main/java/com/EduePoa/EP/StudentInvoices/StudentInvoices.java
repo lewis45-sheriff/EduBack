@@ -5,6 +5,7 @@ import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Filter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,6 +24,7 @@ import java.time.Year;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class StudentInvoices extends TenantScopedEntity {
 
     @Id

@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.UpdateTimestamp;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -21,9 +22,6 @@ import java.util.Set;
 @Entity
 @EqualsAndHashCode(callSuper = false, exclude = "rolePermissions")
 @ToString(exclude = "rolePermissions")
-@Table(uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"name", "tenant_id"})
-})
 public class Role extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

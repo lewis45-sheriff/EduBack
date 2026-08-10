@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Filter;
 
 import java.io.Serializable;
 import java.sql.Timestamp;
@@ -22,6 +23,7 @@ import java.sql.Timestamp;
         @UniqueConstraint(name = "mpesa_transaction_id", columnNames = {"id"}),
         @UniqueConstraint(name = "mpesa_transaction_merchant_request_id", columnNames = {"merchant_request_id"})
 })
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class    MpesaSTKTransactions extends TenantScopedEntity implements Serializable {
     @Id
     @Column(name = "id", nullable = false, updatable = false)

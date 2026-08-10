@@ -7,6 +7,7 @@ import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -20,6 +21,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Table(name = "announcements")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class Announcement extends TenantScopedEntity {
 
     @Id
