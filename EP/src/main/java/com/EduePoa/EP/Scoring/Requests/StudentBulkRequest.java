@@ -14,10 +14,9 @@ public class StudentBulkRequest {
         private Long studentId;
         private Long termId;
         private Long examTypeId;
-        private Double mark;  // For the first format
-        private Double marks; // For the second format
+        private Double mark;
+        private Double marks; 
 
-        // Getters and setters
     }
 }
 
