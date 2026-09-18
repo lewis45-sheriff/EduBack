@@ -52,12 +52,12 @@ public class BankServiceImpl implements BankService {
 
         try {
             // Validate callback structure
-            // if (!isValidCallback(bankRequestDTO)) {
-            // response.setMessage("Invalid callback structure");
-            // response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-            // response.setEntity(null);
-            // return response;
-            // }
+             if (!isValidCallback(bankRequestDTO)) {
+             response.setMessage("Invalid callback structure");
+             response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+             response.setEntity(null);
+             return response;
+             }
 
             String transactionRef = bankRequestDTO.getTransaction().getReference();
 

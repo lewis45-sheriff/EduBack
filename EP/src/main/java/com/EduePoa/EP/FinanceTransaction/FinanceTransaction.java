@@ -72,22 +72,26 @@ public class FinanceTransaction extends TenantScopedEntity {
     @Column(name = "closing_balance", precision = 10, scale = 2)
     private BigDecimal closingBalance;
 
-//    @PrePersist
-//    protected void onCreate() {
-//        createdAt = LocalDateTime.now();
-//        if (reference == null || reference.isEmpty()) {
-//            reference = generateReference();
-//        }
-//    }
+    @PrePersist
+    protected void onCreate() {
+        // createdAt is NOT NULL in the DB. Populate it on insert unless the caller
+        // already set it, otherwise the insert fails with "created_at cannot be null".
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (reference == null || reference.isEmpty()) {
+            reference = generateReference();
+        }
+    }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 
-//    private String generateReference() {
-//        return "TXN" + System.currentTimeMillis();
-//    }
+    private String generateReference() {
+        return "TXN" + System.currentTimeMillis();
+    }
 
     public enum TransactionType {
         INCOME, EXPENSE

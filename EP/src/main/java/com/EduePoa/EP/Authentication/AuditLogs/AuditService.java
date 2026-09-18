@@ -154,8 +154,10 @@ public class AuditService {
 
     public void log(String module, String... val) {
         Audit auditTrail = new Audit();
-        String userEmail, device = "", ipAddress = "";
+        String userEmail = "SYSTEM", device = "", ipAddress = "";
         try {
+            // May throw IllegalStateException when invoked outside an HTTP request
+            // thread (e.g. from an @Async worker such as the bulk-upload job).
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
                     .getRequest();
             ipAddress = request.getRemoteAddr();
@@ -164,7 +166,8 @@ public class AuditService {
             userEmail = ((UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal())
                     .getUsername();
 
-        } catch (NullPointerException | ClassCastException ignored1) {
+        } catch (IllegalStateException | NullPointerException | ClassCastException ignored1) {
+            // No bound request / no authenticated principal — record as SYSTEM.
             userEmail = "SYSTEM";
         }
 

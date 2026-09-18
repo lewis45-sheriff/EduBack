@@ -30,6 +30,8 @@ This document specifies the requirements for converting the EduPoa school manage
 3. WHEN a new Tenant is created, THE EduPoa_System SHALL initialize default configuration data for that tenant (academic terms, grading scales, fee components templates)
 4. IF a tenant registration request contains a Tenant_Identifier that already exists, THEN THE EduPoa_System SHALL reject the request with a descriptive conflict error
 5. THE EduPoa_System SHALL store tenant metadata including school name, physical address, email domain, phone number, logo URL, and subscription plan
+6. WHEN a new Tenant is created, THE EduPoa_System SHALL seed that tenant's required default roles (School_Admin, ROLE_PARENT, SUPPLIER) so that dependent modules (parent onboarding, supplier onboarding) can resolve these roles within the tenant scope
+7. WHEN a module needs a required default role (e.g., SUPPLIER during supplier onboarding) and that role is absent for the current tenant, THE EduPoa_System SHALL create the missing role for the current tenant rather than failing the operation, ensuring the role is always resolvable within the active Tenant_Context
 
 ### Requirement 2: Tenant Context Resolution
 
@@ -103,6 +105,7 @@ This document specifies the requirements for converting the EduPoa school manage
 3. WHEN the migration completes, THE EduPoa_System SHALL verify that all existing queries return the same result set as before migration for the default tenant
 4. THE EduPoa_System SHALL provide a reversible migration script (rollback) that can remove multi-tenancy columns if needed
 5. IF the migration encounters records that cannot be assigned a tenant, THEN THE EduPoa_System SHALL log the affected records and halt the migration with an error report
+6. WHEN the multi-tenancy migration executes, THE EduPoa_System SHALL ensure the pre-existing default tenant has the required default roles (School_Admin, ROLE_PARENT, SUPPLIER) seeded, so that tenants migrated from the single-tenant era are not missing roles that newly provisioned tenants receive
 
 ### Requirement 8: Tenant Lifecycle Management
 

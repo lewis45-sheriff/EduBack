@@ -29,14 +29,24 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.poi.ss.usermodel.*;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PushbackInputStream;
+import java.util.UUID;
+import org.springframework.scheduling.annotation.Async;
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -72,10 +82,21 @@ public class StudentServiceImpl implements StudentService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.EduePoa.EP.WebSocket.BulkUploadProgressPublisher progressPublisher;
+
+    /**
+     * Self-reference (lazy to avoid a constructor cycle) used so that bulk upload
+     * invokes captureNewStudent through the Spring proxy. Without this, the
+     * self-invocation {@code this.captureNewStudent(...)} would bypass the proxy
+     * and the {@link Transactional} boundary would never be applied per row.
+     */
+    @Autowired
+    @Lazy
+    private StudentService self;
 
     @Override
     @Audit(module = "STUDENT MANAGEMENT", action = "CREATE")
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CustomResponse<?> captureNewStudent(CreateStudentRequestDTO request) {
         CustomResponse<StudentResponseDTO> response = new CustomResponse<>();
         try {
@@ -95,15 +116,26 @@ public class StudentServiceImpl implements StudentService {
                 throw new RuntimeException("Date of birth is required");
             if (dto.getAdmissionDate() == null)
                 throw new RuntimeException("Admission date is required");
-            if (dto.getGradeId() == null)
-                throw new RuntimeException("Grade ID is required");
+            boolean hasGradeName = dto.getGradeName() != null && !dto.getGradeName().trim().isEmpty();
+            if (dto.getGradeId() == null && !hasGradeName)
+                throw new RuntimeException("Grade is required (provide gradeName or gradeId)");
 
             // Duplicate admission number check
             if (studentRepository.existsByAdmissionNumber(dto.getAdmissionNumber().trim()))
                 throw new RuntimeException("Student with admission number " + dto.getAdmissionNumber() + " already exists");
 
-            Grade grade = gradeRepository.findById(dto.getGradeId())
-                    .orElseThrow(() -> new RuntimeException("Grade not found with ID: " + dto.getGradeId()));
+            // Resolve grade by name (preferred, tenant-scoped) or by id (fallback).
+            // findByName runs through the tenant-aware repository, so it only matches
+            // grades belonging to the current tenant.
+            Grade grade;
+            if (hasGradeName) {
+                String gradeName = dto.getGradeName().trim();
+                grade = gradeRepository.findByName(gradeName)
+                        .orElseThrow(() -> new RuntimeException("Grade not found with name: " + gradeName));
+            } else {
+                grade = gradeRepository.findById(dto.getGradeId())
+                        .orElseThrow(() -> new RuntimeException("Grade not found with ID: " + dto.getGradeId()));
+            }
 
             FeeStructure feeStructure = feeStructureRepository.findByGrade(grade)
                     .orElseThrow(() -> new RuntimeException("Fee structure not found for grade: " + grade.getName()));
@@ -403,42 +435,98 @@ public class StudentServiceImpl implements StudentService {
     @Override
     @Audit(module = "STUDENT MANAGEMENT", action = "BULK_UPLOAD")
     public CustomResponse<?> bulkUploads(MultipartFile file) {
-        CustomResponse<BulkUploadResponseDTO> response = new CustomResponse<>();
-        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
+        CustomResponse<Map<String, String>> response = new CustomResponse<>();
 
         try {
-            // Validate file
+            // Validate file up-front so the caller gets an immediate error for
+            // obviously bad input instead of having to watch the WebSocket.
             if (file == null || file.isEmpty()) {
                 throw new RuntimeException("File cannot be empty");
             }
-
             String filename = file.getOriginalFilename();
             if (filename == null) {
                 throw new RuntimeException("Invalid file name");
             }
-
-            List<CreateStudentRequestDTO> records = new ArrayList<>();
-
-            // Parse file based on extension
-            if (filename.endsWith(".csv")) {
-                records = parseBulkCSV(file);
-            } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
-                records = parseBulkExcel(file);
-            } else {
+            String lower = filename.toLowerCase();
+            if (!(lower.endsWith(".csv") || lower.endsWith(".xlsx") || lower.endsWith(".xls"))) {
                 throw new RuntimeException("Unsupported file format. Please upload CSV or Excel file");
             }
 
-            uploadResponse.setTotalRecords(records.size());
+            // Read the bytes now: the MultipartFile stream is only valid for the
+            // duration of this request, but processing happens on another thread.
+            byte[] bytes = file.getBytes();
 
-            // Process each student (with parent) using the existing captureNewStudent flow
+            // Capture the tenant here (request thread has TenantContext set); it must
+            // be re-applied inside the async worker because TenantContext is a ThreadLocal.
+            String tenantId = TenantContext.getCurrentTenant();
+
+            String jobId = UUID.randomUUID().toString();
+
+            // Kick off async processing through the proxy so @Async takes effect.
+            self.processBulkUploadAsync(bytes, filename, jobId, tenantId);
+
+            Map<String, String> body = new HashMap<>();
+            body.put("jobId", jobId);
+            body.put("topic", "/topic/bulk-upload/" + jobId);
+
+            response.setStatusCode(HttpStatus.ACCEPTED.value());
+            response.setEntity(body);
+            response.setMessage("Bulk upload started. Subscribe to the topic to track progress.");
+        } catch (RuntimeException e) {
+            log.error("Failed to start bulk upload: {}", e.getMessage());
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error starting bulk upload: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("An unexpected error occurred while starting the bulk upload");
+        }
+        return response;
+    }
+
+    @Override
+    @Async
+    public void processBulkUploadAsync(byte[] fileBytes, String filename, String jobId, String tenantId) {
+        // Re-establish tenant context on this worker thread (ThreadLocal does not
+        // propagate from the request thread).
+        if (tenantId != null) {
+            TenantContext.setCurrentTenant(tenantId);
+        }
+
+        BulkUploadResponseDTO uploadResponse = new BulkUploadResponseDTO();
+        try {
+            List<CreateStudentRequestDTO> records;
+            String lower = filename.toLowerCase();
+            if (lower.endsWith(".csv")) {
+                records = parseBulkCSV(new ByteArrayInputStream(fileBytes));
+            } else {
+                records = parseBulkExcel(new ByteArrayInputStream(fileBytes));
+            }
+
+            int total = records.size();
+            uploadResponse.setTotalRecords(total);
+
+            // STARTED event
+            progressPublisher.publish(BulkUploadProgressDTO.builder()
+                    .jobId(jobId)
+                    .status(BulkUploadProgressDTO.Status.STARTED)
+                    .totalRecords(total)
+                    .processedRecords(0)
+                    .percentComplete(0)
+                    .build());
+
             for (int i = 0; i < records.size(); i++) {
                 CreateStudentRequestDTO record = records.get(i);
-                int rowNumber = i + 2; // +2 because row 1 is header and arrays are 0-indexed
-                String admissionNumber = record.getStudent() != null ? record.getStudent().getAdmissionNumber() : "ROW_" + rowNumber;
+                int rowNumber = i + 2; // row 1 is the header
+                String admissionNumber = record.getStudent() != null
+                        ? record.getStudent().getAdmissionNumber() : "ROW_" + rowNumber;
 
                 try {
-                    // Reuse captureNewStudent which handles student + guardian + parent creation
-                    CustomResponse<?> studentResponse = captureNewStudent(record);
+                    // Each row runs in its own REQUIRES_NEW transaction via the proxy,
+                    // so one bad row rolls back only itself.
+                    CustomResponse<?> studentResponse = self.captureNewStudent(record);
 
                     if (studentResponse.getStatusCode() == HttpStatus.CREATED.value()) {
                         uploadResponse.setSuccessCount(uploadResponse.getSuccessCount() + 1);
@@ -454,44 +542,82 @@ public class StudentServiceImpl implements StudentService {
                             rowNumber, admissionNumber, e.getMessage()));
                     log.error("Error processing student at row {}: {}", rowNumber, e.getMessage());
                 }
+
+                int processed = i + 1;
+                int percent = total == 0 ? 100 : (int) ((processed * 100L) / total);
+
+                // Per-row progress event
+                progressPublisher.publish(BulkUploadProgressDTO.builder()
+                        .jobId(jobId)
+                        .status(BulkUploadProgressDTO.Status.IN_PROGRESS)
+                        .totalRecords(total)
+                        .processedRecords(processed)
+                        .successCount(uploadResponse.getSuccessCount())
+                        .failureCount(uploadResponse.getFailureCount())
+                        .percentComplete(percent)
+                        .currentAdmissionNumber(admissionNumber)
+                        .errors(new ArrayList<>(uploadResponse.getErrors()))
+                        .build());
             }
 
-            response.setStatusCode(HttpStatus.OK.value());
-            response.setEntity(uploadResponse);
-            response.setMessage(String.format("Bulk upload completed. Success: %d, Failed: %d",
-                    uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()));
+            // COMPLETED event
+            progressPublisher.publish(BulkUploadProgressDTO.builder()
+                    .jobId(jobId)
+                    .status(BulkUploadProgressDTO.Status.COMPLETED)
+                    .totalRecords(total)
+                    .processedRecords(total)
+                    .successCount(uploadResponse.getSuccessCount())
+                    .failureCount(uploadResponse.getFailureCount())
+                    .percentComplete(100)
+                    .errors(new ArrayList<>(uploadResponse.getErrors()))
+                    .message(String.format("Bulk upload completed. Success: %d, Failed: %d",
+                            uploadResponse.getSuccessCount(), uploadResponse.getFailureCount()))
+                    .build());
 
-            log.info("Bulk upload completed. Total: {}, Success: {}, Failed: {}",
-                    uploadResponse.getTotalRecords(),
-                    uploadResponse.getSuccessCount(),
-                    uploadResponse.getFailureCount());
-            auditService.log("STUDENT_MANAGEMENT", "Bulk upload completed. Success:",
-                    String.valueOf(uploadResponse.getSuccessCount()), "Failed:",
-                    String.valueOf(uploadResponse.getFailureCount()));
-
-        } catch (RuntimeException e) {
-            log.error("Runtime exception during bulk upload: {}", e.getMessage());
-            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
-            response.setEntity(null);
-            response.setMessage(e.getMessage());
+            // NOTE: no auditService.log(...) here. This runs on an async worker
+            // thread with no bound HTTP request, and AuditService.log() reads the
+            // current request via RequestContextHolder, which would throw
+            // IllegalStateException. The batch is already audited by the @Audit
+            // annotation on bulkUploads() (which runs on the request thread).
+            log.info("Bulk upload job {} completed. Total: {}, Success: {}, Failed: {}",
+                    jobId, total, uploadResponse.getSuccessCount(), uploadResponse.getFailureCount());
         } catch (Exception e) {
-            log.error("Unexpected error during bulk upload: {}", e.getMessage(), e);
-            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-            response.setEntity(null);
-            response.setMessage("An unexpected error occurred during bulk upload");
+            log.error("Bulk upload job {} failed: {}", jobId, e.getMessage(), e);
+            progressPublisher.publish(BulkUploadProgressDTO.builder()
+                    .jobId(jobId)
+                    .status(BulkUploadProgressDTO.Status.FAILED)
+                    .totalRecords(uploadResponse.getTotalRecords())
+                    .successCount(uploadResponse.getSuccessCount())
+                    .failureCount(uploadResponse.getFailureCount())
+                    .errors(new ArrayList<>(uploadResponse.getErrors()))
+                    .message("Bulk upload failed: " + e.getMessage())
+                    .build());
+        } finally {
+            TenantContext.clear();
         }
-        return response;
     }
 
-    private List<CreateStudentRequestDTO> parseBulkCSV(MultipartFile file) throws Exception {
+    private List<CreateStudentRequestDTO> parseBulkCSV(InputStream fileStream) throws Exception {
         List<CreateStudentRequestDTO> records = new ArrayList<>();
 
+        // Lenient CSV format: tolerates spaces around quoted fields, missing column
+        // names and empty lines. This avoids the strict-quoting failure
+        // "invalid char between encapsulated token and delimiter" produced by
+        // CSVFormat.DEFAULT on values exported from Excel/Google Sheets.
+        CSVFormat format = CSVFormat.DEFAULT.builder()
+                .setHeader()
+                .setSkipHeaderRecord(true)
+                .setIgnoreHeaderCase(true)
+                .setTrim(true)
+                .setIgnoreSurroundingSpaces(true)
+                .setIgnoreEmptyLines(true)
+                .setAllowMissingColumnNames(true)
+                .setQuote('"')
+                .build();
+
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
-            CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT
-                    .withFirstRecordAsHeader()
-                    .withIgnoreHeaderCase()
-                    .withTrim());
+                new InputStreamReader(stripBom(fileStream), StandardCharsets.UTF_8));
+             CSVParser csvParser = new CSVParser(reader, format)) {
 
             for (CSVRecord record : csvParser) {
                 CreateStudentRequestDTO dto = buildFromCsvRecord(record);
@@ -518,6 +644,8 @@ public class StudentServiceImpl implements StudentService {
         if (dobStr != null && !dobStr.isBlank()) student.setDateOfBirth(LocalDate.parse(dobStr));
         String admDateStr = safeGet(record, "admissionDate");
         if (admDateStr != null && !admDateStr.isBlank()) student.setAdmissionDate(LocalDate.parse(admDateStr));
+        // Grade is referenced by name (tenant-specific). gradeId still accepted as a fallback.
+        student.setGradeName(safeGet(record, "gradeName"));
         String gradeIdStr = safeGet(record, "gradeId");
         if (gradeIdStr != null && !gradeIdStr.isBlank()) student.setGradeId(Long.parseLong(gradeIdStr.trim()));
 
@@ -558,10 +686,31 @@ public class StudentServiceImpl implements StudentService {
         }
     }
 
-    private List<CreateStudentRequestDTO> parseBulkExcel(MultipartFile file) throws Exception {
+    /**
+     * Skips a leading UTF-8 byte-order mark (BOM) if present. Files exported from
+     * Excel are frequently saved as "UTF-8 with BOM", and the 3 BOM bytes would
+     * otherwise be attached to the first header name (e.g. "admissionNumber"),
+     * causing header lookups to silently miss and, in some cases, the CSV parser
+     * to choke on the first field.
+     */
+    private InputStream stripBom(InputStream in) throws IOException {
+        PushbackInputStream pushback = new PushbackInputStream(in, 3);
+        byte[] bom = new byte[3];
+        int read = pushback.read(bom, 0, 3);
+        boolean isBom = read == 3
+                && (bom[0] & 0xFF) == 0xEF
+                && (bom[1] & 0xFF) == 0xBB
+                && (bom[2] & 0xFF) == 0xBF;
+        if (!isBom && read > 0) {
+            pushback.unread(bom, 0, read);
+        }
+        return pushback;
+    }
+
+    private List<CreateStudentRequestDTO> parseBulkExcel(InputStream fileStream) throws Exception {
         List<CreateStudentRequestDTO> records = new ArrayList<>();
 
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+        try (Workbook workbook = WorkbookFactory.create(fileStream)) {
             // Use first sheet that is named "Students" or just the first sheet
             Sheet sheet = null;
             for (int s = 0; s < workbook.getNumberOfSheets(); s++) {
@@ -609,6 +758,8 @@ public class StudentServiceImpl implements StudentService {
         student.setDateOfBirth(getCellValueAsDate(row.getCell(colMap.getOrDefault("dateofbirth", -1))));
         LocalDate admDate = getCellValueAsDate(row.getCell(colMap.getOrDefault("admissiondate", -1)));
         student.setAdmissionDate(admDate);
+        // Grade by name (tenant-specific). gradeId still accepted as a fallback.
+        student.setGradeName(excelStr(row, colMap, "gradename"));
         student.setGradeId(getCellValueAsLong(row.getCell(colMap.getOrDefault("gradeid", -1))));
 
         String img = excelStr(row, colMap, "studentimage");
@@ -888,17 +1039,25 @@ public class StudentServiceImpl implements StudentService {
     private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
         StringBuilder csv = new StringBuilder();
 
-        csv.append("admissionNumber,firstName,middleName,lastName,dateOfBirth,admissionDate,gradeId,");
+        // Use real grade names for this tenant in the sample rows where possible.
+        List<String> gradeNames = gradeRepository.findAll().stream()
+                .map(Grade::getName)
+                .filter(n -> n != null && !n.isBlank())
+                .collect(Collectors.toList());
+        String sampleGrade1 = gradeNames.isEmpty() ? "Grade 1" : gradeNames.get(0);
+        String sampleGrade2 = gradeNames.size() > 1 ? gradeNames.get(1) : sampleGrade1;
+
+        csv.append("admissionNumber,firstName,middleName,lastName,dateOfBirth,admissionDate,gradeName,");
         csv.append("gender,streamName,nationality,birthCertificateNumber,");
         csv.append("parentFirstName,parentLastName,parentPhone,parentEmail,parentNationalId,parentOccupation,relationship\n");
 
-        csv.append("STU001,John,,Doe,2010-05-15,2024-01-10,1,Male,Form 1A,Kenyan,,");
+        csv.append("STU001,John,,Doe,2010-05-15,2024-01-10,").append(sampleGrade1).append(",Male,Form 1A,Kenyan,,");
         csv.append("Mary,Doe,0712345678,mary.doe@email.com,12345678,Teacher,MOTHER\n");
 
-        csv.append("STU002,Jane,,Smith,2011-08-22,2024-01-10,1,Female,Form 1A,Kenyan,,");
+        csv.append("STU002,Jane,,Smith,2011-08-22,2024-01-10,").append(sampleGrade1).append(",Female,Form 1A,Kenyan,,");
         csv.append("Peter,Smith,0723456789,peter.smith@email.com,98765432,Engineer,FATHER\n");
 
-        csv.append("STU003,Michael,,Johnson,2010-12-03,2024-01-10,2,Male,Form 2B,Kenyan,,");
+        csv.append("STU003,Michael,,Johnson,2010-12-03,2024-01-10,").append(sampleGrade2).append(",Male,Form 2B,Kenyan,,");
         csv.append("Susan,Johnson,0734567890,,45678901,Nurse,MOTHER\n");
 
         ByteArrayResource resource = new ByteArrayResource(csv.toString().getBytes(StandardCharsets.UTF_8));
@@ -960,7 +1119,7 @@ public class StudentServiceImpl implements StudentService {
         String[] headers = {
                 // Student columns
                 "admissionNumber", "firstName", "middleName", "lastName",
-                "dateOfBirth", "admissionDate", "gradeId", "gender",
+                "dateOfBirth", "admissionDate", "gradeName", "gender",
                 "streamName", "nationality", "birthCertificateNumber",
                 // Parent / Guardian columns
                 "parentFirstName", "parentLastName", "parentPhone",
@@ -968,8 +1127,17 @@ public class StudentServiceImpl implements StudentService {
         };
 
         int parentColStart = 11;
+        int gradeColIdx   = 6;
         int genderColIdx  = 7;
         int relColIdx     = 17;
+
+        // Grade names for THIS tenant (findAll is tenant-scoped via the tenant filter).
+        List<String> gradeNames = gradeRepository.findAll().stream()
+                .map(Grade::getName)
+                .filter(n -> n != null && !n.isBlank())
+                .collect(Collectors.toList());
+        String sampleGrade1 = gradeNames.isEmpty() ? "Grade 1" : gradeNames.get(0);
+        String sampleGrade2 = gradeNames.size() > 1 ? gradeNames.get(1) : sampleGrade1;
 
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
@@ -981,11 +1149,11 @@ public class StudentServiceImpl implements StudentService {
         sheet.getRow(0).setHeight((short) 600);
 
         Object[][] sampleData = {
-            {"STU001","John","","Doe",LocalDate.of(2010,5,15),LocalDate.of(2024,1,10),1L,"Male","Form 1A","Kenyan","",
+            {"STU001","John","","Doe",LocalDate.of(2010,5,15),LocalDate.of(2024,1,10),sampleGrade1,"Male","Form 1A","Kenyan","",
              "Mary","Doe","0712345678","mary.doe@email.com","12345678","Teacher","MOTHER"},
-            {"STU002","Jane","","Smith",LocalDate.of(2011,8,22),LocalDate.of(2024,1,10),1L,"Female","Form 1A","Kenyan","",
+            {"STU002","Jane","","Smith",LocalDate.of(2011,8,22),LocalDate.of(2024,1,10),sampleGrade1,"Female","Form 1A","Kenyan","",
              "Peter","Smith","0723456789","peter.smith@email.com","98765432","Engineer","FATHER"},
-            {"STU003","Michael","","Johnson",LocalDate.of(2010,12,3),LocalDate.of(2024,1,10),2L,"Male","Form 2B","Kenyan","",
+            {"STU003","Michael","","Johnson",LocalDate.of(2010,12,3),LocalDate.of(2024,1,10),sampleGrade2,"Male","Form 2B","Kenyan","",
              "Susan","Johnson","0734567890","","45678901","Nurse","MOTHER"}
         };
 
@@ -1009,6 +1177,24 @@ public class StudentServiceImpl implements StudentService {
         }
 
         DataValidationHelper dvHelper = sheet.getDataValidationHelper();
+
+        // Grade dropdown populated with this tenant's grade names.
+        // Note: Excel's explicit-list validation has a ~255 char limit; if the
+        // combined names exceed that, we skip the dropdown (free text still works
+        // and is validated on upload).
+        if (!gradeNames.isEmpty()) {
+            String joined = String.join(",", gradeNames);
+            if (joined.length() <= 255) {
+                DataValidationConstraint gradeConstraint =
+                        dvHelper.createExplicitListConstraint(gradeNames.toArray(new String[0]));
+                CellRangeAddressList gradeRange = new CellRangeAddressList(1, 1000, gradeColIdx, gradeColIdx);
+                DataValidation gradeValidation = dvHelper.createValidation(gradeConstraint, gradeRange);
+                gradeValidation.setShowErrorBox(true);
+                gradeValidation.createErrorBox("Invalid Grade", "Please select a grade from the list");
+                sheet.addValidationData(gradeValidation);
+            }
+        }
+
         DataValidationConstraint genderConstraint = dvHelper.createExplicitListConstraint(new String[]{"Male","Female"});
         CellRangeAddressList genderRange = new CellRangeAddressList(1, 1000, genderColIdx, genderColIdx);
         DataValidation genderValidation = dvHelper.createValidation(genderConstraint, genderRange);
@@ -1043,7 +1229,7 @@ public class StudentServiceImpl implements StudentService {
             "lastName            - Student last name [REQUIRED]",
             "dateOfBirth         - Format YYYY-MM-DD e.g. 2010-05-15 [REQUIRED]",
             "admissionDate       - Format YYYY-MM-DD e.g. 2024-01-10 [REQUIRED]",
-            "gradeId             - Numeric grade/class ID from the system [REQUIRED]",
+            "gradeName           - Grade/class NAME as configured for your school (dropdown) [REQUIRED]",
             "gender              - Male or Female (dropdown) [REQUIRED]",
             "streamName          - Stream/section e.g. Form 1A [OPTIONAL]",
             "nationality         - e.g. Kenyan [OPTIONAL]",

@@ -50,7 +50,10 @@ public class SecurityConfig {
                                 "/api/v1/process-call-back",
                                 "/api/v1/transactions/c2b/confirmation",
                                 "/api/v1/payments/stk-callback",
-                                "/api/v1/validate"
+                                "/api/v1/validate",
+                                // WebSocket handshake — the STOMP CONNECT frame is
+                                // authenticated separately by StompAuthChannelInterceptor
+                                "/ws/**"
                         ).permitAll()
                         // All other endpoints require authentication
                         // Permissions are handled by @PreAuthorize annotations in controllers

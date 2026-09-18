@@ -46,14 +46,14 @@ public class StudentController {
         var response = studentService.studentsPerGrade();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
-    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> bulkUploadStudents(
             @RequestParam("file") MultipartFile file) {
         var response = studentService.bulkUploads(file);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
-    @GetMapping("/bulk-upload/template")
+    @GetMapping("bulk-upload/template")
     public ResponseEntity<Resource> downloadBulkUploadTemplate(
             @RequestParam(defaultValue = "excel") String type) {
         return studentService.generateBulkUploadTemplate(type);

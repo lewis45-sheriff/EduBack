@@ -160,6 +160,37 @@ public class HibernateFilterInterceptor implements HandlerInterceptor {
 | Communications services | Load sender config from `TenantConfiguration` |
 | Reports services | Inject tenant branding from `TenantConfiguration` |
 
+### Default Role Provisioning and Backfill
+
+Because `Role` extends `TenantScopedEntity`, roles are scoped per tenant and all `RoleRepository` lookups are filtered by the active `TenantContext`. Dependent modules resolve roles by name within the current tenant:
+
+- Parent onboarding resolves `ROLE_PARENT`
+- Supplier onboarding resolves `SUPPLIER`
+- Tenant provisioning creates `School_Admin`
+
+Two distinct concerns must be addressed to guarantee these roles are always resolvable:
+
+1. **New tenants** — `TenantProvisioningService.provisionTenant()` runs inside the target `TenantContext` and seeds `School_Admin`, `ROLE_PARENT`, and `SUPPLIER` via `createDefaultRoles()`. This is idempotent: each role is created only if `roleRepository.findByName(...)` returns empty for the current tenant.
+
+2. **Pre-existing (migrated) tenants** — The single-tenant `bureti-high` data predates the default-role seeding logic. Its schema received a `tenant_id` column via `V2__add_multitenancy.sql`, but no migration ever seeded `SUPPLIER` / `ROLE_PARENT` rows for it. This is the source of the runtime error `Role 'SUPPLIER' not found. Please seed the roles table.` A backfill migration (`V3__seed_default_roles_existing_tenants.sql`) seeds the missing default roles for every existing tenant that lacks them, keyed on `(name, tenant_id)`.
+
+To defend against future drift and any not-yet-provisioned tenant, module-level role resolution follows a **self-healing lookup** pattern (already used by `StudentServiceImpl` for `ROLE_PARENT`): resolve the role by name within the current tenant, and if absent, create it in the current tenant before use rather than throwing.
+
+```java
+// Self-healing role resolution within the current TenantContext
+Role supplierRole = roleRepository.findByName("SUPPLIER")
+        .orElseGet(() -> {
+            Role role = new Role();
+            role.setName("SUPPLIER");
+            role.setEnabledFlag('Y');
+            role.setDeletedFlag('N');
+            role.setStatus(Status.ACTIVE);
+            return roleRepository.save(role); // tenant_id auto-populated by TenantEntityListener
+        });
+```
+
+This keeps role resolution resilient across three scenarios: freshly provisioned tenants (seeded), migrated tenants (backfilled), and any tenant where seeding was missed (self-healed on first use). Because persistence runs under an active `TenantContext`, `TenantEntityListener` auto-populates the correct `tenant_id`, preserving isolation.
+
 ## Data Models
 
 ### New Entities
@@ -339,6 +370,30 @@ CREATE TABLE tenant_audit_logs (
 );
 ```
 
+### Default Role Backfill Migration
+
+```sql
+-- V3__seed_default_roles_existing_tenants.sql
+-- Seeds required default roles (ROLE_PARENT, SUPPLIER) for every existing
+-- tenant that is missing them. School_Admin is intentionally left to
+-- provisioning, since its permission set is assigned in code.
+-- Idempotent: keyed on the composite (name, tenant_id) uniqueness.
+
+INSERT INTO role (name, tenant_id, enabled_flag, deleted_flag, status)
+SELECT 'ROLE_PARENT', t.tenant_id, 'Y', 'N', 'ACTIVE'
+FROM tenants t
+WHERE NOT EXISTS (
+    SELECT 1 FROM role r WHERE r.name = 'ROLE_PARENT' AND r.tenant_id = t.tenant_id
+);
+
+INSERT INTO role (name, tenant_id, enabled_flag, deleted_flag, status)
+SELECT 'SUPPLIER', t.tenant_id, 'Y', 'N', 'ACTIVE'
+FROM tenants t
+WHERE NOT EXISTS (
+    SELECT 1 FROM role r WHERE r.name = 'SUPPLIER' AND r.tenant_id = t.tenant_id
+);
+```
+
 ### Rollback Migration
 
 ```sql
@@ -488,6 +543,18 @@ DROP TABLE tenants;
 
 **Validates: Requirements 10.5**
 
+### Property 23: Default role resolvability within tenant scope
+
+*For any* tenant T (whether newly provisioned, migrated from single-tenant, or seeded via self-healing lookup), resolving a required default role by name (School_Admin, ROLE_PARENT, SUPPLIER) while TenantContext is set to T SHALL return a Role whose tenant_id equals T, and SHALL NOT fail with a missing-role error.
+
+**Validates: Requirements 1.6, 1.7, 7.6**
+
+### Property 24: Default role seeding idempotency
+
+*For any* tenant T, running default-role seeding (provisioning, backfill migration, or self-healing lookup) one or more times SHALL result in exactly one Role per default role name within T, never creating duplicates.
+
+**Validates: Requirements 1.6, 7.6**
+
 ## Error Handling
 
 ### Error Categories and Responses
@@ -573,6 +640,8 @@ This feature is well-suited for property-based testing due to:
 
 **Unit Tests** (JUnit 5 + Mockito):
 - Default tenant provisioning creates School_Admin user
+- Default tenant provisioning seeds ROLE_PARENT and SUPPLIER roles
+- Supplier onboarding self-heals a missing SUPPLIER role instead of throwing
 - Default configuration initialization on tenant creation
 - Token blacklist interaction with tenant context
 - Specific error messages for each failure type
