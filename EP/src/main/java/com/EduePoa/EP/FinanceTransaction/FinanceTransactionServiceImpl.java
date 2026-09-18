@@ -2,6 +2,9 @@ package com.EduePoa.EP.FinanceTransaction;
 
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Authentication.User.User;
+import com.EduePoa.EP.Authentication.User.UserRepository;
+import com.EduePoa.EP.Procurement.Ledger.LedgerService;
 import com.EduePoa.EP.Finance.Finance;
 import com.EduePoa.EP.Finance.FinanceRepository;
 import com.EduePoa.EP.Finance.Responses.StudentBalanceDTO;
@@ -14,7 +17,10 @@ import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,12 +32,15 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FinanceTransactionServiceImpl implements FinanceTransactionService {
     private final StudentRepository studentRepository;
     private final FinanceRepository financeRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final StudentInvoicesRepository studentInvoicesRepository;
     private final AuditService auditService;
+    private final LedgerService ledgerService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -112,6 +121,28 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
             // Save transaction first
             FinanceTransaction savedTransaction = financeTransactionRepository.save(transaction);
+
+            // Record a CREDIT entry in the general ledger for money received (INCOME).
+            // Mirrors the DEBIT pattern used for supplier payments/expenses. Runs in its
+            // own transaction (REQUIRES_NEW) so a ledger hiccup does not roll back the
+            // payment; failures are logged for manual reconciliation.
+            if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.INCOME) {
+                try {
+                    User createdBy = getCurrentUserOrNull();
+                    ledgerService.recordCredit(
+                            savedTransaction.getAmount(),
+                            "Fee payment - " + student.getFirstName() + " " + student.getLastName()
+                                    + " (Invoice: " + invoice.getId() + ")",
+                            savedTransaction.getId(),          // referenceId (stable, used for dedup)
+                            savedTransaction.getReference(),   // referenceNumber
+                            savedTransaction.getTransactionDate(),
+                            createdBy
+                    );
+                } catch (Exception ledgerEx) {
+                    log.error("Failed to record ledger CREDIT for transaction {}: {}",
+                            savedTransaction.getId(), ledgerEx.getMessage());
+                }
+            }
 
             // Update Invoice based on transaction type
             if (createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.INCOME) {
@@ -390,6 +421,24 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
         return response;
+    }
+
+    /**
+     * Resolves the currently authenticated user for ledger attribution, or null
+     * when there is no security context (e.g. an automatic M-Pesa callback that
+     * routes through this method). The ledger's createdBy is nullable, so null is
+     * acceptable.
+     */
+    private User getCurrentUserOrNull() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || auth.getName() == null) {
+                return null;
+            }
+            return userRepository.findByEmail(auth.getName()).orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static FinanceTransaction getFinanceTransaction(Long studentId, CreateTransactionDTO createTransactionDTO,
