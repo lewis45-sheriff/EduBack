@@ -14,6 +14,8 @@ import com.EduePoa.EP.Authentication.Role.Response.PermissionDTO;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Multitenancy.config.TenantContext;
+import com.EduePoa.EP.Multitenancy.entity.Tenant;
+import com.EduePoa.EP.Multitenancy.repository.TenantRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import com.EduePoa.EP.Utils.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,6 +52,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final CookieService cookieService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final TenantRepository tenantRepository;
 
     CustomResponse<?> login(LoginRequest loginRequest, HttpServletResponse httpResponse, HttpServletRequest httpRequest) {
         CustomResponse<AuthResponse> response = new CustomResponse<>();
@@ -67,6 +70,14 @@ public class AuthService {
             if (user.getTenantId() != null) {
                 TenantContext.setCurrentTenant(user.getTenantId());
             }
+
+            // Resolve the user's school so its name and logo can be returned in the
+            // login response for display on the frontend.
+            Tenant tenant = user.getTenantId() != null
+                    ? tenantRepository.findByTenantIdentifier(user.getTenantId()).orElse(null)
+                    : null;
+            String schoolName = tenant != null ? tenant.getSchoolName() : null;
+            String logoUrl = tenant != null ? tenant.getLogoUrl() : null;
 
             // Validate user-tenant association if tenantId is provided in the login request
             if (loginRequest.getTenantId() != null && !loginRequest.getTenantId().isBlank()) {
@@ -101,6 +112,8 @@ public class AuthService {
                         .phoneNumber(user.getPhoneNumber())
                         .role(user.getRole().getName())
                         .tenantId(user.getTenantId())
+                        .schoolName(schoolName)
+                        .logoUrl(logoUrl)
                         .passwordReset(true)
                         .build();
 
@@ -168,6 +181,8 @@ public class AuthService {
                     .role(user.getRole().getName())
                     .phoneNumber(user.getPhoneNumber())
                     .tenantId(user.getTenantId())
+                    .schoolName(schoolName)
+                    .logoUrl(logoUrl)
                     .passwordReset(false)
                     .permissions(permissionDTOs)
                     .build();

@@ -59,13 +59,36 @@ public class TenantProvisioningService {
         }
     }
 
+    private static final String TEACHER_ROLE = "ROLE_TEACHER";
+
     /**
-     * Creates default roles (ROLE_PARENT, SUPPLIER) for the new tenant.
-     * These roles are needed by other modules when creating parents/suppliers.
+     * Permissions granted to the default teacher role. Scoped to day-to-day
+     * classroom duties: attendance, marks/exam entry, and read access to the
+     * students, classes, subjects and reports a teacher works with.
+     */
+    private static final List<Permissions> TEACHER_PERMISSIONS = List.of(
+            Permissions.ATTENDANCE_MARK,
+            Permissions.ATTENDANCE_READ,
+            Permissions.EXAM_READ,
+            Permissions.EXAM_GRADE,
+            Permissions.EXAM_MARK_ENTER,
+            Permissions.CAT_MARK_ENTER,
+            Permissions.STUDENT_READ,
+            Permissions.CLASS_READ,
+            Permissions.SUBJECT_READ,
+            Permissions.REPORT_GENERATE,
+            Permissions.COMMUNICATION_READ
+    );
+
+    /**
+     * Creates default roles (ROLE_PARENT, SUPPLIER, ROLE_TEACHER) for the new tenant.
+     * These roles are needed by other modules when creating parents/suppliers/teachers.
      */
     private void createDefaultRoles(Tenant tenant) {
+        String tenantId = tenant.getTenantIdentifier();
+
         // Create ROLE_PARENT if it doesn't exist for this tenant
-        if (roleRepository.findByName("ROLE_PARENT").isEmpty()) {
+        if (roleRepository.findByNameAndTenantId("ROLE_PARENT", tenantId).isEmpty()) {
             Role parentRole = new Role();
             parentRole.setName("ROLE_PARENT");
             parentRole.setEnabledFlag('Y');
@@ -76,7 +99,7 @@ public class TenantProvisioningService {
         }
 
         // Create SUPPLIER role if it doesn't exist for this tenant
-        if (roleRepository.findByName("SUPPLIER").isEmpty()) {
+        if (roleRepository.findByNameAndTenantId("SUPPLIER", tenantId).isEmpty()) {
             Role supplierRole = new Role();
             supplierRole.setName("SUPPLIER");
             supplierRole.setEnabledFlag('Y');
@@ -85,6 +108,21 @@ public class TenantProvisioningService {
             roleRepository.save(supplierRole);
             log.info("SUPPLIER role created for tenant: {}", tenant.getTenantIdentifier());
         }
+
+        // Create ROLE_TEACHER if it doesn't exist for this tenant
+        if (roleRepository.findByNameAndTenantId(TEACHER_ROLE, tenantId).isEmpty()) {
+            Role teacherRole = new Role();
+            teacherRole.setName(TEACHER_ROLE);
+            teacherRole.setEnabledFlag('Y');
+            teacherRole.setDeletedFlag('N');
+            teacherRole.setStatus(Status.ACTIVE);
+            for (Permissions permission : TEACHER_PERMISSIONS) {
+                teacherRole.addPermission(permission);
+            }
+            roleRepository.save(teacherRole);
+            log.info("ROLE_TEACHER created for tenant: {} with {} permissions",
+                    tenant.getTenantIdentifier(), TEACHER_PERMISSIONS.size());
+        }
     }
 
     private void createDefaultAdminUser(Tenant tenant) {
@@ -92,7 +130,7 @@ public class TenantProvisioningService {
         String adminEmail = "admin@" + tenantIdentifier + ".edupoa.com";
 
         // Find or create the School_Admin role for this tenant
-        Role schoolAdminRole = roleRepository.findByName(SCHOOL_ADMIN_ROLE)
+        Role schoolAdminRole = roleRepository.findByNameAndTenantId(SCHOOL_ADMIN_ROLE, tenantIdentifier)
                 .orElseGet(() -> {
                     Role newRole = new Role();
                     newRole.setName(SCHOOL_ADMIN_ROLE);

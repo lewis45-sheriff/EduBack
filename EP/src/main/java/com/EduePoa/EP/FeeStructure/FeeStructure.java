@@ -37,9 +37,13 @@ public class FeeStructure extends TenantScopedEntity {
     @JsonManagedReference
     private List<FeeComponentConfig> TermComponents = new ArrayList<>();
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "grade_id")
     private Grade grade;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mode", nullable = false)
+    private FeeMode mode = FeeMode.DAY;
 
 
 

@@ -23,6 +23,11 @@ public class RoleController {
         var response = roleService.getAllRoles();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-role/{id}")
+    ResponseEntity<?>getRoleById(@PathVariable Long id){
+        var response = roleService.getRoleById(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
     @GetMapping("get-all-permissions")
     ResponseEntity<?>getAllPermissions(){
         var response = roleService.getAllPermissions();

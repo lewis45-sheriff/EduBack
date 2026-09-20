@@ -14,6 +14,8 @@ import java.util.List;
 @AllArgsConstructor
 public class FeeStructureRequestDTO {
     private String grade;
+    /** DAY or BOARDING. Defaults to DAY when not provided. */
+    private String mode;
     private List<TermDTO> terms;
 
     @Data

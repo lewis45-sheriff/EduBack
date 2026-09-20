@@ -12,6 +12,8 @@ public class StudentResponseDTO {
     private LocalDate dateOfBirth;
     private String admissionDate;
     private String gradeName;
+    private Long streamId;
+    private String streamName;
     private String gender;
     private String studentImage;
     private String status;

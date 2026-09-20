@@ -8,13 +8,17 @@ import com.EduePoa.EP.Multitenancy.service.TenantLifecycleService;
 import com.EduePoa.EP.Multitenancy.service.TenantService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 
 @RestController
@@ -34,12 +38,50 @@ public class TenantController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(tenant));
     }
 
+    /**
+     * Register a new school/tenant with an optional logo file in one request.
+     * <p>
+     * Send as {@code multipart/form-data}: a {@code request} part containing the
+     * JSON tenant details and an optional {@code logo} file part. The logo is
+     * stored on disk and only its file path is persisted on the tenant.
+     */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<TenantResponse> registerTenantWithLogo(
+            @Valid @RequestPart("request") TenantRegistrationRequest request,
+            @RequestPart(value = "logo", required = false) MultipartFile logo) {
+        Tenant tenant = tenantService.create(request, logo);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(tenant));
+    }
 
+    /**
+     * Upload or replace the logo for an existing tenant. The image is stored on
+     * disk and the tenant's {@code logoUrl} is set to the served file path.
+     */
+    @PostMapping(value = "/{id}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<TenantResponse> uploadLogo(
+            @PathVariable Long id,
+            @RequestPart("logo") MultipartFile logo) {
+        Tenant tenant = tenantService.updateLogo(id, logo);
+        return ResponseEntity.ok(toResponse(tenant));
+    }
+
+
+    /**
+     * List all tenants across the platform, paginated. This is a platform-admin
+     * endpoint and is intentionally NOT scoped to a single tenant: it returns
+     * tenants from every tenant in the system.
+     *
+     * @param page 1-based page number (defaults to 1)
+     * @param size page size (defaults to 20)
+     */
     @GetMapping
-    public ResponseEntity<List<TenantResponse>> listAllTenants() {
-        List<TenantResponse> tenants = tenantService.findAll().stream()
-                .map(this::toResponse)
-                .toList();
+    public ResponseEntity<Page<TenantResponse>> listAllTenants(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        int pageIndex = Math.max(page, 1) - 1;
+        int pageSize = size < 1 ? 20 : size;
+        Pageable pageable = PageRequest.of(pageIndex, pageSize, Sort.by("id").ascending());
+        Page<TenantResponse> tenants = tenantService.findAll(pageable).map(this::toResponse);
         return ResponseEntity.ok(tenants);
     }
 

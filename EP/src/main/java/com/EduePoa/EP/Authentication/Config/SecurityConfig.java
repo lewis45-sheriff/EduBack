@@ -19,7 +19,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
-//@EnableMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -53,7 +53,9 @@ public class SecurityConfig {
                                 "/api/v1/validate",
                                 // WebSocket handshake — the STOMP CONNECT frame is
                                 // authenticated separately by StompAuthChannelInterceptor
-                                "/ws/**"
+                                "/ws/**",
+                                // Uploaded public assets (school logos, etc.)
+                                "/uploads/**"
                         ).permitAll()
                         // All other endpoints require authentication
                         // Permissions are handled by @PreAuthorize annotations in controllers

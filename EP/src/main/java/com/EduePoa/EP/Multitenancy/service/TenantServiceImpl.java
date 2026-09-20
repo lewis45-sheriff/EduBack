@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Multitenancy.service;
 
+import com.EduePoa.EP.FileStorage.FileStorageService;
 import com.EduePoa.EP.Multitenancy.config.TenantConflictException;
 import com.EduePoa.EP.Multitenancy.config.TenantNotFoundException;
 import com.EduePoa.EP.Multitenancy.dto.TenantRegistrationRequest;
@@ -9,8 +10,12 @@ import com.EduePoa.EP.Multitenancy.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -22,6 +27,9 @@ public class TenantServiceImpl implements TenantService {
 
     private final TenantRepository tenantRepository;
     private final TenantProvisioningService provisioningService;
+    private final FileStorageService fileStorageService;
+
+    private static final String LOGO_SUBDIR = "logos";
 
     @Override
     @Transactional
@@ -41,6 +49,17 @@ public class TenantServiceImpl implements TenantService {
         provisioningService.provisionTenant(savedTenant);
 
         return savedTenant;
+    }
+
+    @Override
+    @Transactional
+    public Tenant create(TenantRegistrationRequest request, MultipartFile logoFile) {
+        // If a logo file was uploaded, store it and use its path as the logoUrl.
+        if (logoFile != null && !logoFile.isEmpty()) {
+            String logoPath = fileStorageService.storeImage(logoFile, LOGO_SUBDIR);
+            request.setLogoUrl(logoPath);
+        }
+        return create(request);
     }
 
     @NotNull
@@ -88,6 +107,12 @@ public class TenantServiceImpl implements TenantService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<Tenant> findAll(Pageable pageable) {
+        return tenantRepository.findAll(pageable);
+    }
+
+    @Override
     @Transactional
     public Tenant update(Long id, TenantRegistrationRequest request) {
         Tenant tenant = tenantRepository.findById(id)
@@ -109,5 +134,29 @@ public class TenantServiceImpl implements TenantService {
                 updatedTenant.getTenantIdentifier(), updatedTenant.getSchoolName());
 
         return updatedTenant;
+    }
+
+    @Override
+    @Transactional
+    public Tenant updateLogo(Long id, MultipartFile logoFile) {
+        Tenant tenant = tenantRepository.findById(id)
+                .orElseThrow(() -> new TenantNotFoundException(
+                        "Tenant not found with ID: " + id, String.valueOf(id)));
+
+        String previousLogo = tenant.getLogoUrl();
+
+        // Store the new logo and persist only the file path (never base64/bytes).
+        String logoPath = fileStorageService.storeImage(logoFile, LOGO_SUBDIR);
+        tenant.setLogoUrl(logoPath);
+        Tenant saved = tenantRepository.save(tenant);
+
+        // Best-effort cleanup of the old file once the new one is committed.
+        if (StringUtils.hasText(previousLogo) && !previousLogo.equals(logoPath)) {
+            fileStorageService.deleteByWebPath(previousLogo);
+        }
+
+        log.info("Tenant logo updated: identifier={}, logoUrl={}",
+                saved.getTenantIdentifier(), saved.getLogoUrl());
+        return saved;
     }
 }

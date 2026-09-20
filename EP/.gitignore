@@ -42,3 +42,6 @@ application.properties
 .m2
 .mvn
 .kiro
+
+### Uploaded files (school logos, etc.) — stored on disk, not in VCS
+uploads/

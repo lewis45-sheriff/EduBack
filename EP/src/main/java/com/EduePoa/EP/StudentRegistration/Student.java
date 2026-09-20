@@ -3,6 +3,7 @@ package com.EduePoa.EP.StudentRegistration;
 import com.EduePoa.EP.Authentication.Enum.Status;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import com.EduePoa.EP.Grade.Grade;
+import com.EduePoa.EP.Grade.Stream.GradeStream;
 import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -69,6 +70,11 @@ public class Student extends TenantScopedEntity {
     @JsonIgnore
     @JoinColumn(name = "grade_id", referencedColumnName = "id")
     private Grade grade;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnore
+    @JoinColumn(name = "grade_stream_id", referencedColumnName = "id")
+    private GradeStream gradeStream;
 
     @Column(name = "on_last_grade", nullable = false)
     @JsonIgnore

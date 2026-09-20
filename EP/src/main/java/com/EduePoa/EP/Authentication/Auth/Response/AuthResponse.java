@@ -22,6 +22,8 @@ public class AuthResponse {
     private Boolean passwordReset;
     private String role;
     private String tenantId;
+    private String schoolName;
+    private String logoUrl;
     private List<PermissionDTO> permissions;
 
 

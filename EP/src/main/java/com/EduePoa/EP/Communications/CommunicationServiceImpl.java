@@ -8,6 +8,8 @@ import com.EduePoa.EP.Communications.Requests.*;
 import com.EduePoa.EP.Communications.Responses.*;
 import com.EduePoa.EP.Communications.SMS.SmsDispatchResult;
 import com.EduePoa.EP.Communications.SMS.SmsGatewayService;
+import com.EduePoa.EP.Communications.WhatsApp.WhatsAppGatewayService;
+import com.EduePoa.EP.Authentication.Email.EmailService;
 import com.EduePoa.EP.Grade.GradeRepository;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentGuardian;
@@ -46,6 +48,8 @@ public class CommunicationServiceImpl implements CommunicationService {
     private final GradeRepository gradeRepository;
     private final AuditService auditService;
     private final SmsGatewayService smsGatewayService;
+    private final WhatsAppGatewayService whatsAppGatewayService;
+    private final EmailService emailService;
 
     // ==================== ANNOUNCEMENT METHODS ====================
 
@@ -250,9 +254,9 @@ public class CommunicationServiceImpl implements CommunicationService {
             messageRecipientRepository.saveAll(recipients);
             message.setRecipients(recipients);
 
-            // ── Dispatch real SMS if message type requires it ──────────────
-            if (request.getMessageType() == MessageType.SMS || request.getMessageType() == MessageType.ALL) {
-                dispatchSmsToRecipients(message, recipients, request.getContent());
+            // ── Dispatch over the requested channel(s), unless scheduled for later ──
+            if (request.getScheduledAt() == null) {
+                dispatchByChannel(message, recipients, request.getContent());
                 messageRecipientRepository.saveAll(recipients); // persist updated delivery statuses
             }
 
@@ -295,9 +299,9 @@ public class CommunicationServiceImpl implements CommunicationService {
             messageRecipientRepository.saveAll(recipients);
             message.setRecipients(recipients);
 
-            // ── Dispatch real SMS if message type requires it ──────────────
-            if (request.getMessageType() == MessageType.SMS || request.getMessageType() == MessageType.ALL) {
-                dispatchSmsToRecipients(message, recipients, request.getContent());
+            // ── Dispatch over the requested channel(s), unless scheduled for later ──
+            if (request.getScheduledAt() == null) {
+                dispatchByChannel(message, recipients, request.getContent());
                 messageRecipientRepository.saveAll(recipients); // persist updated delivery statuses
             }
 
@@ -816,16 +820,91 @@ public class CommunicationServiceImpl implements CommunicationService {
             String phone = recipient.getPhone();
             if (phone == null || phone.isBlank()) {
                 log.warn("[SMS] Recipient {} has no phone number — skipping", recipient.getRecipientName());
-                recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+                markChannelResult(recipient, false);
                 continue;
             }
             SmsDispatchResult result = smsGatewayService.sendSms(phone, content);
-            recipient.setDeliveryStatus(result.isSuccess() ? DeliveryStatus.DELIVERED : DeliveryStatus.FAILED);
-            if (result.isSuccess()) {
-                recipient.setDeliveredAt(LocalDateTime.now());
-            }
+            markChannelResult(recipient, result.isSuccess());
             log.info("[SMS] {} → {} [{}]", message.getSubject(), phone,
                     result.isSuccess() ? "OK" : result.getErrorMessage());
         }
+    }
+
+    private void dispatchWhatsAppToRecipients(Message message, List<MessageRecipient> recipients, String content) {
+        for (MessageRecipient recipient : recipients) {
+            String phone = recipient.getPhone();
+            if (phone == null || phone.isBlank()) {
+                log.warn("[WhatsApp] Recipient {} has no phone number — skipping", recipient.getRecipientName());
+                markChannelResult(recipient, false);
+                continue;
+            }
+            SmsDispatchResult result = whatsAppGatewayService.sendWhatsApp(phone, content);
+            markChannelResult(recipient, result.isSuccess());
+            log.info("[WhatsApp] {} → {} [{}]", message.getSubject(), phone,
+                    result.isSuccess() ? "OK" : result.getErrorMessage());
+        }
+    }
+
+    /**
+     * Dispatches email to recipients. Email is sent asynchronously by
+     * {@link EmailService} (fire-and-forget), so a successful hand-off is treated
+     * as delivered; recipients without an email address are marked failed.
+     * The message subject is used as the email subject and its content as the body.
+     */
+    private void dispatchEmailToRecipients(Message message, List<MessageRecipient> recipients, String content) {
+        for (MessageRecipient recipient : recipients) {
+            String email = recipient.getEmail();
+            if (email == null || email.isBlank()) {
+                log.warn("[Email] Recipient {} has no email — skipping", recipient.getRecipientName());
+                markChannelResult(recipient, false);
+                continue;
+            }
+            try {
+                emailService.sendEmail(email, message.getSubject(), content);
+                markChannelResult(recipient, true);
+                log.info("[Email] {} → {} [QUEUED]", message.getSubject(), email);
+            } catch (Exception e) {
+                markChannelResult(recipient, false);
+                log.error("[Email] Failed to queue email to {}: {}", email, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Records the outcome of one channel attempt on a recipient. Because a
+     * recipient may be targeted over several channels (MessageType.ALL), the
+     * recipient is considered DELIVERED if ANY channel succeeds, and only stays
+     * FAILED when no attempted channel has succeeded yet.
+     */
+    private void markChannelResult(MessageRecipient recipient, boolean success) {
+        if (success) {
+            recipient.setDeliveryStatus(DeliveryStatus.DELIVERED);
+            if (recipient.getDeliveredAt() == null) {
+                recipient.setDeliveredAt(LocalDateTime.now());
+            }
+        } else if (recipient.getDeliveryStatus() != DeliveryStatus.DELIVERED) {
+            recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+        }
+    }
+
+    /**
+     * Fans a message out over every channel implied by its {@link MessageType}.
+     * ALL sends via SMS, WhatsApp, and Email. Each recipient's delivery status
+     * reflects whether at least one channel succeeded.
+     */
+    private void dispatchByChannel(Message message, List<MessageRecipient> recipients, String content) {
+        MessageType type = message.getMessageType();
+        boolean all = type == MessageType.ALL;
+
+        if (all || type == MessageType.SMS) {
+            dispatchSmsToRecipients(message, recipients, content);
+        }
+        if (all || type == MessageType.WHATSAPP) {
+            dispatchWhatsAppToRecipients(message, recipients, content);
+        }
+        if (all || type == MessageType.EMAIL) {
+            dispatchEmailToRecipients(message, recipients, content);
+        }
+        // IN_APP requires no external dispatch; the persisted recipient rows are the delivery.
     }
 }

@@ -58,18 +58,22 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                 return response;
             }
 
+            // Resolve the mode (DAY or BOARDING). Defaults to DAY for backward compatibility.
+            FeeMode mode = parseFeeMode(request.getMode());
+
             // Create FeeStructure entity
             int currentYear = LocalDate.now().getYear();
 
-            // After validating grade, check for existing fee structure
+            // A grade has one fee structure per mode per year. Match on grade + mode + year.
             Optional<FeeStructure> existingFeeStructure = feeStructureRepository
-                    .findByGradeAndYear(grade.get(), currentYear);
+                    .findByGradeAndModeAndYear(grade.get(), mode, currentYear);
 
             FeeStructure feeStructure;
             if (existingFeeStructure.isPresent()) {
                 feeStructure = existingFeeStructure.get();
-                feeStructure.setName("Fee Structure for " + request.getGrade());
+                feeStructure.setName(buildFeeStructureName(mode, request.getGrade()));
                 feeStructure.setGrade(grade.get());
+                feeStructure.setMode(mode);
                 feeStructure.setDatePosted(LocalDateTime.now());
                 feeStructure.setIsDeleted('N');
                 feeStructure.setDeleted('N');
@@ -78,8 +82,9 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                 // Create new fee structure
                 feeStructure = new FeeStructure();
                 feeStructure.setYear(currentYear);
-                feeStructure.setName("Fee Structure for " + request.getGrade());
+                feeStructure.setName(buildFeeStructureName(mode, request.getGrade()));
                 feeStructure.setGrade(grade.get());
+                feeStructure.setMode(mode);
                 feeStructure.setDatePosted(LocalDateTime.now());
                 feeStructure.setIsApproved('N');
                 feeStructure.setIsDeleted('N');
@@ -98,7 +103,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
             // 5. Prepare response
             response.setMessage("Fee Structure created successfully");
             response.setStatusCode(HttpStatus.CREATED.value());
-            auditService.log("FEE_STRUCTURE", "Created fee structure for grade:", request.getGrade(),
+            auditService.log("FEE_STRUCTURE", "Created", mode.name(), "fee structure for grade:", request.getGrade(),
                     "with total amount:", String.valueOf(computation.totalFeeAmount()));
             response.setEntity(feeStructure);
 
@@ -207,24 +212,39 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                 return response;
             }
 
-            Optional<FeeStructure> existingForGrade = feeStructureRepository.findByGrade(grade.get());
-            if (existingForGrade.isPresent()
-                    && !existingForGrade.get().getId().equals(id)
-                    && !isDeleted(existingForGrade.get())) {
-                response.setMessage("Another fee structure already exists for grade: " + request.getGrade());
+            // Resolve the mode; fall back to the existing structure's mode when the
+            // request does not specify one, so an update never silently switches mode.
+            FeeMode mode = request.getMode() != null && !request.getMode().isBlank()
+                    ? parseFeeMode(request.getMode())
+                    : feeStructure.getMode();
+
+            // Conflict check is per grade + mode: a DAY and a BOARDING structure for
+            // the same grade are allowed to coexist.
+            Optional<FeeStructure> existingForGradeMode =
+                    feeStructureRepository.findByGradeAndMode(grade.get(), mode);
+            if (existingForGradeMode.isPresent()
+                    && !existingForGradeMode.get().getId().equals(id)
+                    && !isDeleted(existingForGradeMode.get())) {
+                response.setMessage("Another " + mode.name()
+                        + " fee structure already exists for grade: " + request.getGrade());
                 response.setEntity(null);
                 response.setStatusCode(HttpStatus.CONFLICT.value());
                 return response;
             }
 
-            feeStructure.setName("Fee Structure for " + request.getGrade());
+            feeStructure.setName(buildFeeStructureName(mode, request.getGrade()));
             feeStructure.setGrade(grade.get());
+            feeStructure.setMode(mode);
             feeStructure.setDatePosted(LocalDateTime.now());
-            feeStructure.getTermComponents().clear();
 
             FeeStructureComputation computation = buildFeeStructureComponents(request, feeStructure);
             feeStructure.setTotalAmount(computation.totalFeeAmount());
-            feeStructure.setTermComponents(computation.components());
+
+            // Mutate the managed collection in place instead of replacing it.
+            // Replacing the list instance breaks orphanRemoval and triggers
+            // "A collection with cascade=all-delete-orphan was no longer referenced".
+            feeStructure.getTermComponents().clear();
+            feeStructure.getTermComponents().addAll(computation.components());
 
             FeeStructure updatedFeeStructure = feeStructureRepository.save(feeStructure);
 
@@ -289,6 +309,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         FeeStructureResponseDTO dto = new FeeStructureResponseDTO();
         dto.setId(feeStructure.getId());
         dto.setGrade(feeStructure.getGrade() != null ? feeStructure.getGrade().getName() : "Unknown");
+        dto.setMode(feeStructure.getMode() != null ? feeStructure.getMode().name() : FeeMode.DAY.name());
         dto.setCreatedOn(feeStructure.getDatePosted());
         dto.setUpdatedOn(feeStructure.getDatePosted());
 
@@ -318,6 +339,7 @@ public class FeeStructureServiceImpl implements FeeStructureService {
         FeeStructureGroupedResponseDTO dto = new FeeStructureGroupedResponseDTO();
         dto.setId(feeStructure.getId());
         dto.setGrade(feeStructure.getGrade() != null ? feeStructure.getGrade().getName() : "Unknown");
+        dto.setMode(feeStructure.getMode() != null ? feeStructure.getMode().name() : FeeMode.DAY.name());
         dto.setCreatedOn(feeStructure.getDatePosted());
         dto.setUpdatedOn(feeStructure.getDatePosted());
         dto.setTerms(getGroupedTerms(feeStructure));
@@ -376,6 +398,26 @@ public class FeeStructureServiceImpl implements FeeStructureService {
 
     private boolean isDeleted(FeeStructure feeStructure) {
         return feeStructure.getIsDeleted() == 'Y' || feeStructure.getDeleted() == 'Y';
+    }
+
+    /**
+     * Parses the requested mode string into a {@link FeeMode}. Defaults to
+     * {@link FeeMode#DAY} when blank, and rejects unknown values.
+     */
+    private FeeMode parseFeeMode(String mode) {
+        if (mode == null || mode.isBlank()) {
+            return FeeMode.DAY;
+        }
+        try {
+            return FeeMode.valueOf(mode.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid fee mode: " + mode + ". Allowed values: DAY, BOARDING");
+        }
+    }
+
+    private String buildFeeStructureName(FeeMode mode, String gradeName) {
+        String modeLabel = mode == FeeMode.BOARDING ? "Boarding" : "Day";
+        return modeLabel + " Fee Structure for " + gradeName;
     }
 
 }

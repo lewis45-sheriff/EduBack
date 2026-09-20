@@ -13,6 +13,7 @@ import java.util.List;
 public class FeeStructureGroupedResponseDTO {
     private Long id;
     private String grade;
+    private String mode;
     private LocalDateTime createdOn;
     private LocalDateTime updatedOn;
     private List<TermDTO> terms;

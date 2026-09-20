@@ -4,6 +4,7 @@ import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
+import com.EduePoa.EP.FeeStructure.FeeMode;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import com.EduePoa.EP.FeeStructure.FeeStructureRepository;
 import com.EduePoa.EP.Finance.Finance;
@@ -61,13 +62,17 @@ public class StudentInvoicesServiceImpl implements StudentInvoicesService {
                 throw new RuntimeException("Student has no assigned grade");
             }
 
-            // Find the approved fee structure for the student's grade and current year
+            // Find the fee structure for the student's grade, fee mode (from boarding
+            // status) and current year. Day scholars use the DAY structure; boarding
+            // and weekly-boarding students use the BOARDING structure.
             int currentYear = Year.now().getValue();
-            FeeStructure feeStructure = feeStructureRepository.findByGradeAndYear(
+            FeeMode feeMode = FeeMode.fromBoardingStatus(student.getBoardingStatus());
+            FeeStructure feeStructure = feeStructureRepository.findByGradeAndModeAndYear(
                     studentGrade,
+                    feeMode,
                     currentYear)
                     .orElseThrow(() -> new RuntimeException(
-                            "No approved fee structure found for grade: " + studentGrade.getName() +
+                            "No " + feeMode.name() + " fee structure found for grade: " + studentGrade.getName() +
                                     " and year: " + currentYear));
 
             // Check if invoice already exists for this student, term, and year

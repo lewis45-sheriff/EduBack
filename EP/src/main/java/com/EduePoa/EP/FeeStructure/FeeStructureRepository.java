@@ -11,8 +11,11 @@ public interface FeeStructureRepository extends TenantAwareRepository<FeeStructu
     Optional<FeeStructure> findByGradeAndYear(Grade grade, Integer year);
      List<FeeStructure> findByIsDeletedAndDeletedOrderByDatePostedDesc(char isDeleted, char deleted);
     Optional<FeeStructure> findByGrade(Grade grade);
-//    Optional<FeeStructure> findByGradeAndYear(Grade grade, Year year);
 
-
+    // Mode-aware lookups: a grade has at most one structure per mode (per year).
+    Optional<FeeStructure> findByGradeAndModeAndYear(Grade grade, FeeMode mode, Integer year);
+    Optional<FeeStructure> findByGradeAndMode(Grade grade, FeeMode mode);
+    List<FeeStructure> findByGradeAndModeAndYearAndIsDeletedAndDeleted(
+            Grade grade, FeeMode mode, Integer year, char isDeleted, char deleted);
 
 }

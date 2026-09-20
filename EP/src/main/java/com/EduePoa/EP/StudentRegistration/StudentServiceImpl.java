@@ -8,12 +8,15 @@ import com.EduePoa.EP.Authentication.Role.RoleRepository;
 import com.EduePoa.EP.Authentication.User.User;
 import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
+import com.EduePoa.EP.FeeStructure.FeeMode;
 import com.EduePoa.EP.FeeStructure.FeeStructure;
 import com.EduePoa.EP.FeeStructure.FeeStructureRepository;
 import com.EduePoa.EP.FeeStructure.Responses.FeeStructureGroupedResponseDTO;
 import com.EduePoa.EP.FeeStructure.Responses.FeeStructureResponseDTO;
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
+import com.EduePoa.EP.Grade.Stream.GradeStream;
+import com.EduePoa.EP.Grade.Stream.GradeStreamRepository;
 import com.EduePoa.EP.StudentRegistration.*;
 import com.EduePoa.EP.StudentRegistration.Request.*;
 import com.EduePoa.EP.Parents.Parent;
@@ -74,6 +77,7 @@ import java.util.stream.Collectors;
 public class StudentServiceImpl implements StudentService {
     private final StudentRepository studentRepository;
     private final GradeRepository gradeRepository;
+    private final GradeStreamRepository gradeStreamRepository;
     private final FeeStructureRepository feeStructureRepository;
     private final AuditService auditService;
     private final ParentRepository parentRepository;
@@ -137,8 +141,13 @@ public class StudentServiceImpl implements StudentService {
                         .orElseThrow(() -> new RuntimeException("Grade not found with ID: " + dto.getGradeId()));
             }
 
-            FeeStructure feeStructure = feeStructureRepository.findByGrade(grade)
-                    .orElseThrow(() -> new RuntimeException("Fee structure not found for grade: " + grade.getName()));
+            // Resolve the fee structure by grade AND the student's fee mode. Day
+            // scholars use the DAY structure; boarding/weekly-boarding students use
+            // the BOARDING structure. The repository is tenant-aware.
+            FeeMode feeMode = FeeMode.fromBoardingStatus(dto.getBoardingStatus());
+            FeeStructure feeStructure = feeStructureRepository.findByGradeAndMode(grade, feeMode)
+                    .orElseThrow(() -> new RuntimeException("No " + feeMode.name()
+                            + " fee structure found for grade: " + grade.getName()));
 
             Student student = new Student();
             student.setAdmissionNumber(dto.getAdmissionNumber().trim());
@@ -149,7 +158,20 @@ public class StudentServiceImpl implements StudentService {
             student.setAdmissionDate(dto.getAdmissionDate());
             student.setGrade(grade);
             student.setGradeName(grade.getName());
-            student.setStreamName(dto.getStreamName());
+
+            // Resolve the stream (optional) within the student's grade. The
+            // GradeStreamRepository is tenant-aware, so lookups are already
+            // constrained to the current tenant. We additionally verify the
+            // stream belongs to the resolved grade so a stream from another
+            // grade cannot be attached.
+            GradeStream gradeStream = resolveGradeStream(grade, dto.getStreamId(), dto.getStreamName());
+            if (gradeStream != null) {
+                student.setGradeStream(gradeStream);
+                student.setStreamName(gradeStream.getName());
+            } else {
+                student.setStreamName(null);
+            }
+
             student.setGender(dto.getGender());
             student.setBoardingStatus(dto.getBoardingStatus());
             student.setRouteName(dto.getRouteName());
@@ -291,6 +313,41 @@ public class StudentServiceImpl implements StudentService {
             response.setMessage("An unexpected error occurred while creating student");
         }
         return response;
+    }
+
+    /**
+     * Resolves a {@link GradeStream} for the given grade, by id (preferred) or by
+     * name. Returns {@code null} when no stream information was supplied (streams
+     * are optional). The stream must belong to the supplied grade; otherwise a
+     * {@link RuntimeException} is thrown. All lookups go through the tenant-aware
+     * repository, so they are already constrained to the current tenant.
+     */
+    private GradeStream resolveGradeStream(Grade grade, Long streamId, String streamName) {
+        boolean hasStreamName = streamName != null && !streamName.trim().isEmpty();
+
+        if (streamId == null && !hasStreamName) {
+            return null;
+        }
+
+        GradeStream stream;
+        if (streamId != null) {
+            stream = gradeStreamRepository.findById(streamId)
+                    .orElseThrow(() -> new RuntimeException("Stream not found with ID: " + streamId));
+        } else {
+            String name = streamName.trim();
+            name = name.substring(0, 1).toUpperCase() + name.substring(1);
+            String finalName = name;
+            stream = gradeStreamRepository.findByGradeIdAndName(grade.getId(), name)
+                    .orElseThrow(() -> new RuntimeException(
+                            "Stream '" + finalName + "' not found for grade: " + grade.getName()));
+        }
+
+        if (stream.getGrade() == null || !stream.getGrade().getId().equals(grade.getId())) {
+            throw new RuntimeException("Stream '" + stream.getName()
+                    + "' does not belong to grade: " + grade.getName());
+        }
+
+        return stream;
     }
 
     @NotNull
@@ -1036,28 +1093,66 @@ public class StudentServiceImpl implements StudentService {
         return sb.toString().trim();
     }
 
+    /**
+     * Returns the name of the first stream configured for the grade with the given
+     * name, or an empty string when the grade has no streams (streams are
+     * optional). Used to seed realistic sample values in the bulk-upload template.
+     * Lookups are tenant-scoped via the tenant-aware repositories.
+     */
+    private String firstStreamNameForGrade(List<Grade> grades, String gradeName) {
+        if (gradeName == null) {
+            return "";
+        }
+        return grades.stream()
+                .filter(g -> gradeName.equals(g.getName()))
+                .findFirst()
+                .flatMap(g -> gradeStreamRepository.findByGradeId(g.getId()).stream()
+                        .map(GradeStream::getName)
+                        .filter(n -> n != null && !n.isBlank())
+                        .findFirst())
+                .orElse("");
+    }
+
+    /**
+     * Collects the distinct stream names configured across all of this tenant's
+     * grades, for use as an Excel dropdown on the streamName column.
+     */
+    private List<String> allStreamNames(List<Grade> grades) {
+        return grades.stream()
+                .flatMap(g -> gradeStreamRepository.findByGradeId(g.getId()).stream())
+                .map(GradeStream::getName)
+                .filter(n -> n != null && !n.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
     private ResponseEntity<Resource> generateCSVTemplate() throws Exception {
         StringBuilder csv = new StringBuilder();
 
         // Use real grade names for this tenant in the sample rows where possible.
-        List<String> gradeNames = gradeRepository.findAll().stream()
+        List<Grade> grades = gradeRepository.findAll();
+        List<String> gradeNames = grades.stream()
                 .map(Grade::getName)
                 .filter(n -> n != null && !n.isBlank())
                 .collect(Collectors.toList());
         String sampleGrade1 = gradeNames.isEmpty() ? "Grade 1" : gradeNames.get(0);
         String sampleGrade2 = gradeNames.size() > 1 ? gradeNames.get(1) : sampleGrade1;
 
+        // Sample stream names for those grades (real tenant streams where available).
+        String sampleStream1 = firstStreamNameForGrade(grades, sampleGrade1);
+        String sampleStream2 = firstStreamNameForGrade(grades, sampleGrade2);
+
         csv.append("admissionNumber,firstName,middleName,lastName,dateOfBirth,admissionDate,gradeName,");
         csv.append("gender,streamName,nationality,birthCertificateNumber,");
         csv.append("parentFirstName,parentLastName,parentPhone,parentEmail,parentNationalId,parentOccupation,relationship\n");
 
-        csv.append("STU001,John,,Doe,2010-05-15,2024-01-10,").append(sampleGrade1).append(",Male,Form 1A,Kenyan,,");
+        csv.append("STU001,John,,Doe,2010-05-15,2024-01-10,").append(sampleGrade1).append(",Male,").append(sampleStream1).append(",Kenyan,,");
         csv.append("Mary,Doe,0712345678,mary.doe@email.com,12345678,Teacher,MOTHER\n");
 
-        csv.append("STU002,Jane,,Smith,2011-08-22,2024-01-10,").append(sampleGrade1).append(",Female,Form 1A,Kenyan,,");
+        csv.append("STU002,Jane,,Smith,2011-08-22,2024-01-10,").append(sampleGrade1).append(",Female,").append(sampleStream1).append(",Kenyan,,");
         csv.append("Peter,Smith,0723456789,peter.smith@email.com,98765432,Engineer,FATHER\n");
 
-        csv.append("STU003,Michael,,Johnson,2010-12-03,2024-01-10,").append(sampleGrade2).append(",Male,Form 2B,Kenyan,,");
+        csv.append("STU003,Michael,,Johnson,2010-12-03,2024-01-10,").append(sampleGrade2).append(",Male,").append(sampleStream2).append(",Kenyan,,");
         csv.append("Susan,Johnson,0734567890,,45678901,Nurse,MOTHER\n");
 
         ByteArrayResource resource = new ByteArrayResource(csv.toString().getBytes(StandardCharsets.UTF_8));
@@ -1129,15 +1224,22 @@ public class StudentServiceImpl implements StudentService {
         int parentColStart = 11;
         int gradeColIdx   = 6;
         int genderColIdx  = 7;
+        int streamColIdx  = 8;
         int relColIdx     = 17;
 
         // Grade names for THIS tenant (findAll is tenant-scoped via the tenant filter).
-        List<String> gradeNames = gradeRepository.findAll().stream()
+        List<Grade> grades = gradeRepository.findAll();
+        List<String> gradeNames = grades.stream()
                 .map(Grade::getName)
                 .filter(n -> n != null && !n.isBlank())
                 .collect(Collectors.toList());
         String sampleGrade1 = gradeNames.isEmpty() ? "Grade 1" : gradeNames.get(0);
         String sampleGrade2 = gradeNames.size() > 1 ? gradeNames.get(1) : sampleGrade1;
+
+        // Real stream names for this tenant (used for sample rows and dropdown).
+        String sampleStream1 = firstStreamNameForGrade(grades, sampleGrade1);
+        String sampleStream2 = firstStreamNameForGrade(grades, sampleGrade2);
+        List<String> streamNames = allStreamNames(grades);
 
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
@@ -1149,11 +1251,11 @@ public class StudentServiceImpl implements StudentService {
         sheet.getRow(0).setHeight((short) 600);
 
         Object[][] sampleData = {
-            {"STU001","John","","Doe",LocalDate.of(2010,5,15),LocalDate.of(2024,1,10),sampleGrade1,"Male","Form 1A","Kenyan","",
+            {"STU001","John","","Doe",LocalDate.of(2010,5,15),LocalDate.of(2024,1,10),sampleGrade1,"Male",sampleStream1,"Kenyan","",
              "Mary","Doe","0712345678","mary.doe@email.com","12345678","Teacher","MOTHER"},
-            {"STU002","Jane","","Smith",LocalDate.of(2011,8,22),LocalDate.of(2024,1,10),sampleGrade1,"Female","Form 1A","Kenyan","",
+            {"STU002","Jane","","Smith",LocalDate.of(2011,8,22),LocalDate.of(2024,1,10),sampleGrade1,"Female",sampleStream1,"Kenyan","",
              "Peter","Smith","0723456789","peter.smith@email.com","98765432","Engineer","FATHER"},
-            {"STU003","Michael","","Johnson",LocalDate.of(2010,12,3),LocalDate.of(2024,1,10),sampleGrade2,"Male","Form 2B","Kenyan","",
+            {"STU003","Michael","","Johnson",LocalDate.of(2010,12,3),LocalDate.of(2024,1,10),sampleGrade2,"Male",sampleStream2,"Kenyan","",
              "Susan","Johnson","0734567890","","45678901","Nurse","MOTHER"}
         };
 
@@ -1195,6 +1297,25 @@ public class StudentServiceImpl implements StudentService {
             }
         }
 
+        // Stream dropdown populated with this tenant's configured stream names.
+        // streamName is optional, so an empty entry is allowed. Excel's explicit-list
+        // validation has a ~255 char limit; if the combined names exceed that, we skip
+        // the dropdown (free text still works and is validated on upload against the
+        // stream configured for the student's grade).
+        if (!streamNames.isEmpty()) {
+            String joinedStreams = String.join(",", streamNames);
+            if (joinedStreams.length() <= 255) {
+                DataValidationConstraint streamConstraint =
+                        dvHelper.createExplicitListConstraint(streamNames.toArray(new String[0]));
+                CellRangeAddressList streamRange = new CellRangeAddressList(1, 1000, streamColIdx, streamColIdx);
+                DataValidation streamValidation = dvHelper.createValidation(streamConstraint, streamRange);
+                streamValidation.setShowErrorBox(true);
+                streamValidation.createErrorBox("Invalid Stream",
+                        "Select a stream configured for the student's grade");
+                sheet.addValidationData(streamValidation);
+            }
+        }
+
         DataValidationConstraint genderConstraint = dvHelper.createExplicitListConstraint(new String[]{"Male","Female"});
         CellRangeAddressList genderRange = new CellRangeAddressList(1, 1000, genderColIdx, genderColIdx);
         DataValidation genderValidation = dvHelper.createValidation(genderConstraint, genderRange);
@@ -1231,7 +1352,7 @@ public class StudentServiceImpl implements StudentService {
             "admissionDate       - Format YYYY-MM-DD e.g. 2024-01-10 [REQUIRED]",
             "gradeName           - Grade/class NAME as configured for your school (dropdown) [REQUIRED]",
             "gender              - Male or Female (dropdown) [REQUIRED]",
-            "streamName          - Stream/section e.g. Form 1A [OPTIONAL]",
+            "streamName          - Stream/section NAME as configured for the chosen grade (dropdown) [OPTIONAL]",
             "nationality         - e.g. Kenyan [OPTIONAL]",
             "birthCertificateNumber - Birth certificate no. [OPTIONAL]",
             "",
@@ -1246,6 +1367,7 @@ public class StudentServiceImpl implements StudentService {
             "",
             "NOTES:",
             "- Rows with a blank admissionNumber are skipped.",
+            "- streamName must match a stream configured for that row's gradeName; leave blank if the grade has no streams.",
             "- If parentEmail is provided, a portal account is created (default password: 1234).",
             "- Replace sample rows with your actual data before uploading.",
             "- Maximum file size: 10 MB. Supported formats: .xlsx, .xls, .csv",
@@ -1377,6 +1499,12 @@ public class StudentServiceImpl implements StudentService {
             dto.setGradeName(student.getGrade().getName());
         }
 
+        dto.setStreamName(student.getStreamName());
+        if (student.getGradeStream() != null) {
+            dto.setStreamId(student.getGradeStream().getId());
+            dto.setStreamName(student.getGradeStream().getName());
+        }
+
         // if (student.getParent() != null) {
         // dto.setParentId(student.getParent().getId());
         // dto.setParentName(student.getParent().getFirstName() + " " +
@@ -1399,6 +1527,11 @@ public class StudentServiceImpl implements StudentService {
         responseDTO.setDateOfBirth(savedStudent.getDateOfBirth());
         responseDTO.setAdmissionDate(String.valueOf(savedStudent.getAdmissionDate()));
         responseDTO.setGradeName(savedStudent.getGradeName());
+        responseDTO.setStreamName(savedStudent.getStreamName());
+        if (savedStudent.getGradeStream() != null) {
+            responseDTO.setStreamId(savedStudent.getGradeStream().getId());
+            responseDTO.setStreamName(savedStudent.getGradeStream().getName());
+        }
         responseDTO.setStatus(String.valueOf(savedStudent.getStatus()));
         // responseDTO.setAcademicYear(savedStudent.getAcademicYear());
         responseDTO.setStudentImage(savedStudent.getStudentImage());

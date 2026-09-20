@@ -15,6 +15,7 @@ import java.util.List;
 public class FeeStructureResponseDTO {
     private Long id;
     private String grade;
+    private String mode;
 
     private LocalDateTime createdOn;
     private LocalDateTime updatedOn;

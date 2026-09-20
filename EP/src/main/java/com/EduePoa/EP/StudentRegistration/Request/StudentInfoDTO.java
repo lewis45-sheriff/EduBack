@@ -15,6 +15,7 @@ public class StudentInfoDTO {
     private LocalDate admissionDate;
     private Long gradeId;
     private String gradeName;
+    private Long streamId;
     private String streamName;
     private String gender;
     private String studentImage;

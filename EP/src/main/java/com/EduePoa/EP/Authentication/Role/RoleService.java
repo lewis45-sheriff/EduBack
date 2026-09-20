@@ -309,6 +309,65 @@ public class RoleService {
         return response;
     }
 
+    public CustomResponse<RoleResponse> getRoleById(Long id) {
+        CustomResponse<RoleResponse> response = new CustomResponse<>();
+        try {
+            if (id == null) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Role ID is required");
+                response.setEntity(null);
+                return response;
+            }
+
+            Optional<Role> roleOpt = roleRepository.findById(id);
+            if (roleOpt.isEmpty()) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setMessage("Role not found with ID: " + id);
+                response.setEntity(null);
+                auditService.log("ROLE_MANAGEMENT", "Attempted to fetch non-existent role with ID:",
+                        String.valueOf(id));
+                return response;
+            }
+
+            Role role = roleOpt.get();
+
+            RoleResponse roleResponse = new RoleResponse();
+            roleResponse.setId(role.getId());
+            roleResponse.setName(role.getName());
+            roleResponse.setCreatedOn(role.getCreatedOn());
+            roleResponse.setUpdatedOn(role.getUpdatedOn());
+            roleResponse.setEnabledFlag(role.getEnabledFlag());
+            roleResponse.setDeletedFlag(role.getDeletedFlag());
+            roleResponse.setStatus(role.getStatus());
+
+            // Map permissions
+            List<PermissionDTO> permissionDTOs = role.getRolePermissions().stream()
+                    .map(rp -> {
+                        PermissionDTO dto = new PermissionDTO();
+                        dto.setName(rp.getPermission().name());
+                        dto.setPermission(rp.getPermission().getPermission());
+                        dto.setDescription(rp.getPermission().getDescription());
+                        return dto;
+                    })
+                    .collect(Collectors.toList());
+            roleResponse.setPermissions(permissionDTOs);
+
+            response.setEntity(roleResponse);
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Role retrieved successfully");
+
+            auditService.log("ROLE_MANAGEMENT", "Retrieved role:", role.getName(),
+                    "with ID:", String.valueOf(role.getId()));
+
+        } catch (RuntimeException e) {
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error fetching role: " + e.getMessage());
+            auditService.log("ROLE_MANAGEMENT", "Error fetching role with ID:", String.valueOf(id), e.getMessage());
+        }
+        return response;
+    }
+
     CustomResponse<?> getAllPermissions() {
         CustomResponse<Object> response = new CustomResponse<>();
         try {
