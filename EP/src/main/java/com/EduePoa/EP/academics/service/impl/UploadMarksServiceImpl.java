@@ -37,6 +37,7 @@ public class UploadMarksServiceImpl implements UploadMarksService {
     private final AcademicSubjectRepository subjectRepository;
     private final StudentRepository studentRepository;
     private final ExamTypeRepository examTypeRepository;
+    private final com.EduePoa.EP.academics.common.TermResolver termResolver;
 
     @Override
     @Transactional
@@ -129,15 +130,8 @@ public class UploadMarksServiceImpl implements UploadMarksService {
         return response;
     }
 
+    /** Delegates to the centralized {@link com.EduePoa.EP.academics.common.TermResolver}. */
     private Optional<Term> resolveTermById(Long termId) {
-        if (termId == null) {
-            return Optional.empty();
-        }
-        return switch (termId.intValue()) {
-            case 1 -> Optional.of(Term.TERM_1);
-            case 2 -> Optional.of(Term.TERM_2);
-            case 3 -> Optional.of(Term.TERM_3);
-            default -> Optional.empty();
-        };
+        return termResolver.resolveById(termId);
     }
 }

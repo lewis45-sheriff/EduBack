@@ -17,6 +17,8 @@ public interface CbcGradeResultRepository extends TenantAwareRepository<CbcGrade
 
     List<CbcGradeResult> findByStudentAndTerm(Student student, Term term);
 
+    List<CbcGradeResult> findByStudentAndTermAndYear(Student student, Term term, Year year);
+
     Optional<CbcGradeResult> findByStudentAndAcademicSubjectAndTermAndYear(
             Student student, AcademicSubject subject, Term term, Year year);
 }

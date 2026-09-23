@@ -6,6 +6,9 @@ import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Grade.GradeRepository;
 import com.EduePoa.EP.Grade.Stream.Requests.GradeStreamCreateRequest;
 import com.EduePoa.EP.Grade.Stream.Requests.GradeStreamDto;
+import com.EduePoa.EP.Staff.Staff;
+import com.EduePoa.EP.Staff.StaffRepository;
+import com.EduePoa.EP.Staff.Enum.StaffType;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +25,14 @@ import java.util.Optional;
 public class GradeStreamServiceImpl implements GradeStreamService {
     private final GradeStreamRepository gradeStreamRepository;
     private final GradeRepository gradeRepository;
+    private final StaffRepository staffRepository;
     private final AuditService auditService;
+
+    // Note: gradeRepository is also used to ensure a teacher who is a grade-level
+    // class teacher is not simultaneously assigned to a stream.
+
+    private static final java.util.Set<StaffType> CLASS_TEACHER_TYPES = java.util.EnumSet.of(
+            StaffType.TEACHER, StaffType.HEAD_TEACHER, StaffType.DEPUTY_HEAD_TEACHER);
 
     @Override
     @Audit(module = "GRADE STREAM MANAGEMENT", action = "CREATE")
@@ -181,13 +191,135 @@ public class GradeStreamServiceImpl implements GradeStreamService {
         return response;
     }
 
+    @Override
+    @Audit(module = "GRADE STREAM MANAGEMENT", action = "ASSIGN_CLASS_TEACHER")
+    public CustomResponse<?> assignClassTeacher(Long streamId, Long staffId) {
+        CustomResponse<GradeStreamDto> response = new CustomResponse<>();
+        try {
+            if (streamId == null || staffId == null) {
+                response.setMessage("streamId and staffId are required.");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
+
+            Optional<GradeStream> streamOpt = gradeStreamRepository.findById(streamId);
+            if (streamOpt.isEmpty()) {
+                response.setMessage("Stream not found with id: " + streamId);
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            Staff staff = staffRepository.findById(staffId)
+                    .filter(s -> s.getDeletedFlag() == 'N')
+                    .orElse(null);
+            if (staff == null) {
+                response.setMessage("Staff member not found with id: " + staffId);
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            if (staff.getStaffType() == null || !CLASS_TEACHER_TYPES.contains(staff.getStaffType())) {
+                response.setMessage("Only teaching staff (TEACHER, HEAD_TEACHER, DEPUTY_HEAD_TEACHER) "
+                        + "can be assigned as a class teacher.");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
+
+            // A teacher may be class teacher of only one class at a time — check both
+            // other streams and any grade-level assignment.
+            Optional<GradeStream> existingAssignment = gradeStreamRepository.findByClassTeacherId(staffId);
+            if (existingAssignment.isPresent() && !existingAssignment.get().getId().equals(streamId)) {
+                response.setMessage("This teacher is already the class teacher of stream '"
+                        + existingAssignment.get().getName() + "'. Unassign them first.");
+                response.setStatusCode(HttpStatus.CONFLICT.value());
+                return response;
+            }
+            Optional<com.EduePoa.EP.Grade.Grade> gradeAssignment =
+                    gradeRepository.findByClassTeacherId(staffId);
+            if (gradeAssignment.isPresent()) {
+                response.setMessage("This teacher is already the class teacher of grade '"
+                        + gradeAssignment.get().getName() + "'. Unassign them first.");
+                response.setStatusCode(HttpStatus.CONFLICT.value());
+                return response;
+            }
+
+            GradeStream stream = streamOpt.get();
+            stream.setClassTeacher(staff);
+            GradeStream saved = gradeStreamRepository.save(stream);
+
+            response.setMessage("Class teacher assigned successfully.");
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(toDto(saved));
+            auditService.log("GRADE_STREAM_MANAGEMENT", "Assigned class teacher staffId:",
+                    String.valueOf(staffId), "to stream:", saved.getName());
+            log.info("Assigned class teacher staffId={} to streamId={}", staffId, streamId);
+
+        } catch (Exception e) {
+            log.error("Error assigning class teacher (streamId={}, staffId={}): {}", streamId, staffId, e.getMessage(), e);
+            response.setMessage("An unexpected error occurred while assigning the class teacher.");
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
+    @Override
+    @Audit(module = "GRADE STREAM MANAGEMENT", action = "REMOVE_CLASS_TEACHER")
+    public CustomResponse<?> removeClassTeacher(Long streamId) {
+        CustomResponse<GradeStreamDto> response = new CustomResponse<>();
+        try {
+            if (streamId == null) {
+                response.setMessage("streamId is required.");
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                return response;
+            }
+
+            Optional<GradeStream> streamOpt = gradeStreamRepository.findById(streamId);
+            if (streamOpt.isEmpty()) {
+                response.setMessage("Stream not found with id: " + streamId);
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                return response;
+            }
+
+            GradeStream stream = streamOpt.get();
+            stream.setClassTeacher(null);
+            GradeStream saved = gradeStreamRepository.save(stream);
+
+            response.setMessage("Class teacher removed successfully.");
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(toDto(saved));
+            auditService.log("GRADE_STREAM_MANAGEMENT", "Removed class teacher from stream:",
+                    saved.getName(), "with ID:", String.valueOf(streamId));
+            log.info("Removed class teacher from streamId={}", streamId);
+
+        } catch (Exception e) {
+            log.error("Error removing class teacher (streamId={}): {}", streamId, e.getMessage(), e);
+            response.setMessage("An unexpected error occurred while removing the class teacher.");
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+        return response;
+    }
+
     private GradeStreamDto toDto(GradeStream stream) {
         Grade grade = stream.getGrade();
+        Staff teacher = stream.getClassTeacher();
         return new GradeStreamDto(
                 stream.getId(),
                 stream.getName(),
                 grade != null ? grade.getId() : null,
-                grade != null ? grade.getName() : null
+                grade != null ? grade.getName() : null,
+                teacher != null ? teacher.getId() : null,
+                teacher != null ? buildFullName(teacher) : null,
+                teacher != null ? teacher.getEmployeeNumber() : null
         );
+    }
+
+    private String buildFullName(Staff staff) {
+        StringBuilder sb = new StringBuilder();
+        if (staff.getFirstName() != null) sb.append(staff.getFirstName().trim());
+        if (staff.getOtherNames() != null && !staff.getOtherNames().trim().isEmpty()) {
+            sb.append(" ").append(staff.getOtherNames().trim());
+        }
+        if (staff.getLastName() != null) sb.append(" ").append(staff.getLastName().trim());
+        return sb.toString().trim();
     }
 }

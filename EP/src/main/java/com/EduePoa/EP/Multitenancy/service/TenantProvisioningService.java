@@ -11,6 +11,7 @@ import com.EduePoa.EP.Multitenancy.config.TenantContext;
 import com.EduePoa.EP.Multitenancy.entity.Tenant;
 import com.EduePoa.EP.Multitenancy.entity.TenantConfiguration;
 import com.EduePoa.EP.Multitenancy.repository.TenantConfigurationRepository;
+import com.EduePoa.EP.academics.curriculum.seed.CurriculumSeeder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,6 +33,7 @@ public class TenantProvisioningService {
     private final RoleRepository roleRepository;
     private final TenantConfigurationRepository tenantConfigurationRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CurriculumSeeder curriculumSeeder;
 
 
     @Transactional
@@ -46,6 +48,17 @@ public class TenantProvisioningService {
             createDefaultRoles(tenant);
             createDefaultAdminUser(tenant);
             initializeDefaultConfiguration(tenantIdentifier);
+
+            // Seed the official CBC curriculum catalogue for the new tenant (idempotent).
+            // The seeder manages its own TenantContext; the surrounding context is restored below.
+            try {
+                curriculumSeeder.seedForTenant(tenantIdentifier);
+            } catch (Exception e) {
+                log.error("Curriculum seeding failed during provisioning of tenant {}: {}",
+                        tenantIdentifier, e.getMessage(), e);
+            }
+            // Re-assert this tenant's context (the seeder cleared it in its finally block).
+            TenantContext.setCurrentTenant(tenantIdentifier);
 
             log.info("Tenant provisioned successfully: identifier={}, schoolName={}",
                     tenantIdentifier, tenant.getSchoolName());
@@ -77,7 +90,8 @@ public class TenantProvisioningService {
             Permissions.CLASS_READ,
             Permissions.SUBJECT_READ,
             Permissions.REPORT_GENERATE,
-            Permissions.COMMUNICATION_READ
+            Permissions.COMMUNICATION_READ,
+            Permissions.TIMETABLE_MANAGE
     );
 
     /**

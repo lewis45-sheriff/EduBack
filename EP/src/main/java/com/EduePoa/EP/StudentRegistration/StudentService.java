@@ -18,6 +18,7 @@ public interface StudentService {
     void processBulkUploadAsync(byte[] fileBytes, String filename, String jobId, String tenantId);
     ResponseEntity<Resource> generateBulkUploadTemplate(String file);
     CustomResponse<?>getPerGrade(Long id);
+    CustomResponse<?>getPerStream(Long streamId);
     CustomResponse<?> getFeeStucturePerStudent(Long studentId);
     CustomResponse<?> getStudentGuardians(Long studentId);
     CustomResponse<?> getNemisStatus(Long studentId);

@@ -7,5 +7,7 @@ public interface GradeService {
     CustomResponse<?>getAllGrades();
     CustomResponse<?>delete(Long id);
 
+    CustomResponse<?> assignClassTeacher(Long gradeId, Long staffId);
 
+    CustomResponse<?> removeClassTeacher(Long gradeId);
 }

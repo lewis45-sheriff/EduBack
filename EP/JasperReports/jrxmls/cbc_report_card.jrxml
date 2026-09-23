@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="cbc_report_card"
+              language="java"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20"
+              whenNoDataType="AllSectionsNoDetail"
+              uuid="0b1e6d10-cbc0-4a10-9d0a-000000000001">
+
+    <property name="com.jaspersoft.studio.unit." value="pixel"/>
+
+    <!-- Styles (mirrors term_performance_report for a consistent look) -->
+    <style name="TitleStyle" fontName="Arial" fontSize="19" isBold="true" forecolor="#FFFFFF"/>
+    <style name="SubTitleStyle" fontName="Arial" fontSize="9" forecolor="#E3F2FD"/>
+    <style name="SectionHeader" fontName="Arial" fontSize="12" isBold="true" forecolor="#0F4C81"/>
+    <style name="TableHeader" mode="Opaque" backcolor="#0F4C81" forecolor="#FFFFFF" fontName="Arial" fontSize="10" isBold="true">
+        <box><pen lineWidth="0.4" lineColor="#FFFFFF"/></box>
+    </style>
+    <style name="DetailStyle" fontName="Arial" fontSize="9" forecolor="#16324F">
+        <box><pen lineWidth="0.3" lineColor="#D8E3EC"/></box>
+        <conditionalStyle>
+            <conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+            <style mode="Opaque" backcolor="#F7FAFC"/>
+        </conditionalStyle>
+    </style>
+    <style name="InfoLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#0F4C81"/>
+    <style name="InfoValue" fontName="Arial" fontSize="9" forecolor="#16324F"/>
+
+    <!-- ============ Competency subdataset (evidence-based) ============ -->
+    <!-- subDataset elements must precede parameters/queryString per the JRXML schema. -->
+    <subDataset name="Competencies" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000010">
+        <parameter name="studentID" class="java.lang.Long"/>
+        <parameter name="termID" class="java.lang.String"/>
+        <parameter name="year" class="java.lang.Long"/>
+        <parameter name="tenantId" class="java.lang.String"/>
+        <queryString language="SQL">
+            <![CDATA[
+            SELECT c.name AS competencyName,
+                   pl.label AS levelLabel,
+                   COALESCE(ce.comment, ce.evidence_description) AS competencyComment
+            FROM cbc_competency_evidence ce
+            JOIN cbc_core_competency c ON c.id = ce.competency_id
+            LEFT JOIN cbc_performance_level pl ON pl.id = ce.performance_level_id
+            WHERE ce.student_id = $P{studentID}
+              AND ce.term = $P{termID}
+              AND ce.academic_year = $P{year}
+              AND ce.tenant_id = $P{tenantId}
+            ORDER BY c.sequence
+            ]]>
+        </queryString>
+        <field name="competencyName" class="java.lang.String"/>
+        <field name="levelLabel" class="java.lang.String"/>
+        <field name="competencyComment" class="java.lang.String"/>
+    </subDataset>
+
+    <!-- ============ Values subdataset (active values for the tenant's active version) ============ -->
+    <subDataset name="Values" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000020">
+        <parameter name="tenantId" class="java.lang.String"/>
+        <queryString language="SQL">
+            <![CDATA[
+            SELECT v.name AS valueName, v.description AS valueDescription
+            FROM cbc_value v
+            JOIN cbc_curriculum_version cv ON cv.id = v.curriculum_version_id
+            WHERE v.tenant_id = $P{tenantId}
+              AND v.status = 'ACTIVE'
+              AND cv.status = 'ACTIVE'
+            ORDER BY v.sequence
+            ]]>
+        </queryString>
+        <field name="valueName" class="java.lang.String"/>
+        <field name="valueDescription" class="java.lang.String"/>
+    </subDataset>
+
+    <!-- Parameters supplied by ReportsService -->
+    <parameter name="studentID" class="java.lang.Long"/>
+    <parameter name="termID" class="java.lang.String"/>
+    <parameter name="year" class="java.lang.Long"/>
+    <parameter name="tenantId" class="java.lang.String"/>
+    <parameter name="Logo" class="java.lang.String"/>
+    <parameter name="SchoolName" class="java.lang.String">
+        <defaultValueExpression><![CDATA["SCHOOL NAME"]]></defaultValueExpression>
+    </parameter>
+    <parameter name="SchoolAddress" class="java.lang.String">
+        <defaultValueExpression><![CDATA[""]]></defaultValueExpression>
+    </parameter>
+
+    <!-- ============ Main query: learning-area results from the CBC engine ============ -->
+    <queryString language="SQL">
+        <![CDATA[
+        SELECT
+            asub.subject_name           AS learningAreaName,
+            CONCAT_WS(' ', s.first_name, s.last_name) AS studentFullName,
+            s.admission_number          AS admissionNumber,
+            g.name                      AS gradeName,
+            CAST(cgr.year AS CHAR)      AS academicYear,
+            cgr.term                    AS termName,
+            cgr.normalized_score        AS normalizedScore,
+            cgr.performance_points      AS performancePoints,
+            COALESCE(pl.label, cgr.cbc_label) AS performanceLabel,
+            pl.code                     AS performanceCode,
+            cgr.teacher_comment         AS teacherComment,
+            af.code                     AS frameworkCode
+        FROM cbc_grade_result cgr
+        JOIN student s        ON s.id = cgr.student_id
+        JOIN academic_subject asub ON asub.id = cgr.academic_subject_id
+        LEFT JOIN grade g     ON g.id = s.grade_id
+        LEFT JOIN cbc_performance_level pl ON pl.id = cgr.performance_level_id
+        LEFT JOIN cbc_assessment_framework af ON af.id = cgr.assessment_framework_id
+        WHERE cgr.student_id = $P{studentID}
+          AND cgr.term = $P{termID}
+          AND cgr.year = $P{year}
+          AND cgr.tenant_id = $P{tenantId}
+        ORDER BY asub.subject_name ASC
+        ]]>
+    </queryString>
+
+    <field name="learningAreaName" class="java.lang.String"/>
+    <field name="studentFullName" class="java.lang.String"/>
+    <field name="admissionNumber" class="java.lang.String"/>
+    <field name="gradeName" class="java.lang.String"/>
+    <field name="academicYear" class="java.lang.String"/>
+    <field name="termName" class="java.lang.String"/>
+    <field name="normalizedScore" class="java.math.BigDecimal"/>
+    <field name="performancePoints" class="java.lang.Integer"/>
+    <field name="performanceLabel" class="java.lang.String"/>
+    <field name="performanceCode" class="java.lang.String"/>
+    <field name="teacherComment" class="java.lang.String"/>
+    <field name="frameworkCode" class="java.lang.String"/>
+
+    <variable name="LearningAreaCount" class="java.lang.Integer" calculation="Count">
+        <variableExpression><![CDATA[$F{learningAreaName}]]></variableExpression>
+    </variable>
+
+    <!-- Header -->
+    <title>
+        <band height="176" splitType="Stretch">
+            <rectangle>
+                <reportElement mode="Opaque" x="0" y="0" width="555" height="96" backcolor="#0F4C81" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000101"/>
+            </rectangle>
+            <image scaleImage="RetainShape" onErrorType="Blank">
+                <reportElement x="16" y="14" width="66" height="66" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000102">
+                    <printWhenExpression><![CDATA[$P{Logo} != null]]></printWhenExpression>
+                </reportElement>
+                <imageExpression><![CDATA[$P{Logo}]]></imageExpression>
+            </image>
+            <textField>
+                <reportElement style="TitleStyle" x="94" y="16" width="445" height="26" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000103"/>
+                <textElement verticalAlignment="Middle"><font fontName="Arial" size="18" isBold="true"/></textElement>
+                <textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="94" y="44" width="445" height="20" forecolor="#FFFFFF" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000104"/>
+                <textElement verticalAlignment="Middle"><font fontName="Arial" size="13" isBold="true"/></textElement>
+                <text><![CDATA[CBC LEARNER REPORT CARD]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement style="SubTitleStyle" x="94" y="66" width="445" height="16" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000105"/>
+                <textElement verticalAlignment="Middle"><font fontName="Arial" size="9" isItalic="true"/></textElement>
+                <textFieldExpression><![CDATA[$P{SchoolAddress}]]></textFieldExpression>
+            </textField>
+
+            <rectangle radius="8">
+                <reportElement mode="Opaque" x="0" y="104" width="555" height="64" backcolor="#F7FAFC" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000106"/>
+                <graphicElement><pen lineWidth="0.5" lineColor="#C7D7E5"/></graphicElement>
+            </rectangle>
+            <staticText><reportElement style="InfoLabel" x="14" y="110" width="120" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000107"/><text><![CDATA[Learner Name]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="14" y="124" width="180" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000108"/><textFieldExpression><![CDATA[$F{studentFullName}]]></textFieldExpression></textField>
+            <staticText><reportElement style="InfoLabel" x="200" y="110" width="120" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000109"/><text><![CDATA[Assessment No]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="200" y="124" width="120" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010a"/><textFieldExpression><![CDATA[$F{admissionNumber}]]></textFieldExpression></textField>
+            <staticText><reportElement style="InfoLabel" x="330" y="110" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010b"/><text><![CDATA[Grade]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="330" y="124" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010c"/><textFieldExpression><![CDATA[$F{gradeName}]]></textFieldExpression></textField>
+            <staticText><reportElement style="InfoLabel" x="440" y="110" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010d"/><text><![CDATA[Term / Year]]></text></staticText>
+            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="440" y="124" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010e"/><textFieldExpression><![CDATA[$F{termName} + " / " + $F{academicYear}]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="14" y="146" width="527" height="14" forecolor="#537188" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010f"/>
+                <textElement><font fontName="Arial" size="8" isItalic="true"/></textElement>
+                <textFieldExpression><![CDATA[$F{frameworkCode} == null ? "" : ("Assessment framework: " + $F{frameworkCode})]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <!-- Learning area column headers -->
+    <columnHeader>
+        <band height="30" splitType="Stretch">
+            <staticText><reportElement style="TableHeader" x="0" y="4" width="26" height="22" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000201"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[#]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="26" y="4" width="200" height="22" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000202"/><textElement verticalAlignment="Middle"><paragraph leftIndent="4"/></textElement><text><![CDATA[LEARNING AREA]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="226" y="4" width="70" height="22" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000203"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[SCORE %]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="296" y="4" width="150" height="22" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000204"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[PERFORMANCE LEVEL]]></text></staticText>
+            <staticText><reportElement style="TableHeader" x="446" y="4" width="109" height="22" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000205"/><textElement textAlignment="Center" verticalAlignment="Middle"/><text><![CDATA[POINTS]]></text></staticText>
+        </band>
+    </columnHeader>
+
+    <!-- Learning area rows -->
+    <detail>
+        <band height="28" splitType="Stretch">
+            <textField><reportElement style="DetailStyle" x="0" y="0" width="26" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000301"/><textElement textAlignment="Center" verticalAlignment="Middle"/><textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression></textField>
+            <textField><reportElement style="DetailStyle" x="26" y="0" width="200" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000302"/><textElement verticalAlignment="Middle"><paragraph leftIndent="4"/></textElement><textFieldExpression><![CDATA[$F{learningAreaName}]]></textFieldExpression></textField>
+            <textField pattern="#,##0.0" isBlankWhenNull="true"><reportElement style="DetailStyle" x="226" y="0" width="70" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000303"/><textElement textAlignment="Center" verticalAlignment="Middle"/><textFieldExpression><![CDATA[$F{normalizedScore}]]></textFieldExpression></textField>
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true"><reportElement style="DetailStyle" x="296" y="0" width="150" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000304"/><textElement textAlignment="Center" verticalAlignment="Middle"><paragraph leftIndent="3" rightIndent="3"/></textElement>
+                <textFieldExpression><![CDATA[($F{performanceCode} == null ? "" : ($F{performanceCode} + " - ")) + ($F{performanceLabel} == null ? "" : $F{performanceLabel})]]></textFieldExpression></textField>
+            <textField isBlankWhenNull="true"><reportElement style="DetailStyle" x="446" y="0" width="109" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000305"/><textElement textAlignment="Center" verticalAlignment="Middle"/><textFieldExpression><![CDATA[$F{performancePoints}]]></textFieldExpression></textField>
+        </band>
+    </detail>
+
+    <!-- Competencies + Values + Comments -->
+    <summary>
+        <band height="330" splitType="Stretch">
+            <!-- Core competencies -->
+            <staticText><reportElement style="SectionHeader" x="0" y="8" width="300" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000401"/><text><![CDATA[CORE COMPETENCIES]]></text></staticText>
+            <componentElement>
+                <reportElement x="0" y="28" width="555" height="20" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000402"/>
+                <jr:list xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components"
+                         xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd"
+                         printOrder="Vertical">
+                    <datasetRun subDataset="Competencies" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000403">
+                        <datasetParameter name="studentID"><datasetParameterExpression><![CDATA[$P{studentID}]]></datasetParameterExpression></datasetParameter>
+                        <datasetParameter name="termID"><datasetParameterExpression><![CDATA[$P{termID}]]></datasetParameterExpression></datasetParameter>
+                        <datasetParameter name="year"><datasetParameterExpression><![CDATA[$P{year}]]></datasetParameterExpression></datasetParameter>
+                        <datasetParameter name="tenantId"><datasetParameterExpression><![CDATA[$P{tenantId}]]></datasetParameterExpression></datasetParameter>
+                    </datasetRun>
+                    <jr:listContents height="20" width="555">
+                        <textField isBlankWhenNull="true">
+                            <reportElement style="DetailStyle" x="0" y="0" width="200" height="20" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000404"/>
+                            <textElement verticalAlignment="Middle"><paragraph leftIndent="4"/></textElement>
+                            <textFieldExpression><![CDATA[$F{competencyName}]]></textFieldExpression>
+                        </textField>
+                        <textField isBlankWhenNull="true">
+                            <reportElement style="DetailStyle" x="200" y="0" width="120" height="20" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000405"/>
+                            <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                            <textFieldExpression><![CDATA[$F{levelLabel}]]></textFieldExpression>
+                        </textField>
+                        <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                            <reportElement style="DetailStyle" x="320" y="0" width="235" height="20" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000406"/>
+                            <textElement verticalAlignment="Middle"><paragraph leftIndent="4" rightIndent="4"/></textElement>
+                            <textFieldExpression><![CDATA[$F{competencyComment}]]></textFieldExpression>
+                        </textField>
+                    </jr:listContents>
+                </jr:list>
+            </componentElement>
+
+            <!-- Values -->
+            <staticText><reportElement style="SectionHeader" x="0" y="150" width="300" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000407"/><text><![CDATA[VALUES]]></text></staticText>
+            <componentElement>
+                <reportElement x="0" y="170" width="555" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000408"/>
+                <jr:list xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components"
+                         xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd"
+                         printOrder="Vertical">
+                    <datasetRun subDataset="Values" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000409">
+                        <datasetParameter name="tenantId"><datasetParameterExpression><![CDATA[$P{tenantId}]]></datasetParameterExpression></datasetParameter>
+                    </datasetRun>
+                    <jr:listContents height="18" width="555">
+                        <textField isBlankWhenNull="true">
+                            <reportElement style="DetailStyle" x="0" y="0" width="200" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040a"/>
+                            <textElement verticalAlignment="Middle"><paragraph leftIndent="4"/></textElement>
+                            <textFieldExpression><![CDATA[$F{valueName}]]></textFieldExpression>
+                        </textField>
+                        <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                            <reportElement style="DetailStyle" x="200" y="0" width="355" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040b"/>
+                            <textElement verticalAlignment="Middle"><paragraph leftIndent="4" rightIndent="4"/></textElement>
+                            <textFieldExpression><![CDATA[$F{valueDescription}]]></textFieldExpression>
+                        </textField>
+                    </jr:listContents>
+                </jr:list>
+            </componentElement>
+
+            <!-- Teacher comment + signature -->
+            <rectangle radius="10">
+                <reportElement mode="Opaque" x="0" y="250" width="555" height="70" backcolor="#F7FAFC" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040c"/>
+                <graphicElement><pen lineWidth="0.5" lineColor="#C7D7E5"/></graphicElement>
+            </rectangle>
+            <staticText><reportElement style="SectionHeader" x="12" y="258" width="300" height="16" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040d"/><text><![CDATA[CLASS TEACHER'S REMARKS]]></text></staticText>
+            <textField evaluationTime="Report" textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="12" y="278" width="531" height="30" forecolor="#16324F" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040e"/>
+                <textElement verticalAlignment="Top"><font fontName="Arial" size="10"/></textElement>
+                <textFieldExpression><![CDATA[$F{teacherComment} == null ? "The learner is developing across the assessed learning areas. Continued support and practice are encouraged." : $F{teacherComment}]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+
+    <!-- Empty state -->
+    <noData>
+        <band height="180" splitType="Stretch">
+            <rectangle><reportElement mode="Opaque" x="0" y="0" width="555" height="96" backcolor="#0F4C81" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000501"/></rectangle>
+            <textField><reportElement style="TitleStyle" x="20" y="20" width="515" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000502"/><textElement textAlignment="Center" verticalAlignment="Middle"><font fontName="Arial" size="18" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression></textField>
+            <staticText><reportElement x="20" y="52" width="515" height="20" forecolor="#D7E7F5" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000503"/><textElement textAlignment="Center" verticalAlignment="Middle"><font fontName="Arial" size="12" isBold="true"/></textElement><text><![CDATA[CBC LEARNER REPORT CARD]]></text></staticText>
+            <staticText><reportElement style="SectionHeader" x="20" y="120" width="515" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000504"/><textElement textAlignment="Center"/><text><![CDATA[No CBC results were found for the selected learner, term and year.]]></text></staticText>
+            <textField><reportElement x="20" y="142" width="515" height="16" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000505"/><textElement textAlignment="Center"><font fontName="Arial" size="9"/></textElement>
+                <textFieldExpression><![CDATA["Student ID: " + $P{studentID} + " | Term: " + $P{termID} + " | Year: " + $P{year}]]></textFieldExpression></textField>
+        </band>
+    </noData>
+</jasperReport>

@@ -8,4 +8,6 @@ import java.util.Optional;
 @Repository
 public interface GradeRepository extends TenantAwareRepository<Grade, Long> {
     Optional<Grade> findByName( String Name);
+
+    Optional<Grade> findByClassTeacherId(Long classTeacherId);
 }

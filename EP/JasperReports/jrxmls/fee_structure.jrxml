@@ -183,8 +183,10 @@ ORDER BY
 					<pen lineWidth="0.0"/>
 				</graphicElement>
 			</rectangle>
-			<image scaleImage="RetainShape">
-				<reportElement x="20" y="15" width="70" height="70" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca"/>
+			<image scaleImage="RetainShape" onErrorType="Blank">
+				<reportElement x="20" y="15" width="70" height="70" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca">
+					<printWhenExpression><![CDATA[$P{Logo} != null]]></printWhenExpression>
+				</reportElement>
 				<imageExpression><![CDATA[$P{Logo}]]></imageExpression>
 			</image>
 			<textField>

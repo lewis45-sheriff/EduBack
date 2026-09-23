@@ -1,0 +1,121 @@
+{
+  "version": {
+    "code": "CBC_2024",
+    "name": "Kenya CBC/CBE Rationalised Curriculum",
+    "version": "2024",
+    "status": "ACTIVE",
+    "source": "OFFICIAL_KICD",
+    "description": "Kenyan Competency-Based Curriculum reference data. Structure per KICD Basic Education Curriculum Framework. Learning-area lists are seed samples that a school configures; extend via reference data, not code."
+  },
+  "educationLevels": [
+    { "code": "PRE_PRIMARY",   "band": "PRE_PRIMARY",   "name": "Pre-Primary Education", "sequence": 1 },
+    { "code": "LOWER_PRIMARY", "band": "LOWER_PRIMARY", "name": "Lower Primary",         "sequence": 2 },
+    { "code": "UPPER_PRIMARY", "band": "UPPER_PRIMARY", "name": "Upper Primary",         "sequence": 3 },
+    { "code": "JUNIOR_SCHOOL", "band": "JUNIOR_SCHOOL", "name": "Junior School",         "sequence": 4 },
+    { "code": "SENIOR_SCHOOL", "band": "SENIOR_SCHOOL", "name": "Senior School",         "sequence": 5 }
+  ],
+  "grades": [
+    { "gradeCode": "PP1",      "gradeName": "PP1",      "educationLevel": "PRE_PRIMARY",   "sequence": 1 },
+    { "gradeCode": "PP2",      "gradeName": "PP2",      "educationLevel": "PRE_PRIMARY",   "sequence": 2 },
+    { "gradeCode": "GRADE_1",  "gradeName": "Grade 1",  "educationLevel": "LOWER_PRIMARY", "sequence": 3 },
+    { "gradeCode": "GRADE_2",  "gradeName": "Grade 2",  "educationLevel": "LOWER_PRIMARY", "sequence": 4 },
+    { "gradeCode": "GRADE_3",  "gradeName": "Grade 3",  "educationLevel": "LOWER_PRIMARY", "sequence": 5 },
+    { "gradeCode": "GRADE_4",  "gradeName": "Grade 4",  "educationLevel": "UPPER_PRIMARY", "sequence": 6 },
+    { "gradeCode": "GRADE_5",  "gradeName": "Grade 5",  "educationLevel": "UPPER_PRIMARY", "sequence": 7 },
+    { "gradeCode": "GRADE_6",  "gradeName": "Grade 6",  "educationLevel": "UPPER_PRIMARY", "sequence": 8 },
+    { "gradeCode": "GRADE_7",  "gradeName": "Grade 7",  "educationLevel": "JUNIOR_SCHOOL", "sequence": 9 },
+    { "gradeCode": "GRADE_8",  "gradeName": "Grade 8",  "educationLevel": "JUNIOR_SCHOOL", "sequence": 10 },
+    { "gradeCode": "GRADE_9",  "gradeName": "Grade 9",  "educationLevel": "JUNIOR_SCHOOL", "sequence": 11 },
+    { "gradeCode": "GRADE_10", "gradeName": "Grade 10", "educationLevel": "SENIOR_SCHOOL", "sequence": 12 },
+    { "gradeCode": "GRADE_11", "gradeName": "Grade 11", "educationLevel": "SENIOR_SCHOOL", "sequence": 13 },
+    { "gradeCode": "GRADE_12", "gradeName": "Grade 12", "educationLevel": "SENIOR_SCHOOL", "sequence": 14 }
+  ],
+  "learningAreas": [
+    { "catalogueKey": "LANGUAGE_ACTIVITIES",      "officialName": "Language Activities",      "educationLevel": "PRE_PRIMARY",   "type": "ACTIVITY_AREA", "core": true,  "optional": false, "sequence": 1 },
+    { "catalogueKey": "MATHEMATICAL_ACTIVITIES",  "officialName": "Mathematical Activities",  "educationLevel": "PRE_PRIMARY",   "type": "ACTIVITY_AREA", "core": true,  "optional": false, "sequence": 2 },
+    { "catalogueKey": "ENVIRONMENTAL_ACTIVITIES", "officialName": "Environmental Activities", "educationLevel": "PRE_PRIMARY",   "type": "ACTIVITY_AREA", "core": true,  "optional": false, "sequence": 3 },
+    { "catalogueKey": "PSYCHOMOTOR_CREATIVE",     "officialName": "Creative Activities",      "educationLevel": "PRE_PRIMARY",   "type": "ACTIVITY_AREA", "core": true,  "optional": false, "sequence": 4 },
+    { "catalogueKey": "RELIGIOUS_ACTIVITIES",     "officialName": "Religious Activities",     "educationLevel": "PRE_PRIMARY",   "type": "ACTIVITY_AREA", "core": true,  "optional": false, "sequence": 5 },
+
+    { "catalogueKey": "LITERACY",                 "officialName": "Literacy",                 "educationLevel": "LOWER_PRIMARY", "type": "CORE",     "core": true,  "optional": false, "sequence": 1 },
+    { "catalogueKey": "KISWAHILI",                "officialName": "Kiswahili",                "educationLevel": "LOWER_PRIMARY", "type": "LANGUAGE", "core": true,  "optional": false, "sequence": 2 },
+    { "catalogueKey": "ENGLISH_ACTIVITIES",       "officialName": "English Activities",       "educationLevel": "LOWER_PRIMARY", "type": "LANGUAGE", "core": true,  "optional": false, "sequence": 3 },
+    { "catalogueKey": "MATHEMATICAL_ACTIVITIES_LP","officialName": "Mathematical Activities", "educationLevel": "LOWER_PRIMARY", "type": "CORE",     "core": true,  "optional": false, "sequence": 4 },
+
+    { "catalogueKey": "ENGLISH",                  "officialName": "English",                  "educationLevel": "UPPER_PRIMARY", "type": "LANGUAGE", "core": true,  "optional": false, "sequence": 1 },
+    { "catalogueKey": "KISWAHILI_UP",             "officialName": "Kiswahili",                "educationLevel": "UPPER_PRIMARY", "type": "LANGUAGE", "core": true,  "optional": false, "sequence": 2 },
+    { "catalogueKey": "MATHEMATICS_UP",           "officialName": "Mathematics",              "educationLevel": "UPPER_PRIMARY", "type": "CORE",     "core": true,  "optional": false, "sequence": 3 },
+    { "catalogueKey": "SCIENCE_TECHNOLOGY",       "officialName": "Science and Technology",   "educationLevel": "UPPER_PRIMARY", "type": "CORE",     "core": true,  "optional": false, "sequence": 4 },
+
+    { "catalogueKey": "ENGLISH_JS",               "officialName": "English",                  "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": true,  "optional": false, "sequence": 1 },
+    { "catalogueKey": "KISWAHILI_JS",             "officialName": "Kiswahili",                "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": true,  "optional": false, "sequence": 2 },
+    { "catalogueKey": "MATHEMATICS",              "officialName": "Mathematics",              "educationLevel": "JUNIOR_SCHOOL", "type": "CORE",     "core": true,  "optional": false, "sequence": 3 },
+    { "catalogueKey": "INTEGRATED_SCIENCE",       "officialName": "Integrated Science",       "educationLevel": "JUNIOR_SCHOOL", "type": "CORE",     "core": true,  "optional": false, "sequence": 4 },
+    { "catalogueKey": "SOCIAL_STUDIES",           "officialName": "Social Studies",           "educationLevel": "JUNIOR_SCHOOL", "type": "CORE",     "core": true,  "optional": false, "sequence": 5 },
+    { "catalogueKey": "PRE_TECHNICAL_STUDIES",    "officialName": "Pre-Technical Studies",    "educationLevel": "JUNIOR_SCHOOL", "type": "CORE",     "core": true,  "optional": false, "sequence": 6 },
+    { "catalogueKey": "AGRICULTURE",              "officialName": "Agriculture",              "educationLevel": "JUNIOR_SCHOOL", "type": "CORE",     "core": true,  "optional": false, "sequence": 7 },
+    { "catalogueKey": "CREATIVE_ARTS_SPORTS",     "officialName": "Creative Arts and Sports", "educationLevel": "JUNIOR_SCHOOL", "type": "CORE",     "core": true,  "optional": false, "sequence": 8 },
+    { "catalogueKey": "CRE",                      "officialName": "Christian Religious Education", "educationLevel": "JUNIOR_SCHOOL", "type": "RELIGIOUS_EDUCATION", "core": false, "optional": true, "sequence": 9 },
+    { "catalogueKey": "IRE",                      "officialName": "Islamic Religious Education",   "educationLevel": "JUNIOR_SCHOOL", "type": "RELIGIOUS_EDUCATION", "core": false, "optional": true, "sequence": 10 },
+    { "catalogueKey": "HRE",                      "officialName": "Hindu Religious Education",     "educationLevel": "JUNIOR_SCHOOL", "type": "RELIGIOUS_EDUCATION", "core": false, "optional": true, "sequence": 11 },
+    { "catalogueKey": "ARABIC",                   "officialName": "Arabic",                   "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": false, "optional": true, "sequence": 12 },
+    { "catalogueKey": "FRENCH",                   "officialName": "French",                   "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": false, "optional": true, "sequence": 13 },
+    { "catalogueKey": "GERMAN",                   "officialName": "German",                   "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": false, "optional": true, "sequence": 14 },
+    { "catalogueKey": "MANDARIN",                 "officialName": "Mandarin",                 "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": false, "optional": true, "sequence": 15 },
+    { "catalogueKey": "INDIGENOUS_LANGUAGE",      "officialName": "Indigenous Language",      "educationLevel": "JUNIOR_SCHOOL", "type": "LANGUAGE", "core": false, "optional": true, "sequence": 16 }
+  ],
+  "sampleCurriculumTree": {
+    "learningAreaKey": "MATHEMATICS",
+    "strands": [
+      {
+        "code": "MATH_G7_S1",
+        "name": "Numbers",
+        "sequence": 1,
+        "subStrands": [
+          {
+            "code": "MATH_G7_S1_SS1",
+            "name": "Whole Numbers",
+            "sequence": 1,
+            "learningOutcomes": [
+              {
+                "code": "MATH_G7_SLO1",
+                "description": "Use place value of digits up to hundreds of millions in real life",
+                "sequence": 1,
+                "inquiryQuestions": [
+                  "How do we use large numbers in daily life?",
+                  "Why is place value important?"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "coreCompetencies": [
+    { "code": "COMMUNICATION_COLLABORATION", "name": "Communication and Collaboration",       "sequence": 1 },
+    { "code": "CRITICAL_THINKING",           "name": "Critical Thinking and Problem Solving", "sequence": 2 },
+    { "code": "CREATIVITY_IMAGINATION",      "name": "Creativity and Imagination",            "sequence": 3 },
+    { "code": "CITIZENSHIP",                 "name": "Citizenship",                           "sequence": 4 },
+    { "code": "DIGITAL_LITERACY",            "name": "Digital Literacy",                      "sequence": 5 },
+    { "code": "LEARNING_TO_LEARN",           "name": "Learning to Learn",                     "sequence": 6 },
+    { "code": "SELF_EFFICACY",               "name": "Self-Efficacy",                         "sequence": 7 }
+  ],
+  "values": [
+    { "code": "LOVE",            "name": "Love",            "sequence": 1 },
+    { "code": "RESPONSIBILITY",  "name": "Responsibility",  "sequence": 2 },
+    { "code": "RESPECT",         "name": "Respect",         "sequence": 3 },
+    { "code": "UNITY",           "name": "Unity",           "sequence": 4 },
+    { "code": "PEACE",           "name": "Peace",           "sequence": 5 },
+    { "code": "PATRIOTISM",      "name": "Patriotism",      "sequence": 6 },
+    { "code": "INTEGRITY",       "name": "Integrity",       "sequence": 7 }
+  ],
+  "pcis": [
+    { "code": "HEALTH_EDUCATION",     "name": "Health Education",           "category": "Health",       "sequence": 1 },
+    { "code": "ENVIRONMENTAL",        "name": "Environmental Education",    "category": "Environment",  "sequence": 2 },
+    { "code": "CITIZENSHIP_PCI",      "name": "Citizenship",                "category": "Citizenship",  "sequence": 3 },
+    { "code": "SAFETY_SECURITY",      "name": "Safety and Security",        "category": "Safety",       "sequence": 4 },
+    { "code": "FINANCIAL_LITERACY",   "name": "Financial Literacy",         "category": "Life Skills",  "sequence": 5 },
+    { "code": "LIFE_SKILLS",          "name": "Life Skills",                "category": "Life Skills",  "sequence": 6 }
+  ]
+}

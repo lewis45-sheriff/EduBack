@@ -150,8 +150,10 @@
 				<reportElement mode="Opaque" x="0" y="0" width="555" height="108" backcolor="#0F4C81" uuid="8c13e6c7-db0a-47cf-88ca-11296a96b083"/>
 			</rectangle>
 
-			<image scaleImage="RetainShape">
-				<reportElement x="18" y="18" width="72" height="72" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca"/>
+			<image scaleImage="RetainShape" onErrorType="Blank">
+				<reportElement x="18" y="18" width="72" height="72" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca">
+					<printWhenExpression><![CDATA[$P{Logo} != null]]></printWhenExpression>
+				</reportElement>
 				<imageExpression><![CDATA[$P{Logo}]]></imageExpression>
 			</image>
 

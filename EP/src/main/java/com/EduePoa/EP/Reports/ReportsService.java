@@ -87,7 +87,7 @@ public class ReportsService {
 
         parameters.put("file_name", reportRequestObject.fileName);
         parameters.put("report_path", path);
-        parameters.put("Logo", resolveLogoPath(null));
+        parameters.put("Logo", safeLogo(resolveLogoPath(null)));
 
         // Inject tenant branding from TenantConfigurationService
         Map<String, String> branding = getTenantBranding();
@@ -96,7 +96,7 @@ public class ReportsService {
         }
         if (branding.containsKey("Logo")) {
             // Tenant-configured logo overrides the default
-            parameters.put("Logo", branding.get("Logo"));
+            parameters.put("Logo", safeLogo(branding.get("Logo")));
         }
         if (branding.containsKey("SchoolAddress")) {
             parameters.put("SchoolAddress", branding.get("SchoolAddress"));
@@ -149,7 +149,7 @@ public class ReportsService {
         parameters.put("gradeId", request.getGradeId());
         parameters.put("termID", termCode);
         parameters.put("year", request.getYear().longValue());
-        parameters.put("Logo", resolveLogoPath(request.getLogoPath()));
+        parameters.put("Logo", safeLogo(resolveLogoPath(request.getLogoPath())));
 
         // Inject tenant branding as defaults
         Map<String, String> branding = getTenantBranding();
@@ -158,7 +158,7 @@ public class ReportsService {
         }
         if (branding.containsKey("Logo") && !StringUtils.hasText(request.getLogoPath())) {
             // Only override logo if the request didn't specify one
-            parameters.put("Logo", branding.get("Logo"));
+            parameters.put("Logo", safeLogo(branding.get("Logo")));
         }
         if (branding.containsKey("SchoolAddress")) {
             parameters.put("SchoolAddress", branding.get("SchoolAddress"));
@@ -209,6 +209,90 @@ public class ReportsService {
             res.setMessage("Report generation error: " + e.getMessage());
             return res;
         } catch (Exception e) {
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Unexpected error: " + e.getMessage());
+            return res;
+        }
+    }
+
+    /**
+     * Generates the CBC learner report card PDF from the new curriculum/assessment tables
+     * (cbc_grade_result, cbc_performance_level, cbc_competency_evidence, cbc_value).
+     * <p>
+     * Jasper fills the report through a raw JDBC connection, which bypasses the Hibernate
+     * tenant filter, so the current tenant is passed explicitly as the {@code tenantId}
+     * parameter and every query in the template is scoped by {@code tenant_id = $P{tenantId}}.
+     */
+    public CustomResponse<?> generateCbcReportCard(ReportCardRequest request) {
+        CustomResponse<Object> res = new CustomResponse<>();
+
+        if (request == null || request.getStudentId() == null
+                || request.getTermId() == null || request.getYear() == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("studentId, termId and year are required");
+            return res;
+        }
+
+        String termCode = mapTermIdToCode(request.getTermId());
+        if (termCode == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("Invalid termId. Use 1, 2, or 3");
+            return res;
+        }
+
+        if (!TenantContext.isSet()) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("Tenant context is required to generate a report card");
+            return res;
+        }
+        String tenantId = TenantContext.getCurrentTenant();
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("studentID", request.getStudentId());
+        parameters.put("termID", termCode);
+        parameters.put("year", request.getYear().longValue());
+        parameters.put("tenantId", tenantId);
+        parameters.put("Logo", safeLogo(resolveLogoPath(request.getLogoPath())));
+
+        Map<String, String> branding = getTenantBranding();
+        if (branding.containsKey("SchoolName")) {
+            parameters.put("SchoolName", branding.get("SchoolName"));
+        }
+        if (branding.containsKey("Logo") && !StringUtils.hasText(request.getLogoPath())) {
+            parameters.put("Logo", safeLogo(branding.get("Logo")));
+        }
+        if (branding.containsKey("SchoolAddress")) {
+            parameters.put("SchoolAddress", branding.get("SchoolAddress"));
+        }
+        // Request-provided values override tenant branding.
+        if (StringUtils.hasText(request.getSchoolName())) {
+            parameters.put("SchoolName", request.getSchoolName());
+        }
+
+        String reportPath = path + FileTypeEnums.CBC_REPORT_CARD.getReportTypeString();
+        File reportFile = new File(reportPath);
+        if (!reportFile.exists()) {
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("CBC report template not found at " + reportPath);
+            return res;
+        }
+
+        try (InputStream reportStream = new FileInputStream(reportFile);
+             Connection connection = DriverManager.getConnection(db, username, password)) {
+            JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
+            JasperPrint report = JasperFillManager.fillReport(compiledReport, parameters, connection);
+            byte[] data = JasperExportManager.exportReportToPdf(report);
+            res.setEntity(data);
+            res.setStatusCode(HttpStatus.OK.value());
+            res.setMessage("CBC report card generated successfully");
+            return res;
+        } catch (JRException e) {
+            log.error("CBC report generation error: {}", e.getMessage(), e);
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Report generation error: " + e.getMessage());
+            return res;
+        } catch (Exception e) {
+            log.error("Unexpected error generating CBC report: {}", e.getMessage(), e);
             res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             res.setMessage("Unexpected error: " + e.getMessage());
             return res;
@@ -386,9 +470,52 @@ public class ReportsService {
     }
 
     private String resolveLogoPath(String logoPath) {
+        // Prefer the explicitly-provided logo, then fall back to the packaged default.
+        // Whatever we return is validated by the caller via safeLogo(...) so a bad
+        // value never reaches Jasper (which would abort the whole PDF export).
         if (StringUtils.hasText(logoPath)) {
             return logoPath;
         }
         return path + "effort-schools-logo.jpg";
+    }
+
+    /**
+     * Returns the given logo location only if it points to a resource that can
+     * actually be decoded as an image (local file, classpath resource, or URL).
+     * Otherwise returns {@code null} so the report simply omits the logo instead
+     * of failing with "The byte array is not a recognized image format".
+     */
+    private String safeLogo(String logo) {
+        if (!StringUtils.hasText(logo)) {
+            return null;
+        }
+        try {
+            java.awt.image.BufferedImage img;
+            String value = logo.trim();
+            if (value.startsWith("http://") || value.startsWith("https://")) {
+                java.net.URL url = new java.net.URL(value);
+                img = javax.imageio.ImageIO.read(url);
+            } else {
+                File file = new File(value);
+                if (file.exists() && file.isFile()) {
+                    img = javax.imageio.ImageIO.read(file);
+                } else {
+                    // Try classpath as a last resort (e.g. logos bundled in the jar).
+                    try (InputStream in = getClass().getClassLoader()
+                            .getResourceAsStream(value.startsWith("/") ? value.substring(1) : value)) {
+                        img = in == null ? null : javax.imageio.ImageIO.read(in);
+                    }
+                }
+            }
+            if (img == null) {
+                log.warn("Logo '{}' could not be decoded as an image; report will render without a logo.", logo);
+                return null;
+            }
+            return logo;
+        } catch (Exception e) {
+            log.warn("Logo '{}' is not a usable image ({}); report will render without a logo.",
+                    logo, e.getMessage());
+            return null;
+        }
     }
 }

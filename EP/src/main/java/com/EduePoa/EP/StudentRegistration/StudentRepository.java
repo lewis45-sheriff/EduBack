@@ -31,6 +31,7 @@ public interface StudentRepository extends TenantAwareRepository<Student, Long> 
 
     List<Student> findByAdmissionDateBetween(java.time.LocalDate startDate, java.time.LocalDate endDate);
     List<Student> findByGradeId(Long gradeId);
+    List<Student> findByGradeStreamId(Long gradeStreamId);
 
 
 }

@@ -189,4 +189,27 @@ public class ReportsController {
 
         return ResponseEntity.status(res.getStatusCode()).body(res);
     }
+
+    /**
+     * Generates the CBC learner report card (new curriculum/assessment tables) as a PDF.
+     * Returns application/pdf on success, or the CustomResponse JSON on error.
+     */
+    @PostMapping("/cbc-report-card")
+    @org.springframework.security.access.prepost.PreAuthorize("hasPermission(null, 'report:generate')")
+    public ResponseEntity<?> generateCbcReportCard(@RequestBody ReportCardRequest request) {
+        CustomResponse<?> res = reportsService.generateCbcReportCard(request);
+
+        if (res.getStatusCode() == HttpStatus.OK.value()) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=cbc-report-card-" + request.getStudentId() + "-" + request.getYear() + ".pdf");
+
+            return ResponseEntity.status(res.getStatusCode())
+                    .headers(headers)
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(res.getEntity());
+        }
+
+        return ResponseEntity.status(res.getStatusCode()).body(res);
+    }
 }

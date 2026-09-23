@@ -23,4 +23,12 @@ public interface StudentsScoreRepository extends TenantAwareRepository<StudentsS
             Student student, Grade grade, Term term,
            AcademicSubject academicSubject, ExamType examType, Year year);
 
+    // --- CBC engine finders (tenant-filtered automatically) ---
+
+    List<StudentsScore> findByGradeAndTermAndYear(Grade grade, Term term, Year year);
+
+    List<StudentsScore> findByStudentAndTermAndYear(Student student, Term term, Year year);
+
+    List<StudentsScore> findByStudentAndAcademicSubjectAndTermAndYear(
+            Student student, AcademicSubject academicSubject, Term term, Year year);
 }

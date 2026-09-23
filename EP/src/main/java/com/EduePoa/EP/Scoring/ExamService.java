@@ -57,6 +57,9 @@ public class ExamService {
     @Autowired
     private AcademicSubjectRepository academicSubjectRepository;
 
+    @Autowired
+    private com.EduePoa.EP.academics.common.TermResolver termResolver;
+
     @Transactional
     public CustomResponse<ExamTypeResponseDto> createExamType(CreateExamTypeRequest request) {
         CustomResponse<ExamTypeResponseDto> response = new CustomResponse<>();
@@ -535,15 +538,8 @@ public class ExamService {
         return responseDtos;
     }
 
+    /** Delegates to the centralized {@link com.EduePoa.EP.academics.common.TermResolver}. */
     private Optional<Term> resolveTermById(Long termId) {
-        if (termId == null) {
-            return Optional.empty();
-        }
-        return switch (termId.intValue()) {
-            case 1 -> Optional.of(Term.TERM_1);
-            case 2 -> Optional.of(Term.TERM_2);
-            case 3 -> Optional.of(Term.TERM_3);
-            default -> Optional.empty();
-        };
+        return termResolver.resolveById(termId);
     }
 }

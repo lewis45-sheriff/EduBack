@@ -12,4 +12,7 @@ public class GradeStreamDto {
     private String name;
     private Long gradeId;
     private String gradeName;
+    private Long classTeacherId;
+    private String classTeacherName;
+    private String classTeacherEmployeeNumber;
 }

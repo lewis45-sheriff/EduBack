@@ -1,0 +1,53 @@
+{
+  "frameworks": [
+    {
+      "code": "KJSEA",
+      "name": "Kenya Junior School Education Assessment",
+      "description": "Summative assessment framework for Junior School (Grade 9). Uses eight performance levels (EE1-BE2) with points. Subjects are reported individually and are NOT combined into a single aggregate value/points.",
+      "educationLevel": "JUNIOR_SCHOOL",
+      "gradeCode": "GRADE_9",
+      "aggregateAcrossLearningAreas": false,
+      "performanceLevels": [
+        { "code": "EE1", "broadLevel": "EXCEEDING_EXPECTATION",    "label": "Exceeding Expectation 1",    "abbreviation": "EE1", "minScore": 90, "maxScore": 100, "points": 8, "sequence": 1 },
+        { "code": "EE2", "broadLevel": "EXCEEDING_EXPECTATION",    "label": "Exceeding Expectation 2",    "abbreviation": "EE2", "minScore": 75, "maxScore": 89,  "points": 7, "sequence": 2 },
+        { "code": "ME1", "broadLevel": "MEETING_EXPECTATION",      "label": "Meeting Expectation 1",      "abbreviation": "ME1", "minScore": 58, "maxScore": 74,  "points": 6, "sequence": 3 },
+        { "code": "ME2", "broadLevel": "MEETING_EXPECTATION",      "label": "Meeting Expectation 2",      "abbreviation": "ME2", "minScore": 41, "maxScore": 57,  "points": 5, "sequence": 4 },
+        { "code": "AE1", "broadLevel": "APPROACHING_EXPECTATION",  "label": "Approaching Expectation 1",  "abbreviation": "AE1", "minScore": 31, "maxScore": 40,  "points": 4, "sequence": 5 },
+        { "code": "AE2", "broadLevel": "APPROACHING_EXPECTATION",  "label": "Approaching Expectation 2",  "abbreviation": "AE2", "minScore": 21, "maxScore": 30,  "points": 3, "sequence": 6 },
+        { "code": "BE1", "broadLevel": "BELOW_EXPECTATION",        "label": "Below Expectation 1",        "abbreviation": "BE1", "minScore": 11, "maxScore": 20,  "points": 2, "sequence": 7 },
+        { "code": "BE2", "broadLevel": "BELOW_EXPECTATION",        "label": "Below Expectation 2",        "abbreviation": "BE2", "minScore": 0,  "maxScore": 10,  "points": 1, "sequence": 8 }
+      ],
+      "components": []
+    },
+    {
+      "code": "INTERNAL_BROAD",
+      "name": "Internal School Assessment (Broad Levels)",
+      "description": "General internal assessment using the four broad CBC performance levels. Applies where no level-specific national framework is mandated. Bands are configurable school data, not a national KNEC rule.",
+      "educationLevel": null,
+      "gradeCode": null,
+      "aggregateAcrossLearningAreas": true,
+      "performanceLevels": [
+        { "code": "EE", "broadLevel": "EXCEEDING_EXPECTATION",   "label": "Exceeding Expectation",   "abbreviation": "EE", "minScore": 76, "maxScore": 100, "points": 4, "sequence": 1 },
+        { "code": "ME", "broadLevel": "MEETING_EXPECTATION",     "label": "Meeting Expectation",     "abbreviation": "ME", "minScore": 51, "maxScore": 75,  "points": 3, "sequence": 2 },
+        { "code": "AE", "broadLevel": "APPROACHING_EXPECTATION", "label": "Approaching Expectation", "abbreviation": "AE", "minScore": 26, "maxScore": 50,  "points": 2, "sequence": 3 },
+        { "code": "BE", "broadLevel": "BELOW_EXPECTATION",       "label": "Below Expectation",       "abbreviation": "BE", "minScore": 0,  "maxScore": 25,  "points": 1, "sequence": 4 }
+      ],
+      "components": [
+        { "code": "CAT",      "name": "Continuous Assessment", "weight": 30, "sequence": 1 },
+        { "code": "END_TERM", "name": "End of Term",           "weight": 70, "sequence": 2 }
+      ]
+    }
+  ],
+  "assessmentTypes": [
+    { "code": "FORMATIVE",    "name": "Formative Assessment",     "defaultMethod": "OBSERVATION" },
+    { "code": "SCHOOL_BASED", "name": "School-Based Assessment",  "defaultMethod": "PERCENTAGE" },
+    { "code": "SUMMATIVE",    "name": "Summative Assessment",     "defaultMethod": "PERCENTAGE" },
+    { "code": "PROJECT",      "name": "Project",                  "defaultMethod": "RUBRIC" },
+    { "code": "PRACTICAL",    "name": "Practical",                "defaultMethod": "RUBRIC" },
+    { "code": "OBSERVATION",  "name": "Observation",              "defaultMethod": "OBSERVATION" },
+    { "code": "PORTFOLIO",    "name": "Portfolio",                "defaultMethod": "RUBRIC" },
+    { "code": "ORAL",         "name": "Oral Assessment",          "defaultMethod": "PERCENTAGE" },
+    { "code": "WRITTEN",      "name": "Written Assessment",       "defaultMethod": "PERCENTAGE" },
+    { "code": "ACTIVITY",     "name": "Activity",                 "defaultMethod": "COMPLETION" }
+  ]
+}

@@ -10,5 +10,7 @@ import lombok.NoArgsConstructor;
 public class GradeDto {
     private Long id;
     private String name;
-
+    private Long classTeacherId;
+    private String classTeacherName;
+    private String classTeacherEmployeeNumber;
 }

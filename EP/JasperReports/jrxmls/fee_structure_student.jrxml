@@ -352,8 +352,10 @@ FROM term_totals tt, discount_totals dt
             </rectangle>
 
             <!-- School Logo -->
-            <image scaleImage="RetainShape">
-                <reportElement x="20" y="15" width="70" height="70"/>
+            <image scaleImage="RetainShape" onErrorType="Blank">
+                <reportElement x="20" y="15" width="70" height="70">
+                    <printWhenExpression><![CDATA[$P{Logo} != null]]></printWhenExpression>
+                </reportElement>
                 <imageExpression><![CDATA[$P{Logo}]]></imageExpression>
             </image>
 

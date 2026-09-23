@@ -63,6 +63,11 @@ public class StudentController {
         var response = studentService.getPerGrade(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-per-stream/{streamId}")
+    public ResponseEntity<?> getPerStream(@PathVariable Long streamId) {
+        var response = studentService.getPerStream(streamId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
     @GetMapping("get-fee-structure-per-student-grouped/{studentId}")
     public ResponseEntity<?> getFeeStucturePerStudent(@PathVariable Long studentId) {
         var response = studentService. getFeeStucturePerStudent(studentId);

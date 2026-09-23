@@ -144,10 +144,18 @@ public class StudentServiceImpl implements StudentService {
             // Resolve the fee structure by grade AND the student's fee mode. Day
             // scholars use the DAY structure; boarding/weekly-boarding students use
             // the BOARDING structure. The repository is tenant-aware.
+            //
+            // A fee structure is OPTIONAL: schools may onboard students before
+            // their fee structures are configured. When no matching structure
+            // exists we leave it unset (it can be attached later) instead of
+            // failing the create/upload.
             FeeMode feeMode = FeeMode.fromBoardingStatus(dto.getBoardingStatus());
             FeeStructure feeStructure = feeStructureRepository.findByGradeAndMode(grade, feeMode)
-                    .orElseThrow(() -> new RuntimeException("No " + feeMode.name()
-                            + " fee structure found for grade: " + grade.getName()));
+                    .orElse(null);
+            if (feeStructure == null) {
+                log.info("No {} fee structure found for grade '{}'; creating student '{}' without a fee structure.",
+                        feeMode.name(), grade.getName(), dto.getAdmissionNumber());
+            }
 
             Student student = new Student();
             student.setAdmissionNumber(dto.getAdmissionNumber().trim());
@@ -317,9 +325,10 @@ public class StudentServiceImpl implements StudentService {
 
     /**
      * Resolves a {@link GradeStream} for the given grade, by id (preferred) or by
-     * name. Returns {@code null} when no stream information was supplied (streams
-     * are optional). The stream must belong to the supplied grade; otherwise a
-     * {@link RuntimeException} is thrown. All lookups go through the tenant-aware
+     * name. Streams are entirely optional and must never block student creation:
+     * when no stream info is supplied, or the supplied stream cannot be found, or
+     * it belongs to a different grade, this returns {@code null} (a warning is
+     * logged) rather than throwing. All lookups go through the tenant-aware
      * repository, so they are already constrained to the current tenant.
      */
     private GradeStream resolveGradeStream(Grade grade, Long streamId, String streamName) {
@@ -331,20 +340,27 @@ public class StudentServiceImpl implements StudentService {
 
         GradeStream stream;
         if (streamId != null) {
-            stream = gradeStreamRepository.findById(streamId)
-                    .orElseThrow(() -> new RuntimeException("Stream not found with ID: " + streamId));
+            stream = gradeStreamRepository.findById(streamId).orElse(null);
+            if (stream == null) {
+                log.warn("Stream not found with ID: {} for grade '{}'; creating student without a stream.",
+                        streamId, grade.getName());
+                return null;
+            }
         } else {
             String name = streamName.trim();
             name = name.substring(0, 1).toUpperCase() + name.substring(1);
-            String finalName = name;
-            stream = gradeStreamRepository.findByGradeIdAndName(grade.getId(), name)
-                    .orElseThrow(() -> new RuntimeException(
-                            "Stream '" + finalName + "' not found for grade: " + grade.getName()));
+            stream = gradeStreamRepository.findByGradeIdAndName(grade.getId(), name).orElse(null);
+            if (stream == null) {
+                log.warn("Stream '{}' not found for grade '{}'; creating student without a stream.",
+                        name, grade.getName());
+                return null;
+            }
         }
 
         if (stream.getGrade() == null || !stream.getGrade().getId().equals(grade.getId())) {
-            throw new RuntimeException("Stream '" + stream.getName()
-                    + "' does not belong to grade: " + grade.getName());
+            log.warn("Stream '{}' does not belong to grade '{}'; ignoring stream and creating student without one.",
+                    stream.getName(), grade.getName());
+            return null;
         }
 
         return stream;
@@ -792,7 +808,7 @@ public class StudentServiceImpl implements StudentService {
                 if (row == null) continue;
 
                 // Skip fully blank rows
-                String admNumber = getCellValueAsString(row.getCell(colMap.getOrDefault("admissionnumber", -1)));
+                String admNumber = excelStr(row, colMap, "admissionnumber");
                 if (admNumber == null || admNumber.isBlank()) continue;
 
                 CreateStudentRequestDTO dto = buildFromExcelRow(row, colMap);
@@ -812,12 +828,11 @@ public class StudentServiceImpl implements StudentService {
         student.setStreamName(excelStr(row, colMap, "streamname"));
         student.setNationality(excelStr(row, colMap, "nationality"));
         student.setBirthCertificateNumber(excelStr(row, colMap, "birthcertificatenumber"));
-        student.setDateOfBirth(getCellValueAsDate(row.getCell(colMap.getOrDefault("dateofbirth", -1))));
-        LocalDate admDate = getCellValueAsDate(row.getCell(colMap.getOrDefault("admissiondate", -1)));
-        student.setAdmissionDate(admDate);
+        student.setDateOfBirth(excelDate(row, colMap, "dateofbirth"));
+        student.setAdmissionDate(excelDate(row, colMap, "admissiondate"));
         // Grade by name (tenant-specific). gradeId still accepted as a fallback.
         student.setGradeName(excelStr(row, colMap, "gradename"));
-        student.setGradeId(getCellValueAsLong(row.getCell(colMap.getOrDefault("gradeid", -1))));
+        student.setGradeId(excelLong(row, colMap, "gradeid"));
 
         String img = excelStr(row, colMap, "studentimage");
         if (img != null && !img.isBlank()) student.setStudentImage(img);
@@ -852,9 +867,29 @@ public class StudentServiceImpl implements StudentService {
     }
 
     private String excelStr(Row row, Map<String, Integer> colMap, String key) {
+        Cell cell = excelCell(row, colMap, key);
+        return cell == null ? null : getCellValueAsString(cell);
+    }
+
+    private LocalDate excelDate(Row row, Map<String, Integer> colMap, String key) {
+        Cell cell = excelCell(row, colMap, key);
+        return cell == null ? null : getCellValueAsDate(cell);
+    }
+
+    private Long excelLong(Row row, Map<String, Integer> colMap, String key) {
+        Cell cell = excelCell(row, colMap, key);
+        return cell == null ? null : getCellValueAsLong(cell);
+    }
+
+    /**
+     * Safely resolves a cell for the given header key. Returns {@code null} when the
+     * column is absent from the uploaded file (index missing or negative), which
+     * prevents POI's {@code getCell(-1)} from throwing "Cell index must be >= 0".
+     */
+    private Cell excelCell(Row row, Map<String, Integer> colMap, String key) {
         Integer idx = colMap.get(key);
         if (idx == null || idx < 0) return null;
-        return getCellValueAsString(row.getCell(idx));
+        return row.getCell(idx);
     }
 
     private GuardianRelationship parseRelationship(String value) {
@@ -957,6 +992,43 @@ public class StudentServiceImpl implements StudentService {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
             response.setEntity(null);
             response.setMessage("Failed to retrieve students per grade");
+        }
+        return response;
+    }
+
+    @Override
+    @Audit(module = "STUDENT MANAGEMENT", action = "GET_BY_STREAM")
+    public CustomResponse<?> getPerStream(Long streamId) {
+        CustomResponse<List<StudentResponseDTO>> response = new CustomResponse<>();
+        try {
+            if (streamId == null) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setEntity(null);
+                response.setMessage("Stream id is required");
+                return response;
+            }
+
+            List<StudentResponseDTO> studentDTOs = studentRepository.findByGradeStreamId(streamId)
+                    .stream()
+                    .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
+                    .map(this::convertToResponseDTO)
+                    .collect(Collectors.toList());
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setEntity(studentDTOs);
+            response.setMessage(studentDTOs.isEmpty()
+                    ? "No students found for this stream"
+                    : "Students retrieved successfully");
+
+            log.info("Retrieved {} students for stream ID {}", studentDTOs.size(), streamId);
+            auditService.log("STUDENT_MANAGEMENT", "Retrieved", String.valueOf(studentDTOs.size()),
+                    "students for stream ID:", String.valueOf(streamId));
+
+        } catch (Exception e) {
+            log.error("Error retrieving students for stream ID {}: {}", streamId, e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage("Failed to retrieve students per stream");
         }
         return response;
     }

@@ -11,4 +11,8 @@ public interface GradeStreamService {
     CustomResponse<?> getAllStreams();
 
     CustomResponse<?> delete(Long id);
+
+    CustomResponse<?> assignClassTeacher(Long streamId, Long staffId);
+
+    CustomResponse<?> removeClassTeacher(Long streamId);
 }

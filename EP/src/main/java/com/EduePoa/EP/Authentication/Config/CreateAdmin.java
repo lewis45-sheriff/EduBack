@@ -64,10 +64,12 @@ public class CreateAdmin implements ApplicationRunner {
         }
     }
 
+    private static final String DEFAULT_TENANT = "bureti-high";
+
     void addAdminRole() {
         try {
-            TenantContext.setCurrentTenant("bureti-high");
-            Optional<Role> existingRole = roleRepository.findByName("ROLE_ADMIN");
+            TenantContext.setCurrentTenant(DEFAULT_TENANT);
+            Optional<Role> existingRole = roleRepository.findByNameAndTenantId("ROLE_ADMIN", DEFAULT_TENANT);
 
             if (existingRole.isEmpty()) {
                 log.info("Creating ROLE_ADMIN role on " + LocalDateTime.now());
@@ -95,8 +97,8 @@ public class CreateAdmin implements ApplicationRunner {
 //    }
     void addSupplier() {
         try {
-            TenantContext.setCurrentTenant("bureti-high");
-            Optional<Role> existingRole = roleRepository.findByName("SUPPLIER");
+            TenantContext.setCurrentTenant(DEFAULT_TENANT);
+            Optional<Role> existingRole = roleRepository.findByNameAndTenantId("SUPPLIER", DEFAULT_TENANT);
 
             if (existingRole.isEmpty()) {
                 log.info("Creating SUPPLIER role on " + LocalDateTime.now());
@@ -113,14 +115,14 @@ public class CreateAdmin implements ApplicationRunner {
     void addAdmin() {
         try {
             // Set tenant context so TenantEntityListener can populate tenant_id
-            TenantContext.setCurrentTenant("bureti-high");
+            TenantContext.setCurrentTenant(DEFAULT_TENANT);
 
             Integer adminCount = userRepository.adminCount("ROLE_ADMIN");
 
             if (adminCount > 0) {
                 log.info("System admin already exists.");
             } else {
-                Role adminRole = roleRepository.findByName("ROLE_ADMIN")
+                Role adminRole = roleRepository.findByNameAndTenantId("ROLE_ADMIN", DEFAULT_TENANT)
                         .orElseThrow(() -> new ResourceNotFoundException("Role with name ROLE_ADMIN not found"));
 
                 User user = new User();
@@ -153,9 +155,9 @@ public class CreateAdmin implements ApplicationRunner {
     void addPlatformAdminRole() {
         try {
             // Set tenant context for role creation (roles are tenant-scoped)
-            TenantContext.setCurrentTenant("bureti-high");
+            TenantContext.setCurrentTenant(DEFAULT_TENANT);
 
-            Optional<Role> existingRole = roleRepository.findByName("Platform_Admin");
+            Optional<Role> existingRole = roleRepository.findByNameAndTenantId("Platform_Admin", DEFAULT_TENANT);
 
             if (existingRole.isEmpty()) {
                 log.info("Creating Platform_Admin role...");
@@ -189,7 +191,7 @@ public class CreateAdmin implements ApplicationRunner {
      */
     void addPlatformAdmin() {
         try {
-            TenantContext.setCurrentTenant("bureti-high");
+            TenantContext.setCurrentTenant(DEFAULT_TENANT);
 
             Optional<User> existing = userRepository.findByEmail("platform@edupoa.com");
 
@@ -198,7 +200,7 @@ public class CreateAdmin implements ApplicationRunner {
                 return;
             }
 
-            Role platformAdminRole = roleRepository.findByName("Platform_Admin")
+            Role platformAdminRole = roleRepository.findByNameAndTenantId("Platform_Admin", DEFAULT_TENANT)
                     .orElseThrow(() -> new ResourceNotFoundException("Role 'Platform_Admin' not found"));
 
             User platformAdmin = new User();

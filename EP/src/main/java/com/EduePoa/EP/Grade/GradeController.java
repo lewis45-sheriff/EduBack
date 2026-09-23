@@ -1,9 +1,11 @@
 package com.EduePoa.EP.Grade;
 
+import com.EduePoa.EP.Grade.Requests.AssignClassTeacherRequest;
 import com.EduePoa.EP.Grade.Requests.GradeCreateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -28,8 +30,19 @@ public class GradeController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @PatchMapping("/{gradeId}/class-teacher")
+    @PreAuthorize("hasPermission(null, 'class:update')")
+    public ResponseEntity<?> assignClassTeacher(@PathVariable Long gradeId,
+                                                 @Valid @RequestBody AssignClassTeacherRequest request) {
+        var response = gradeService.assignClassTeacher(gradeId, request.getStaffId());
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
-
-
+    @DeleteMapping("/{gradeId}/class-teacher")
+    @PreAuthorize("hasPermission(null, 'class:update')")
+    public ResponseEntity<?> removeClassTeacher(@PathVariable Long gradeId) {
+        var response = gradeService.removeClassTeacher(gradeId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 }

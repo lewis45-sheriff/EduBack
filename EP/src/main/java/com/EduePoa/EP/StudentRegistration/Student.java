@@ -19,13 +19,23 @@ import java.time.Year;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @RequiredArgsConstructor
+@Table(
+        name = "student",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_student_admission_number_tenant",
+                columnNames = {"admission_number", "tenant_id"}
+        )
+)
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId AND tenant_id IS NOT NULL AND tenant_id != ''")
 public class Student extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    // Uniqueness is scoped per tenant via the table-level composite constraint
+    // (admission_number, tenant_id) — the same admission number may exist across
+    // different tenants.
+    @Column(name = "admission_number", nullable = false)
     private String admissionNumber;
 
     private String firstName;

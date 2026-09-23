@@ -46,6 +46,16 @@ public enum Permissions {
     ATTENDANCE_READ("attendance:read", "View attendance records"),
     SUPPLEMENTARY_MANAGE("supplementary:manage", "Manage supplementary exams"),
 
+    // CBC / CBE Curriculum & Assessment
+    CURRICULUM_READ("curriculum:read", "View CBC curriculum definitions"),
+    CURRICULUM_MANAGE("curriculum:manage", "Manage CBC curriculum versions and configuration"),
+    LEARNING_OUTCOME_READ("learning_outcome:read", "View specific learning outcomes"),
+    ASSESSMENT_CREATE("assessment:create", "Create CBC assessments"),
+    ASSESSMENT_READ("assessment:read", "View CBC assessments"),
+    ASSESSMENT_MANAGE("assessment:manage", "Manage CBC assessments and frameworks"),
+    COMPETENCY_ASSESS("competency:assess", "Record learner competency evidence"),
+    RESULT_AMEND("result:amend", "Amend published CBC results"),
+
     // Grades & Transcripts
     GRADE_APPROVE_HOD("grade_approve:hod", "HOD approval of grades"),
     GRADE_APPROVE_DEAN("grade_approve:dean", "Dean approval of grades"),
@@ -53,21 +63,21 @@ public enum Permissions {
     TRANSCRIPT_GENERATE("transcript:generate", "Generate student transcripts"),
     TRANSCRIPT_REQUEST("transcript:request", "Request a transcript"),
 
-    // Programmes, Faculties, Departments & Course Units
-    PROGRAMME_CREATE("programme:create", "Create academic programmes"),
-    PROGRAMME_READ("programme:read", "View academic programmes"),
-    PROGRAMME_UPDATE("programme:update", "Update academic programmes"),
-    FACULTY_CREATE("faculty:create", "Create faculties"),
-    FACULTY_READ("faculty:read", "View faculties"),
-    FACULTY_UPDATE("faculty:update", "Update faculties"),
-    DEPARTMENT_CREATE("department:create", "Create departments"),
-    DEPARTMENT_READ("department:read", "View departments"),
-    DEPARTMENT_UPDATE("department:update", "Update departments"),
-    COURSE_UNIT_CREATE("course_unit:create", "Create course units"),
-    COURSE_UNIT_READ("course_unit:read", "View course units"),
-    COURSE_UNIT_UPDATE("course_unit:update", "Update course units"),
-    COURSE_REGISTER("course:register", "Register for courses"),
-    COURSE_REGISTRATION_MANAGE("course_registration:manage", "Manage course registrations"),
+//    // Programmes, Faculties, Departments & Course Units
+//    PROGRAMME_CREATE("programme:create", "Create academic programmes"),
+//    PROGRAMME_READ("programme:read", "View academic programmes"),
+//    PROGRAMME_UPDATE("programme:update", "Update academic programmes"),
+//    FACULTY_CREATE("faculty:create", "Create faculties"),
+//    FACULTY_READ("faculty:read", "View faculties"),
+//    FACULTY_UPDATE("faculty:update", "Update faculties"),
+//    DEPARTMENT_CREATE("department:create", "Create departments"),
+//    DEPARTMENT_READ("department:read", "View departments"),
+//    DEPARTMENT_UPDATE("department:update", "Update departments"),
+//    COURSE_UNIT_CREATE("course_unit:create", "Create course units"),
+//    COURSE_UNIT_READ("course_unit:read", "View course units"),
+//    COURSE_UNIT_UPDATE("course_unit:update", "Update course units"),
+//    COURSE_REGISTER("course:register", "Register for courses"),
+//    COURSE_REGISTRATION_MANAGE("course_registration:manage", "Manage course registrations"),
 
     // Financial Management
     FEE_STRUCTURE_MANAGE("fee_structure:manage", "Create/Update fee structures"),
@@ -79,6 +89,17 @@ public enum Permissions {
     EXPENSE_READ("expense:read", "View expense reports"),
     FINANCIAL_REPORT_READ("financial_report:read", "Access financial summaries"),
     SCHOLARSHIP_MANAGE("scholarship:manage", "Manage scholarships and bursaries"),
+
+    // Budgeting
+    BUDGET_CREATE("budget:create", "Create and edit draft budgets and budget lines"),
+    BUDGET_READ("budget:read", "View budgets and budget categories"),
+    BUDGET_MANAGE("budget:manage", "Delete draft budgets and manage budget lines"),
+    BUDGET_APPROVE("budget:approve", "Approve budgets and budget amendments"),
+    BUDGET_CLOSE("budget:close", "Close approved budgets"),
+    BUDGET_AMEND("budget:amend", "Request controlled amendments to approved budgets"),
+    BUDGET_CATEGORY_MANAGE("budget_category:manage", "Create, update, and deactivate budget categories"),
+    BUDGET_REPORT_READ("budget_report:read", "View budget-vs-actual, summary, and monthly reports"),
+
     HELB_MANAGE("helb:manage", "Manage HELB loan allocations"),
     HELB_VIEW("helb:view", "View HELB loan details"),
 
@@ -97,6 +118,7 @@ public enum Permissions {
     STAFF_CREATE("staff:create", "Add new staff members"),
     STAFF_READ("staff:read", "View staff profiles"),
     STAFF_UPDATE("staff:update", "Update staff details"),
+    STAFF_DELETE("staff:delete", "Remove/deactivate staff members"),
     PAYROLL_MANAGE("payroll:manage", "Manage staff salaries"),
     LEAVE_MANAGE("leave:manage", "Approve/Reject leave requests"),
 

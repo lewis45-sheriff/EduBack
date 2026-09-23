@@ -2,6 +2,7 @@ package com.EduePoa.EP.Grade.Stream;
 
 import com.EduePoa.EP.Grade.Grade;
 import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
+import com.EduePoa.EP.Staff.Staff;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -37,6 +38,15 @@ public class GradeStream extends TenantScopedEntity {
     @JsonIgnore
     @JoinColumn(name = "grade_id", referencedColumnName = "id", nullable = false)
     private Grade grade;
+
+    /**
+     * The class teacher who owns this class/stream. Optional; at most one per stream.
+     * Points to a {@link Staff} record (a teacher), not directly to a login user.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnore
+    @JoinColumn(name = "class_teacher_id", referencedColumnName = "id")
+    private Staff classTeacher;
 
     @JsonIgnore
     private char deletedFlag = 'N';
