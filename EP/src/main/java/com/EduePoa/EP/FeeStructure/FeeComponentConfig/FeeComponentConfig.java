@@ -50,5 +50,20 @@ public class FeeComponentConfig extends TenantScopedEntity {
 
     private String term;
 
+    /**
+     * Whether this fee-structure line item may be assigned to individual students
+     * as an optional fee. Defaults to {@code false} so existing line items remain
+     * mandatory and backward compatible.
+     */
+    @Column(nullable = false)
+    private boolean optional = false;
+
+    /**
+     * Whether an authorized parent may self-assign this optional line item to their
+     * own child. Only meaningful when {@link #optional} is {@code true}. Defaults to
+     * {@code false}; a value of {@code true} does not itself grant authorization.
+     */
+    @Column(nullable = false)
+    private boolean parentAssignable = false;
 
 }

@@ -26,6 +26,11 @@ public class FeeStructureContoller {
         var response = feeStructureService.getFeeStructureById(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("get-fee-structure-components/{id}")
+    ResponseEntity<?> getFeeStructureComponents(@PathVariable Long id){
+        var response = feeStructureService.getFeeStructureComponents(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
     @PutMapping("update/{id}")
     ResponseEntity<?> update(@PathVariable Long id, @RequestBody FeeStructureRequestDTO feeStructureRequestDTO){
         var response = feeStructureService.update(id, feeStructureRequestDTO);

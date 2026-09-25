@@ -16,6 +16,8 @@ public class FeeComponentResponse {
     private String type;
     private String category;
     private String status;
+    private boolean optional;
+    private boolean parentAssignable;
     private LocalDateTime timeCreated;
 
 }

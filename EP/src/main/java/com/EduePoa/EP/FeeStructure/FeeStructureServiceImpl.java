@@ -8,6 +8,7 @@ import com.EduePoa.EP.FeeComponents.FeeComponentsRepository;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfig;
 import com.EduePoa.EP.FeeStructure.FeeComponentConfig.FeeComponentConfigRepository;
 import com.EduePoa.EP.FeeStructure.Requests.FeeStructureRequestDTO;
+import com.EduePoa.EP.FeeStructure.Responses.FeeStructureComponentDTO;
 import com.EduePoa.EP.FeeStructure.Responses.FeeStructureGroupedResponseDTO;
 import com.EduePoa.EP.FeeStructure.Responses.FeeStructureResponseDTO;
 import com.EduePoa.EP.Grade.Grade;
@@ -180,6 +181,49 @@ public class FeeStructureServiceImpl implements FeeStructureService {
             response.setMessage(e.getMessage());
         }
 
+        return response;
+    }
+
+    @Override
+    @Audit(module = "FEE STRUCTURE", action = "GET_COMPONENTS")
+    public CustomResponse<?> getFeeStructureComponents(Long id) {
+        CustomResponse<List<FeeStructureComponentDTO>> response = new CustomResponse<>();
+        try {
+            Optional<FeeStructure> optionalFeeStructure = feeStructureRepository.findById(id);
+            if (optionalFeeStructure.isEmpty()) {
+                response.setMessage("Fee structure not found");
+                response.setEntity(null);
+                response.setStatusCode(HttpStatus.OK.value());
+                return response;
+            }
+
+            FeeStructure feeStructure = optionalFeeStructure.get();
+
+            List<FeeStructureComponentDTO> components = new ArrayList<>();
+            if (feeStructure.getTermComponents() != null) {
+                for (FeeComponentConfig config : feeStructure.getTermComponents()) {
+                    components.add(FeeStructureComponentDTO.builder()
+                            .configId(config.getId() != null ? Long.valueOf(config.getId()) : null)
+                            .name(config.getName())
+                            .amount(config.getAmount())
+                            .term(config.getTerm())
+                            .optional(config.isOptional())
+                            .parentAssignable(config.isParentAssignable())
+                            .build());
+                }
+            }
+
+            response.setMessage("Fee structure components retrieved successfully");
+            response.setEntity(components);
+            response.setStatusCode(HttpStatus.OK.value());
+            auditService.log("FEE_STRUCTURE", "Retrieved", String.valueOf(components.size()),
+                    "components for fee structure ID:", String.valueOf(id));
+
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setEntity(null);
+            response.setMessage(e.getMessage());
+        }
         return response;
     }
 
@@ -387,6 +431,18 @@ public class FeeStructureServiceImpl implements FeeStructureService {
                 component.setFeeStatus(String.valueOf(config.getStatus()));
                 component.setTerm(termDTO.getTerm());
                 component.setFeeStructure(feeStructure);
+
+                // Optional is derived from the catalog component's type ("OPTIONAL");
+                // parent-assignable is inherited from the catalog component. The
+                // fee-structure request may override either per line item.
+                boolean optional = itemDTO.getOptional() != null
+                        ? itemDTO.getOptional()
+                        : config.isOptional();
+                boolean parentAssignable = itemDTO.getParentAssignable() != null
+                        ? itemDTO.getParentAssignable()
+                        : config.isParentAssignable();
+                component.setOptional(optional);
+                component.setParentAssignable(parentAssignable);
 
                 allComponents.add(component);
                 totalFeeAmount += itemDTO.getAmount();

@@ -16,6 +16,11 @@ public interface FinanceTransactionRepository extends TenantAwareRepository<Fina
         List<FinanceTransaction> findByStudentId(Long studentId);
         boolean existsByReference(String reference);
 
+        // Look up the single payment (INCOME) behind a unique reference, e.g. an
+        // M-Pesa receipt code. Used as the source basis for a payment transfer.
+        java.util.Optional<FinanceTransaction> findByReferenceAndTransactionType(
+                        String reference, FinanceTransaction.TransactionType transactionType);
+
         List<FinanceTransaction> findAllByOrderByTransactionDateDesc();
 
         @Query("SELECT FUNCTION('MONTH', t.transactionDate) as month, " +

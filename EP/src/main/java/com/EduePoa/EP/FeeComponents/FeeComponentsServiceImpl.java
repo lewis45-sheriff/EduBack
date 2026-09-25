@@ -40,6 +40,7 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
                     .type(feeComponentRequest.getType())
                     .category(feeComponentRequest.getCategory())
                     .status(Status.ACTIVE)
+                    .parentAssignable(Boolean.TRUE.equals(feeComponentRequest.getParentAssignable()))
                     .build();
 
             // Save to DB
@@ -53,6 +54,8 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
                     .type(savedComponent.getType())
                     .category(savedComponent.getCategory())
                     .status(String.valueOf(savedComponent.getStatus()))
+                    .optional(savedComponent.isOptional())
+                    .parentAssignable(savedComponent.isParentAssignable())
                     .build();
 
             // Build response
@@ -86,6 +89,8 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
                             .type(fc.getType())
                             .category(fc.getCategory())
                             .status(String.valueOf(fc.getStatus()))
+                            .optional(fc.isOptional())
+                            .parentAssignable(fc.isParentAssignable())
                             .timeCreated(fc.getCreatedOn())
                             .build())
                     .toList();

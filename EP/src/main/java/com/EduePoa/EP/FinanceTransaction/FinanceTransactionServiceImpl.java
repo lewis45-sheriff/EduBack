@@ -41,6 +41,233 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
     private final AuditService auditService;
     private final LedgerService ledgerService;
     private final UserRepository userRepository;
+    private final com.EduePoa.EP.FileStorage.FileStorageService fileStorageService;
+    private final com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionRepository pendingTransactionRepository;
+
+    /**
+     * When true, a manual transaction entered through the controller is stored as a
+     * pending maker-checker request instead of posting immediately. Automated callers
+     * (M-Pesa / bank callbacks) bypass this entirely by calling
+     * {@link #createTransaction(Long, CreateTransactionDTO)} directly.
+     */
+    @org.springframework.beans.factory.annotation.Value("${finance.transaction.maker-checker.enabled:false}")
+    private boolean makerCheckerEnabled;
+
+    private static final String ATTACHMENT_SUBDIR = "transaction-attachments";
+
+    /**
+     * Manual-creation entry point used by the controller. Stores an optional
+     * attachment, then either posts immediately (maker-checker off) or records a
+     * pending request for approval (maker-checker on).
+     */
+    @Override
+    @Transactional
+    public CustomResponse<?> createManualTransaction(Long studentId, CreateTransactionDTO dto,
+                                                     org.springframework.web.multipart.MultipartFile attachment) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            // Manual entries are always MANUAL-sourced regardless of what the client sends,
+            // so a gateway source can never be spoofed to make a payment deletable/immutable.
+            dto.setSource(FinanceTransaction.TransactionSource.MANUAL);
+
+            String attachmentUrl = null;
+            if (attachment != null && !attachment.isEmpty()) {
+                attachmentUrl = fileStorageService.storeDocument(attachment, ATTACHMENT_SUBDIR);
+            }
+
+            if (!makerCheckerEnabled) {
+                // Immediate posting (current behaviour). Carry the attachment through.
+                return createTransaction(studentId, dto, attachmentUrl);
+            }
+
+            // Maker-checker ON: store a pending request; no balances change yet.
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+            User maker = getCurrentUserOrNull();
+
+            com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransaction pending =
+                    com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransaction.builder()
+                            .studentId(studentId)
+                            .studentName(student.getFirstName() + " " + student.getLastName())
+                            .admissionNumber(student.getAdmissionNumber())
+                            .transactionType(dto.getTransactionType())
+                            .category(dto.getCategory())
+                            .amount(dto.getAmount())
+                            .transactionDate(dto.getTransactionDate())
+                            .description(dto.getDescription())
+                            .paymentMethod(dto.getPaymentMethod())
+                            .reference(dto.getReference())
+                            .term(dto.getTerm())
+                            .year(dto.getYear())
+                            .invoiceId(dto.getInvoiceId())
+                            .attachmentUrl(attachmentUrl)
+                            .status(com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionStatus.PENDING_APPROVAL)
+                            .createdBy(maker)
+                            .createdAt(LocalDateTime.now())
+                            .build();
+            var saved = pendingTransactionRepository.save(pending);
+
+            auditService.log("FINANCE_TRANSACTION", "Manual transaction pending approval, ID:",
+                    String.valueOf(saved.getId()), "student:", String.valueOf(studentId));
+
+            response.setStatusCode(HttpStatus.CREATED.value());
+            response.setMessage("Transaction submitted and pending approval. No balances changed.");
+            response.setEntity(saved);
+        } catch (IllegalArgumentException e) {
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public CustomResponse<?> approvePendingTransaction(Long pendingId) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            var pending = pendingTransactionRepository.findById(pendingId).orElse(null);
+            if (pending == null) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setMessage("Pending transaction not found with ID: " + pendingId);
+                return response;
+            }
+            if (pending.getStatus()
+                    != com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionStatus.PENDING_APPROVAL) {
+                response.setStatusCode(HttpStatus.CONFLICT.value());
+                response.setMessage("Pending transaction " + pendingId + " is not awaiting approval (status: "
+                        + pending.getStatus() + ")");
+                return response;
+            }
+
+            User checker = getCurrentUserOrNull();
+            // Maker must not approve their own request.
+            if (checker != null && pending.getCreatedBy() != null
+                    && pending.getCreatedBy().getId() != null
+                    && pending.getCreatedBy().getId().equals(checker.getId())) {
+                response.setStatusCode(HttpStatus.CONFLICT.value());
+                response.setMessage("The maker of a transaction cannot approve it. A different approver is required.");
+                return response;
+            }
+
+            // Rebuild the DTO from the snapshot and post it through the normal path.
+            CreateTransactionDTO dto = new CreateTransactionDTO();
+            dto.setTransactionType(pending.getTransactionType());
+            dto.setCategory(pending.getCategory());
+            dto.setAmount(pending.getAmount());
+            dto.setTransactionDate(pending.getTransactionDate());
+            dto.setDescription(pending.getDescription());
+            dto.setPaymentMethod(pending.getPaymentMethod());
+            dto.setReference(pending.getReference());
+            dto.setTerm(pending.getTerm());
+            dto.setYear(pending.getYear());
+            dto.setInvoiceId(pending.getInvoiceId());
+            dto.setSource(FinanceTransaction.TransactionSource.MANUAL);
+
+            CustomResponse<?> posted = createTransaction(pending.getStudentId(), dto, pending.getAttachmentUrl());
+            if (posted.getStatusCode() == null || posted.getStatusCode() >= 300) {
+                // Propagate the failure and roll back.
+                throw new RuntimeException(posted.getMessage() != null
+                        ? posted.getMessage() : "Failed to post the approved transaction");
+            }
+
+            pending.setStatus(
+                    com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionStatus.APPROVED);
+            pending.setApprovedBy(checker);
+            pending.setApprovedAt(LocalDateTime.now());
+            pendingTransactionRepository.save(pending);
+
+            auditService.log("FINANCE_TRANSACTION", "Approved pending transaction ID:", String.valueOf(pendingId));
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Pending transaction approved and posted.");
+            response.setEntity(posted.getEntity());
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Failed to approve pending transaction: " + e.getMessage(), e);
+        }
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public CustomResponse<?> rejectPendingTransaction(Long pendingId, String reason) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            var pending = pendingTransactionRepository.findById(pendingId).orElse(null);
+            if (pending == null) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setMessage("Pending transaction not found with ID: " + pendingId);
+                return response;
+            }
+            if (pending.getStatus()
+                    != com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionStatus.PENDING_APPROVAL) {
+                response.setStatusCode(HttpStatus.CONFLICT.value());
+                response.setMessage("Pending transaction " + pendingId + " is not awaiting approval (status: "
+                        + pending.getStatus() + ")");
+                return response;
+            }
+            User checker = getCurrentUserOrNull();
+            pending.setStatus(
+                    com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionStatus.REJECTED);
+            pending.setApprovedBy(checker);
+            pending.setApprovedAt(LocalDateTime.now());
+            pending.setRejectionReason(reason);
+            // Remove the orphaned attachment since the request will never be posted.
+            if (pending.getAttachmentUrl() != null) {
+                fileStorageService.deleteByWebPath(pending.getAttachmentUrl());
+            }
+            pendingTransactionRepository.save(pending);
+
+            auditService.log("FINANCE_TRANSACTION", "Rejected pending transaction ID:", String.valueOf(pendingId));
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Pending transaction rejected. No balances changed.");
+            response.setEntity(pending);
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    public CustomResponse<?> listPendingTransactions(
+            com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionStatus status) {
+        CustomResponse<Object> response = new CustomResponse<>();
+        try {
+            var list = (status == null)
+                    ? pendingTransactionRepository.findAllByOrderByCreatedAtDesc()
+                    : pendingTransactionRepository.findByStatusOrderByCreatedAtDesc(status);
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage(list.isEmpty() ? "No pending transactions found"
+                    : "Pending transactions retrieved successfully");
+            response.setEntity(list);
+        } catch (RuntimeException e) {
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    /** Overload that carries an attachment URL onto the posted transaction. */
+    @Transactional
+    public CustomResponse<?> createTransaction(Long studentId, CreateTransactionDTO dto, String attachmentUrl) {
+        this.pendingAttachmentUrl.set(attachmentUrl);
+        try {
+            return createTransaction(studentId, dto);
+        } finally {
+            this.pendingAttachmentUrl.remove();
+        }
+    }
+
+    /** Thread-local hand-off for the attachment URL so the shared builder can pick it up. */
+    private final ThreadLocal<String> pendingAttachmentUrl = new ThreadLocal<>();
 
     @Override
     @Transactional
@@ -100,6 +327,11 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
 
             // Create the transaction with invoice reference
             FinanceTransaction transaction = getFinanceTransaction(studentId, createTransactionDTO, student);
+            // Attach the supporting-document path when one was handed off for this call.
+            String handoffAttachmentUrl = pendingAttachmentUrl.get();
+            if (handoffAttachmentUrl != null) {
+                transaction.setAttachmentUrl(handoffAttachmentUrl);
+            }
             transaction.setInvoiceId(invoice.getId());
             transaction.setTerm(currentTerm);
             transaction.setYear(currentYear);
@@ -459,6 +691,12 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
         transaction.setTransactionDate(createTransactionDTO.getTransactionDate());
         transaction.setDescription(createTransactionDTO.getDescription());
         transaction.setPaymentMethod(createTransactionDTO.getPaymentMethod());
+        // Origin drives deletion eligibility. The manual UI leaves this null (defaults
+        // to MANUAL); automated flows (e.g. M-Pesa callback) supply a gateway source so
+        // the resulting payment cannot be deleted later.
+        transaction.setSource(createTransactionDTO.getSource() != null
+                ? createTransactionDTO.getSource()
+                : FinanceTransaction.TransactionSource.MANUAL);
         return transaction;
     }
 

@@ -24,4 +24,10 @@ public class CreateTransactionDTO {
     private Year year;
     private Long invoiceId;
 
+    /**
+     * Origin of the transaction. Left null by the manual finance UI (treated as
+     * MANUAL); set to a gateway value (e.g. MPESA_CALLBACK) by automated payment
+     * flows so those payments cannot later be deleted.
+     */
+    private FinanceTransaction.TransactionSource source;
 }

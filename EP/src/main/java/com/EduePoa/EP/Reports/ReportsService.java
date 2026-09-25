@@ -326,6 +326,14 @@ public class ReportsService {
                     .equalsIgnoreCase(reportRequestObject.fileName)
                     || FileTypeEnums.REPORT_CARD.getReportTypeString().equalsIgnoreCase(reportRequestObject.fileName);
 
+            // Templates that read tenant-scoped finance/transaction data through the raw
+            // JDBC connection (which bypasses the Hibernate tenant filter) must receive the
+            // current tenant explicitly and normalize the term to the canonical TERM_x code.
+            boolean isFeeStatement = FileTypeEnums.FEE_STATEMENT.getFileName()
+                    .equalsIgnoreCase(reportRequestObject.fileName)
+                    || FileTypeEnums.FEE_STATEMENT.getReportTypeString()
+                    .equalsIgnoreCase(reportRequestObject.fileName);
+
             // **CRITICAL FIX: The JRXML expects studentID as Long, not String**
             // Check your JRXML: <parameter name="studentID" class="java.lang.Long"/>
 
@@ -356,13 +364,26 @@ public class ReportsService {
             }
 
             // **FIX: term parameter should be String as per JRXML**
-            if (term != null && !term.isEmpty()) {
-                parameters.put("termID", isTermPerformance ? normalizeTermValue(term) : term);
-            } else {
-                // Handle case where term is null but required
+            if (term == null || term.isEmpty()) {
                 res.setMessage("Term is required");
                 res.setStatusCode(HttpStatus.BAD_REQUEST.value());
                 return res;
+            }
+
+            // The finance/finance_transactions tables store the term as the enum string
+            // (TERM_1/TERM_2/TERM_3), so any report that queries them must be given the
+            // canonical code. Normalize + validate here so an invalid term fails clearly
+            // instead of producing a misleading "No fee record" PDF.
+            if (isTermPerformance || isFeeStatement) {
+                String normalizedTerm = normalizeTermValue(term);
+                if (normalizedTerm == null) {
+                    res.setMessage("Invalid term '" + term + "'. Use 1, 2, 3 or TERM_1, TERM_2, TERM_3.");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return res;
+                }
+                parameters.put("termID", normalizedTerm);
+            } else {
+                parameters.put("termID", term);
             }
 
             if (isTermPerformance) {
@@ -372,6 +393,18 @@ public class ReportsService {
                     return res;
                 }
                 parameters.put("gradeId", gradeId);
+            }
+
+            // Tenant isolation: the fee statement reads tenant-scoped finance data over a
+            // raw JDBC connection, so the tenant must be supplied as an explicit parameter
+            // and every query in the template scoped by tenant_id = $P{tenantId}.
+            if (isFeeStatement) {
+                if (!TenantContext.isSet()) {
+                    res.setMessage("Tenant context is required to generate a fee statement");
+                    res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                    return res;
+                }
+                parameters.put("tenantId", TenantContext.getCurrentTenant());
             }
 
             // Debug: Print parameters being passed
@@ -456,16 +489,37 @@ public class ReportsService {
         };
     }
 
+    /**
+     * Normalizes the many representations the frontend may send for a term into the
+     * canonical enum-string form stored in the database ({@code TERM_1}, {@code TERM_2},
+     * {@code TERM_3}).
+     * <p>
+     * Accepts values such as {@code 1}, {@code TERM_1}, {@code term_1}, {@code Term 1},
+     * {@code TERM 1}, {@code Term_1} and resolves them all to {@code TERM_1} (and the
+     * equivalents for terms 2 and 3).
+     *
+     * @return the canonical term code, or {@code null} if the value cannot be resolved
+     *         to a valid term (invalid values must fail rather than silently produce an
+     *         empty report).
+     */
     private String normalizeTermValue(String term) {
         if (!StringUtils.hasText(term)) {
-            return term;
+            return null;
         }
-        String trimmed = term.trim();
-        return switch (trimmed) {
+        // Collapse case, whitespace and separators so "Term 1", "term_1", "TERM 1" and
+        // "1" all reduce to the same canonical digit.
+        String compact = term.trim()
+                .toUpperCase()
+                .replace("TERM", "")
+                .replace("_", "")
+                .replace("-", "")
+                .replace(" ", "")
+                .trim();
+        return switch (compact) {
             case "1" -> "TERM_1";
             case "2" -> "TERM_2";
             case "3" -> "TERM_3";
-            default -> trimmed;
+            default -> null;
         };
     }
 

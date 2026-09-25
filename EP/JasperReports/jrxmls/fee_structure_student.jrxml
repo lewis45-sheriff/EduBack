@@ -16,46 +16,46 @@
     <property name="com.jaspersoft.studio.data.defaultdataadapter" value="EdutechMSSSQL"/>
 
     <!-- Styles -->
-    <style name="TitleStyle" forecolor="#1565C0" fontName="Arial" fontSize="22" isBold="true"/>
-    <style name="SubTitleStyle" forecolor="#546E7A" fontName="Arial" fontSize="14"/>
-    <style name="SectionHeader" forecolor="#1565C0" fontName="Arial" fontSize="12" isBold="true"/>
-    <style name="TableHeader" mode="Opaque" forecolor="#FFFFFF" backcolor="#1565C0" fontName="Arial" fontSize="11" isBold="true">
+    <style name="TitleStyle" forecolor="#333333" fontName="Arial" fontSize="22" isBold="true"/>
+    <style name="SubTitleStyle" forecolor="#555555" fontName="Arial" fontSize="14"/>
+    <style name="SectionHeader" forecolor="#333333" fontName="Arial" fontSize="12" isBold="true"/>
+    <style name="TableHeader" mode="Opaque" forecolor="#FFFFFF" backcolor="#333333" fontName="Arial" fontSize="11" isBold="true">
         <box>
             <pen lineWidth="0.5" lineColor="#FFFFFF"/>
-            <bottomPen lineWidth="0.5" lineColor="#BBDEFB"/>
+            <bottomPen lineWidth="0.5" lineColor="#E6E6E6"/>
         </box>
     </style>
     <style name="DetailStyle" fontName="Arial" fontSize="10">
         <box>
-            <pen lineWidth="0.5" lineColor="#E3F2FD"/>
+            <pen lineWidth="0.5" lineColor="#E6E6E6"/>
         </box>
         <conditionalStyle>
             <conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
-            <style mode="Opaque" backcolor="#F5F5F5"/>
+            <style mode="Opaque" backcolor="#F2F2F2"/>
         </conditionalStyle>
     </style>
-    <style name="DiscountStyle" fontName="Arial" fontSize="9" isItalic="true" forecolor="#D32F2F">
+    <style name="DiscountStyle" fontName="Arial" fontSize="9" isItalic="true" forecolor="#333333">
         <box>
-            <pen lineWidth="0.5" lineColor="#E3F2FD"/>
+            <pen lineWidth="0.5" lineColor="#E6E6E6"/>
         </box>
     </style>
-    <style name="SubtotalStyle" mode="Opaque" backcolor="#E8F5E8" fontName="Arial" fontSize="10" isBold="true">
+    <style name="SubtotalStyle" mode="Opaque" backcolor="#E6E6E6" fontName="Arial" fontSize="10" isBold="true">
         <box>
-            <topPen lineWidth="1.0" lineColor="#4CAF50"/>
+            <topPen lineWidth="1.0" lineColor="#333333"/>
         </box>
     </style>
-    <style name="TotalStyle" mode="Opaque" backcolor="#E3F2FD" fontName="Arial" fontSize="11" isBold="true">
+    <style name="TotalStyle" mode="Opaque" backcolor="#E6E6E6" fontName="Arial" fontSize="11" isBold="true">
         <box>
-            <topPen lineWidth="1.0" lineColor="#1565C0"/>
+            <topPen lineWidth="1.0" lineColor="#333333"/>
         </box>
     </style>
-    <style name="GrandTotalStyle" mode="Opaque" backcolor="#1565C0" forecolor="#FFFFFF" fontName="Arial" fontSize="12" isBold="true">
+    <style name="GrandTotalStyle" mode="Opaque" backcolor="#333333" forecolor="#FFFFFF" fontName="Arial" fontSize="12" isBold="true">
         <box>
-            <topPen lineWidth="1.5" lineColor="#1565C0"/>
-            <bottomPen lineWidth="1.5" lineColor="#1565C0"/>
+            <topPen lineWidth="1.5" lineColor="#333333"/>
+            <bottomPen lineWidth="1.5" lineColor="#333333"/>
         </box>
     </style>
-    <style name="StudentInfoLabel" forecolor="#1565C0" fontName="Arial" fontSize="10" isBold="true"/>
+    <style name="StudentInfoLabel" forecolor="#333333" fontName="Arial" fontSize="10" isBold="true"/>
     <style name="StudentInfoValue" fontName="Arial" fontSize="10"/>
 
     <!-- Parameters -->
@@ -330,7 +330,7 @@ FROM term_totals tt, discount_totals dt
     <background>
         <band height="802" splitType="Stretch">
             <rectangle>
-                <reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E3F2FD">
+                <reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E6E6E6">
                     <printWhenExpression><![CDATA[false]]></printWhenExpression>
                 </reportElement>
                 <graphicElement>
@@ -345,7 +345,7 @@ FROM term_totals tt, discount_totals dt
         <band height="220" splitType="Stretch">
             <!-- Header Background -->
             <rectangle>
-                <reportElement mode="Opaque" x="0" y="0" width="555" height="100" backcolor="#1565C0"/>
+                <reportElement mode="Opaque" x="0" y="0" width="555" height="100" backcolor="#333333"/>
                 <graphicElement>
                     <pen lineWidth="0.0"/>
                 </graphicElement>
@@ -370,7 +370,7 @@ FROM term_totals tt, discount_totals dt
 
             <!-- Report Title -->
             <staticText>
-                <reportElement x="100" y="45" width="435" height="25" forecolor="#E3F2FD"/>
+                <reportElement x="100" y="45" width="435" height="25" forecolor="#E6E6E6"/>
                 <textElement verticalAlignment="Middle">
                     <font fontName="Arial" size="16" isBold="true"/>
                 </textElement>
@@ -379,7 +379,7 @@ FROM term_totals tt, discount_totals dt
 
             <!-- School Motto and Contact -->
             <textField>
-                <reportElement x="100" y="70" width="435" height="20" forecolor="#BBDEFB"/>
+                <reportElement x="100" y="70" width="435" height="20" forecolor="#E6E6E6"/>
                 <textElement verticalAlignment="Middle">
                     <font fontName="Arial" size="10" isItalic="true"/>
                 </textElement>
@@ -388,11 +388,11 @@ FROM term_totals tt, discount_totals dt
 
             <!-- Report Subheader -->
             <rectangle radius="0">
-                <reportElement mode="Opaque" x="0" y="100" width="555" height="25" backcolor="#E3F2FD"/>
+                <reportElement mode="Opaque" x="0" y="100" width="555" height="25" backcolor="#E6E6E6"/>
             </rectangle>
 
             <textField>
-                <reportElement x="20" y="100" width="300" height="25" forecolor="#1565C0"/>
+                <reportElement x="20" y="100" width="300" height="25" forecolor="#333333"/>
                 <textElement verticalAlignment="Middle">
                     <font fontName="Arial" size="12" isBold="true"/>
                 </textElement>
@@ -400,7 +400,7 @@ FROM term_totals tt, discount_totals dt
             </textField>
 
             <textField>
-                <reportElement x="340" y="100" width="195" height="25" forecolor="#1565C0"/>
+                <reportElement x="340" y="100" width="195" height="25" forecolor="#333333"/>
                 <textElement textAlignment="Right" verticalAlignment="Middle">
                     <font fontName="Arial" size="10" isBold="true"/>
                 </textElement>
@@ -409,9 +409,9 @@ FROM term_totals tt, discount_totals dt
 
             <!-- Student Information Box -->
             <rectangle radius="10">
-                <reportElement mode="Opaque" x="20" y="135" width="515" height="75" backcolor="#F5F5F5"/>
+                <reportElement mode="Opaque" x="20" y="135" width="515" height="75" backcolor="#F2F2F2"/>
                 <graphicElement>
-                    <pen lineWidth="0.5" lineColor="#BBDEFB"/>
+                    <pen lineWidth="0.5" lineColor="#E6E6E6"/>
                 </graphicElement>
             </rectangle>
 
@@ -731,7 +731,7 @@ FROM term_totals tt, discount_totals dt
     <summary>
         <band height="50" splitType="Stretch">
             <staticText>
-                <reportElement x="20" y="10" width="515" height="15" forecolor="#546E7A"/>
+                <reportElement x="20" y="10" width="515" height="15" forecolor="#555555"/>
                 <textElement textAlignment="Center">
                     <font size="9" isItalic="true"/>
                 </textElement>
@@ -739,7 +739,7 @@ FROM term_totals tt, discount_totals dt
             </staticText>
 
             <textField pattern="EEEEE MMMMM dd, yyyy 'at' HH:mm">
-                <reportElement x="20" y="25" width="515" height="15" forecolor="#546E7A"/>
+                <reportElement x="20" y="25" width="515" height="15" forecolor="#555555"/>
                 <textElement textAlignment="Center">
                     <font size="8"/>
                 </textElement>

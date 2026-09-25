@@ -22,27 +22,27 @@
 
 	<!-- Enhanced School-Themed Styles -->
 	<style name="TitleStyle" fontName="Arial" fontSize="22" isBold="true" forecolor="#FFFFFF"/>
-	<style name="SubTitleStyle" fontName="Arial" fontSize="12" forecolor="#E3F2FD"/>
-	<style name="SectionHeader" fontName="Arial" fontSize="12" isBold="true" forecolor="#0F4C81"/>
-	<style name="TableHeader" mode="Opaque" backcolor="#0F4C81" forecolor="#FFFFFF"
+	<style name="SubTitleStyle" fontName="Arial" fontSize="12" forecolor="#E6E6E6"/>
+	<style name="SectionHeader" fontName="Arial" fontSize="12" isBold="true" forecolor="#333333"/>
+	<style name="TableHeader" mode="Opaque" backcolor="#333333" forecolor="#FFFFFF"
 		   fontName="Arial" fontSize="10" isBold="true">
 		<box>
 			<pen lineWidth="0.4" lineColor="#FFFFFF"/>
 		</box>
 	</style>
-	<style name="DetailStyle" fontName="Arial" fontSize="9" forecolor="#16324F">
+	<style name="DetailStyle" fontName="Arial" fontSize="9" forecolor="#333333">
 		<box>
-			<pen lineWidth="0.3" lineColor="#D8E3EC"/>
+			<pen lineWidth="0.3" lineColor="#BDBDBD"/>
 		</box>
 		<conditionalStyle>
 			<conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
-			<style mode="Opaque" backcolor="#F7FAFC"/>
+			<style mode="Opaque" backcolor="#F2F2F2"/>
 		</conditionalStyle>
 	</style>
-	<style name="StudentInfoLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#0F4C81"/>
-	<style name="StudentInfoValue" fontName="Arial" fontSize="9" forecolor="#16324F"/>
-	<style name="MetricLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#537188"/>
-	<style name="MetricValue" fontName="Arial" fontSize="16" isBold="true" forecolor="#0F4C81"/>
+	<style name="StudentInfoLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#333333"/>
+	<style name="StudentInfoValue" fontName="Arial" fontSize="9" forecolor="#333333"/>
+	<style name="MetricLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#555555"/>
+	<style name="MetricValue" fontName="Arial" fontSize="16" isBold="true" forecolor="#333333"/>
 
 	<!-- Parameters -->
 	<parameter name="studentID" class="java.lang.Long"/>
@@ -133,7 +133,7 @@
 		<band height="802" splitType="Stretch">
 			<!-- Light watermark in background -->
 			<rectangle>
-				<reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E3F2FD" uuid="47c025fb-b994-4c3d-8608-1f5c601ffafb">
+				<reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E6E6E6" uuid="47c025fb-b994-4c3d-8608-1f5c601ffafb">
 					<printWhenExpression><![CDATA[false]]></printWhenExpression>
 				</reportElement>
 				<graphicElement>
@@ -147,7 +147,7 @@
 	<title>
 		<band height="196" splitType="Stretch">
 			<rectangle>
-				<reportElement mode="Opaque" x="0" y="0" width="555" height="108" backcolor="#0F4C81" uuid="8c13e6c7-db0a-47cf-88ca-11296a96b083"/>
+				<reportElement mode="Opaque" x="0" y="0" width="555" height="108" backcolor="#333333" uuid="8c13e6c7-db0a-47cf-88ca-11296a96b083"/>
 			</rectangle>
 
 			<image scaleImage="RetainShape" onErrorType="Blank">
@@ -182,14 +182,14 @@
 			</textField>
 
 			<rectangle radius="8">
-				<reportElement mode="Opaque" x="0" y="115" width="555" height="55" backcolor="#F7FAFC" uuid="1f02481e-dac2-49aa-a818-336a771cafff"/>
+				<reportElement mode="Opaque" x="0" y="115" width="555" height="55" backcolor="#F2F2F2" uuid="1f02481e-dac2-49aa-a818-336a771cafff"/>
 				<graphicElement>
-					<pen lineWidth="0.5" lineColor="#C7D7E5"/>
+					<pen lineWidth="0.5" lineColor="#BDBDBD"/>
 				</graphicElement>
 			</rectangle>
 
 			<textField>
-				<reportElement x="18" y="116" width="260" height="18" forecolor="#0F4C81" uuid="4883017f-04bc-4935-9245-976da0891742"/>
+				<reportElement x="18" y="116" width="260" height="18" forecolor="#333333" uuid="4883017f-04bc-4935-9245-976da0891742"/>
 				<textElement verticalAlignment="Middle">
 					<font fontName="Arial" size="11" isBold="true"/>
 				</textElement>
@@ -197,7 +197,7 @@
 			</textField>
 
 			<textField>
-				<reportElement x="340" y="116" width="195" height="18" forecolor="#537188" uuid="0eb00515-9a89-424f-9391-f2802a97e60e"/>
+				<reportElement x="340" y="116" width="195" height="18" forecolor="#555555" uuid="0eb00515-9a89-424f-9391-f2802a97e60e"/>
 				<textElement textAlignment="Right" verticalAlignment="Middle">
 					<font fontName="Arial" size="9" isBold="true"/>
 				</textElement>
@@ -326,21 +326,21 @@
 	<summary>
 		<band height="196" splitType="Stretch">
 			<rectangle radius="12">
-				<reportElement mode="Opaque" x="0" y="10" width="175" height="54" backcolor="#F7FAFC" uuid="c8fe4de8-b9ca-4b5b-ad87-8c7b2db4f6b9"/>
+				<reportElement mode="Opaque" x="0" y="10" width="175" height="54" backcolor="#F2F2F2" uuid="c8fe4de8-b9ca-4b5b-ad87-8c7b2db4f6b9"/>
 				<graphicElement>
-					<pen lineWidth="0.5" lineColor="#C7D7E5"/>
+					<pen lineWidth="0.5" lineColor="#BDBDBD"/>
 				</graphicElement>
 			</rectangle>
 			<rectangle radius="12">
-				<reportElement mode="Opaque" x="190" y="10" width="175" height="54" backcolor="#F7FAFC" uuid="82a87809-1f5e-41b0-8042-7f4a2b46d9c5"/>
+				<reportElement mode="Opaque" x="190" y="10" width="175" height="54" backcolor="#F2F2F2" uuid="82a87809-1f5e-41b0-8042-7f4a2b46d9c5"/>
 				<graphicElement>
-					<pen lineWidth="0.5" lineColor="#C7D7E5"/>
+					<pen lineWidth="0.5" lineColor="#BDBDBD"/>
 				</graphicElement>
 			</rectangle>
 			<rectangle radius="12">
-				<reportElement mode="Opaque" x="380" y="10" width="175" height="54" backcolor="#F7FAFC" uuid="c4d8a448-adf8-46cc-b2f6-d473ba0d9c55"/>
+				<reportElement mode="Opaque" x="380" y="10" width="175" height="54" backcolor="#F2F2F2" uuid="c4d8a448-adf8-46cc-b2f6-d473ba0d9c55"/>
 				<graphicElement>
-					<pen lineWidth="0.5" lineColor="#C7D7E5"/>
+					<pen lineWidth="0.5" lineColor="#BDBDBD"/>
 				</graphicElement>
 			</rectangle>
 
@@ -369,7 +369,7 @@
 				<text><![CDATA[Overall Rating]]></text>
 			</staticText>
 			<textField evaluationTime="Report">
-				<reportElement x="395" y="32" width="145" height="24" forecolor="#0F4C81" uuid="f4795719-fd70-4c72-b4ab-746f7059320c"/>
+				<reportElement x="395" y="32" width="145" height="24" forecolor="#333333" uuid="f4795719-fd70-4c72-b4ab-746f7059320c"/>
 				<textElement verticalAlignment="Middle">
 					<font fontName="Arial" size="13" isBold="true"/>
 				</textElement>
@@ -382,9 +382,9 @@
 			</textField>
 
 			<rectangle radius="12">
-				<reportElement mode="Opaque" x="0" y="80" width="555" height="86" backcolor="#F7FAFC" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2aff21"/>
+				<reportElement mode="Opaque" x="0" y="80" width="555" height="86" backcolor="#F2F2F2" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2aff21"/>
 				<graphicElement>
-					<pen lineWidth="0.5" lineColor="#C7D7E5"/>
+					<pen lineWidth="0.5" lineColor="#BDBDBD"/>
 				</graphicElement>
 			</rectangle>
 
@@ -395,7 +395,7 @@
 			</staticText>
 
 			<textField evaluationTime="Report" textAdjust="StretchHeight" isBlankWhenNull="true">
-				<reportElement x="16" y="114" width="523" height="40" forecolor="#16324F" uuid="bb788e41-222f-42d2-b440-40ca1f851ec3"/>
+				<reportElement x="16" y="114" width="523" height="40" forecolor="#333333" uuid="bb788e41-222f-42d2-b440-40ca1f851ec3"/>
 				<textElement verticalAlignment="Top">
 					<font fontName="Arial" size="10"/>
 				</textElement>
@@ -415,11 +415,11 @@
 			<line>
 				<reportElement x="16" y="178" width="170" height="1" uuid="a458053d-20ba-4455-a26a-8ab9d892f394"/>
 				<graphicElement>
-					<pen lineWidth="0.8" lineColor="#537188"/>
+					<pen lineWidth="0.8" lineColor="#555555"/>
 				</graphicElement>
 			</line>
 			<staticText>
-				<reportElement x="16" y="180" width="170" height="12" forecolor="#537188" uuid="6e93cb0f-9fff-4309-95dc-5d6f80ca77ed"/>
+				<reportElement x="16" y="180" width="170" height="12" forecolor="#555555" uuid="6e93cb0f-9fff-4309-95dc-5d6f80ca77ed"/>
 				<textElement textAlignment="Center">
 					<font fontName="Arial" size="8" isBold="true"/>
 				</textElement>
@@ -431,7 +431,7 @@
 	<noData>
 		<band height="220" splitType="Stretch">
 			<rectangle>
-				<reportElement mode="Opaque" x="0" y="0" width="555" height="110" backcolor="#0F4C81" uuid="2dbabef8-ef1d-49df-a770-2a0d4fb4cb88"/>
+				<reportElement mode="Opaque" x="0" y="0" width="555" height="110" backcolor="#333333" uuid="2dbabef8-ef1d-49df-a770-2a0d4fb4cb88"/>
 			</rectangle>
 			<textField>
 				<reportElement style="TitleStyle" x="20" y="24" width="515" height="30" uuid="83054998-9017-4f4d-b7e6-15d1ca5df14f"/>
@@ -441,16 +441,16 @@
 				<textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression>
 			</textField>
 			<staticText>
-				<reportElement x="20" y="58" width="515" height="22" forecolor="#D7E7F5" uuid="037d5fa5-a8da-4c9d-bcdb-424652a779ff"/>
+				<reportElement x="20" y="58" width="515" height="22" forecolor="#E6E6E6" uuid="037d5fa5-a8da-4c9d-bcdb-424652a779ff"/>
 				<textElement textAlignment="Center" verticalAlignment="Middle">
 					<font fontName="Arial" size="13" isBold="true"/>
 				</textElement>
 				<text><![CDATA[REPORT CARD]]></text>
 			</staticText>
 			<rectangle radius="14">
-				<reportElement mode="Opaque" x="20" y="128" width="515" height="78" backcolor="#F7FAFC" uuid="f92d60c3-fdb3-4427-a28d-f486ef6db761"/>
+				<reportElement mode="Opaque" x="20" y="128" width="515" height="78" backcolor="#F2F2F2" uuid="f92d60c3-fdb3-4427-a28d-f486ef6db761"/>
 				<graphicElement>
-					<pen lineWidth="0.5" lineColor="#C7D7E5"/>
+					<pen lineWidth="0.5" lineColor="#BDBDBD"/>
 				</graphicElement>
 			</rectangle>
 			<staticText>

@@ -472,6 +472,7 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
             payment.setAdmissionNumber(student.getAdmissionNumber()); // Assuming this exists
             payment.setTransactionType(FinanceTransaction.TransactionType.INCOME);
             payment.setCategory("Fee Payment"); // Or "STK PUSH" or however you categorize
+            payment.setSource(FinanceTransaction.TransactionSource.MPESA_STK);
             payment.setAmount(BigDecimal.valueOf(amount));
             payment.setTransactionDate(LocalDate.now());
             payment.setDescription(
@@ -784,6 +785,7 @@ public class MpesaServiceImpl implements MpesaServiceInterface {
         transactionDTO.setTransactionType(FinanceTransaction.TransactionType.INCOME);
         transactionDTO.setAmount(amount);
         transactionDTO.setCategory("School Fees Payment");
+        transactionDTO.setSource(FinanceTransaction.TransactionSource.MPESA_CALLBACK);
         transactionDTO.setPaymentMethod(FinanceTransaction.PaymentMethod.MPESA);
         transactionDTO.setReference(receiptNumber);
         transactionDTO.setInvoiceId(invoice.getId());

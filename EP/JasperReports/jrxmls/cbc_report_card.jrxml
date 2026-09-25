@@ -18,20 +18,20 @@
 
     <!-- Styles (mirrors term_performance_report for a consistent look) -->
     <style name="TitleStyle" fontName="Arial" fontSize="19" isBold="true" forecolor="#FFFFFF"/>
-    <style name="SubTitleStyle" fontName="Arial" fontSize="9" forecolor="#E3F2FD"/>
-    <style name="SectionHeader" fontName="Arial" fontSize="12" isBold="true" forecolor="#0F4C81"/>
-    <style name="TableHeader" mode="Opaque" backcolor="#0F4C81" forecolor="#FFFFFF" fontName="Arial" fontSize="10" isBold="true">
+    <style name="SubTitleStyle" fontName="Arial" fontSize="9" forecolor="#E6E6E6"/>
+    <style name="SectionHeader" fontName="Arial" fontSize="12" isBold="true" forecolor="#333333"/>
+    <style name="TableHeader" mode="Opaque" backcolor="#333333" forecolor="#FFFFFF" fontName="Arial" fontSize="10" isBold="true">
         <box><pen lineWidth="0.4" lineColor="#FFFFFF"/></box>
     </style>
-    <style name="DetailStyle" fontName="Arial" fontSize="9" forecolor="#16324F">
-        <box><pen lineWidth="0.3" lineColor="#D8E3EC"/></box>
+    <style name="DetailStyle" fontName="Arial" fontSize="9" forecolor="#333333">
+        <box><pen lineWidth="0.3" lineColor="#BDBDBD"/></box>
         <conditionalStyle>
             <conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
-            <style mode="Opaque" backcolor="#F7FAFC"/>
+            <style mode="Opaque" backcolor="#F2F2F2"/>
         </conditionalStyle>
     </style>
-    <style name="InfoLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#0F4C81"/>
-    <style name="InfoValue" fontName="Arial" fontSize="9" forecolor="#16324F"/>
+    <style name="InfoLabel" fontName="Arial" fontSize="9" isBold="true" forecolor="#333333"/>
+    <style name="InfoValue" fontName="Arial" fontSize="9" forecolor="#333333"/>
 
     <!-- ============ Competency subdataset (evidence-based) ============ -->
     <!-- subDataset elements must precede parameters/queryString per the JRXML schema. -->
@@ -142,7 +142,7 @@
     <title>
         <band height="176" splitType="Stretch">
             <rectangle>
-                <reportElement mode="Opaque" x="0" y="0" width="555" height="96" backcolor="#0F4C81" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000101"/>
+                <reportElement mode="Opaque" x="0" y="0" width="555" height="96" backcolor="#333333" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000101"/>
             </rectangle>
             <image scaleImage="RetainShape" onErrorType="Blank">
                 <reportElement x="16" y="14" width="66" height="66" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000102">
@@ -167,8 +167,8 @@
             </textField>
 
             <rectangle radius="8">
-                <reportElement mode="Opaque" x="0" y="104" width="555" height="64" backcolor="#F7FAFC" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000106"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#C7D7E5"/></graphicElement>
+                <reportElement mode="Opaque" x="0" y="104" width="555" height="64" backcolor="#F2F2F2" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000106"/>
+                <graphicElement><pen lineWidth="0.5" lineColor="#BDBDBD"/></graphicElement>
             </rectangle>
             <staticText><reportElement style="InfoLabel" x="14" y="110" width="120" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000107"/><text><![CDATA[Learner Name]]></text></staticText>
             <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="14" y="124" width="180" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000108"/><textFieldExpression><![CDATA[$F{studentFullName}]]></textFieldExpression></textField>
@@ -178,7 +178,7 @@
             <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="330" y="124" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010c"/><textFieldExpression><![CDATA[$F{gradeName}]]></textFieldExpression></textField>
             <staticText><reportElement style="InfoLabel" x="440" y="110" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010d"/><text><![CDATA[Term / Year]]></text></staticText>
             <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="440" y="124" width="100" height="14" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010e"/><textFieldExpression><![CDATA[$F{termName} + " / " + $F{academicYear}]]></textFieldExpression></textField>
-            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="14" y="146" width="527" height="14" forecolor="#537188" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010f"/>
+            <textField isBlankWhenNull="true"><reportElement style="InfoValue" x="14" y="146" width="527" height="14" forecolor="#555555" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000010f"/>
                 <textElement><font fontName="Arial" size="8" isItalic="true"/></textElement>
                 <textFieldExpression><![CDATA[$F{frameworkCode} == null ? "" : ("Assessment framework: " + $F{frameworkCode})]]></textFieldExpression>
             </textField>
@@ -271,12 +271,12 @@
 
             <!-- Teacher comment + signature -->
             <rectangle radius="10">
-                <reportElement mode="Opaque" x="0" y="250" width="555" height="70" backcolor="#F7FAFC" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040c"/>
-                <graphicElement><pen lineWidth="0.5" lineColor="#C7D7E5"/></graphicElement>
+                <reportElement mode="Opaque" x="0" y="250" width="555" height="70" backcolor="#F2F2F2" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040c"/>
+                <graphicElement><pen lineWidth="0.5" lineColor="#BDBDBD"/></graphicElement>
             </rectangle>
             <staticText><reportElement style="SectionHeader" x="12" y="258" width="300" height="16" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040d"/><text><![CDATA[CLASS TEACHER'S REMARKS]]></text></staticText>
             <textField evaluationTime="Report" textAdjust="StretchHeight" isBlankWhenNull="true">
-                <reportElement x="12" y="278" width="531" height="30" forecolor="#16324F" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040e"/>
+                <reportElement x="12" y="278" width="531" height="30" forecolor="#333333" uuid="0b1e6d10-cbc0-4a10-9d0a-00000000040e"/>
                 <textElement verticalAlignment="Top"><font fontName="Arial" size="10"/></textElement>
                 <textFieldExpression><![CDATA[$F{teacherComment} == null ? "The learner is developing across the assessed learning areas. Continued support and practice are encouraged." : $F{teacherComment}]]></textFieldExpression>
             </textField>
@@ -286,9 +286,9 @@
     <!-- Empty state -->
     <noData>
         <band height="180" splitType="Stretch">
-            <rectangle><reportElement mode="Opaque" x="0" y="0" width="555" height="96" backcolor="#0F4C81" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000501"/></rectangle>
+            <rectangle><reportElement mode="Opaque" x="0" y="0" width="555" height="96" backcolor="#333333" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000501"/></rectangle>
             <textField><reportElement style="TitleStyle" x="20" y="20" width="515" height="28" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000502"/><textElement textAlignment="Center" verticalAlignment="Middle"><font fontName="Arial" size="18" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression></textField>
-            <staticText><reportElement x="20" y="52" width="515" height="20" forecolor="#D7E7F5" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000503"/><textElement textAlignment="Center" verticalAlignment="Middle"><font fontName="Arial" size="12" isBold="true"/></textElement><text><![CDATA[CBC LEARNER REPORT CARD]]></text></staticText>
+            <staticText><reportElement x="20" y="52" width="515" height="20" forecolor="#E6E6E6" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000503"/><textElement textAlignment="Center" verticalAlignment="Middle"><font fontName="Arial" size="12" isBold="true"/></textElement><text><![CDATA[CBC LEARNER REPORT CARD]]></text></staticText>
             <staticText><reportElement style="SectionHeader" x="20" y="120" width="515" height="18" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000504"/><textElement textAlignment="Center"/><text><![CDATA[No CBC results were found for the selected learner, term and year.]]></text></staticText>
             <textField><reportElement x="20" y="142" width="515" height="16" uuid="0b1e6d10-cbc0-4a10-9d0a-000000000505"/><textElement textAlignment="Center"><font fontName="Arial" size="9"/></textElement>
                 <textFieldExpression><![CDATA["Student ID: " + $P{studentID} + " | Term: " + $P{termID} + " | Year: " + $P{year}]]></textFieldExpression></textField>

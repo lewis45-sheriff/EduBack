@@ -28,6 +28,13 @@ public class FileStorageService {
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS =
             Set.of("png", "jpg", "jpeg", "gif", "webp", "svg");
 
+    /** Attachment types accepted for supporting documents (receipts, proofs, etc.). */
+    private static final Set<String> ALLOWED_DOCUMENT_EXTENSIONS =
+            Set.of("png", "jpg", "jpeg", "pdf", "doc", "docx");
+
+    /** Maximum size for an uploaded supporting document (10 MB). */
+    private static final long MAX_DOCUMENT_SIZE_BYTES = 10L * 1024 * 1024;
+
     private final Path uploadRoot;
     private final String urlPrefix;
 
@@ -61,14 +68,41 @@ public class FileStorageService {
      * @return the web path where the file can be served from
      */
     public String storeImage(MultipartFile file, String subDirectory) {
+        return store(file, subDirectory, ALLOWED_IMAGE_EXTENSIONS, 0L, "image");
+    }
+
+    /**
+     * Stores an uploaded supporting document (PNG/JPG/PDF/Word) under the given
+     * sub-directory and returns the public URL path to persist. Enforces the
+     * document type allow-list and a 10 MB size cap.
+     *
+     * @param file          the uploaded multipart file
+     * @param subDirectory  logical folder to group files (e.g. "transaction-attachments")
+     * @return the web path where the file can be served from
+     */
+    public String storeDocument(MultipartFile file, String subDirectory) {
+        return store(file, subDirectory, ALLOWED_DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE_BYTES, "document");
+    }
+
+    /**
+     * Shared store routine: validates emptiness, extension allow-list and (when
+     * {@code maxSizeBytes > 0}) size, writes the bytes under a UUID filename in the
+     * sanitised sub-directory, and returns the servable web path.
+     */
+    private String store(MultipartFile file, String subDirectory, Set<String> allowedExtensions,
+                         long maxSizeBytes, String kind) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
         }
+        if (maxSizeBytes > 0 && file.getSize() > maxSizeBytes) {
+            throw new IllegalArgumentException(
+                    "File exceeds the maximum allowed size of " + (maxSizeBytes / (1024 * 1024)) + " MB");
+        }
 
         String extension = getExtension(file.getOriginalFilename());
-        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
+        if (!allowedExtensions.contains(extension)) {
             throw new IllegalArgumentException(
-                    "Unsupported image type '" + extension + "'. Allowed: " + ALLOWED_IMAGE_EXTENSIONS);
+                    "Unsupported " + kind + " type '" + extension + "'. Allowed: " + allowedExtensions);
         }
 
         String safeSubDir = sanitizeSubDirectory(subDirectory);

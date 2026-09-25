@@ -327,6 +327,7 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
             financeTransaction.setAdmissionNumber(accountNumber);
             financeTransaction.setTransactionType(FinanceTransaction.TransactionType.INCOME);
             financeTransaction.setCategory("FEE_PAYMENT");
+            financeTransaction.setSource(FinanceTransaction.TransactionSource.MPESA_CALLBACK);
             financeTransaction.setAmount(paymentAmount);
             financeTransaction.setTransactionDate(transactionDate.toLocalDate());
             financeTransaction.setDescription("M-Pesa payment - " + transactionId);

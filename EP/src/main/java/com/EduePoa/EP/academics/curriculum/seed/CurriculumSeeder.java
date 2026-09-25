@@ -12,8 +12,11 @@ import com.EduePoa.EP.academics.curriculum.entity.*;
 import com.EduePoa.EP.academics.curriculum.enums.*;
 import com.EduePoa.EP.academics.curriculum.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Session;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -64,6 +67,9 @@ public class CurriculumSeeder implements ApplicationRunner {
 
     private final com.EduePoa.EP.academics.repository.AcademicSubjectRepository academicSubjectRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Override
     public void run(ApplicationArguments args) {
         List<Tenant> tenants = tenantRepository.findAll();
@@ -84,6 +90,11 @@ public class CurriculumSeeder implements ApplicationRunner {
         }
         try {
             TenantContext.setCurrentTenant(tenantIdentifier);
+            // Seeders run outside an HTTP request, so HibernateFilterInterceptor never enabled the
+            // tenant filter. Enable it here so EVERY findBy... query in this method is tenant-scoped
+            // and we never read/link another tenant's rows.
+            enableTenantFilter(tenantIdentifier);
+
             CurriculumSeedData data = load("curriculum/cbc-2024.json", CurriculumSeedData.class);
             CurriculumSeedData.FrameworksFile frameworks =
                     load("curriculum/assessment-frameworks.json", CurriculumSeedData.FrameworksFile.class);
@@ -102,7 +113,22 @@ public class CurriculumSeeder implements ApplicationRunner {
 
             log.info("Curriculum seeding complete for tenant {}", tenantIdentifier);
         } finally {
+            disableTenantFilter();
             TenantContext.clear();
+        }
+    }
+
+    /** Enable the Hibernate tenant filter on the seeding session (mirrors HibernateFilterInterceptor). */
+    private void enableTenantFilter(String tenantId) {
+        Session session = entityManager.unwrap(Session.class);
+        session.enableFilter("tenantFilter").setParameter("tenantId", tenantId);
+    }
+
+    private void disableTenantFilter() {
+        try {
+            entityManager.unwrap(Session.class).disableFilter("tenantFilter");
+        } catch (Exception ignored) {
+            // Filter may not be enabled if seeding bailed early; safe to ignore.
         }
     }
 
@@ -113,7 +139,8 @@ public class CurriculumSeeder implements ApplicationRunner {
     }
 
     private CurriculumVersion seedVersion(CurriculumSeedData.VersionSeed v) {
-        return versionRepository.findByCode(v.getCode()).orElseGet(() -> {
+        String tenantId = TenantContext.getCurrentTenant();
+        return versionRepository.findByCodeAndTenant(v.getCode(), tenantId).orElseGet(() -> {
             CurriculumVersion cv = new CurriculumVersion();
             cv.setCode(v.getCode());
             cv.setName(v.getName());
@@ -400,21 +427,26 @@ public class CurriculumSeeder implements ApplicationRunner {
      * instead of creating duplicates.
      */
     private void bridgeLearningAreasToSubjects(CurriculumVersion version) {
+        // IMPORTANT: seeders run outside an HTTP request, so the request-scoped Hibernate tenantFilter
+        // is NOT active. We must scope subject lookups by the current tenant explicitly, otherwise
+        // findBySubjectName leaks across tenants and links to another tenant's AcademicSubject.
+        String tenantId = TenantContext.getCurrentTenant();
+
         List<LearningArea> areas = learningAreaRepository.findByCurriculumVersionOrderBySequenceAsc(version);
         for (LearningArea la : areas) {
             if (la.getStatus() != CurriculumStatus.ACTIVE) {
                 continue;
             }
 
-            // If already bridged and the subject still exists, leave it alone.
+            // If already bridged and that subject still exists for THIS tenant, leave it alone.
             if (la.getAcademicSubjectId() != null
-                    && academicSubjectRepository.existsById(la.getAcademicSubjectId())) {
+                    && academicSubjectRepository.existsByIdAndTenant(la.getAcademicSubjectId(), tenantId)) {
                 continue;
             }
 
             String name = la.getOfficialName();
             com.EduePoa.EP.academics.entity.AcademicSubject subject = academicSubjectRepository
-                    .findBySubjectName(name)
+                    .findBySubjectNameAndTenant(name, tenantId)
                     .orElseGet(() -> {
                         var s = new com.EduePoa.EP.academics.entity.AcademicSubject();
                         s.setSubjectName(name);

@@ -32,5 +32,9 @@ public class FeeStructureRequestDTO {
     public static class FeeItemDTO {
         private String name;
         private Double amount;
+        /** Whether this line item may be assigned to students as an optional fee. Defaults false. */
+        private Boolean optional;
+        /** Whether a parent may self-assign this optional line item. Defaults false. */
+        private Boolean parentAssignable;
     }
 }

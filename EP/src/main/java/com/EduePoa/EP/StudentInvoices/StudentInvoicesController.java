@@ -43,6 +43,46 @@ public class StudentInvoicesController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasPermission(null, 'invoice:reverse')")
+    @PostMapping("reverse/{invoiceId}")
+    ResponseEntity<?> reverseInvoice(@PathVariable Long invoiceId){
+        var response = studentInvoicesService.reverseInvoice(invoiceId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasPermission(null, 'invoice:reverse')")
+    @PostMapping("reverse/student/{studentId}/{term}")
+    ResponseEntity<?> reverseStudentInvoice(@PathVariable Long studentId,
+                                            @PathVariable Term term,
+                                            @RequestParam(required = false) Integer academicYear){
+        var response = studentInvoicesService.reverseInvoice(studentId, term, academicYear);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasPermission(null, 'invoice:reverse')")
+    @PostMapping("reverse-all/{term}")
+    ResponseEntity<?> reverseAllInvoices(@PathVariable Term term,
+                                         @RequestParam(required = false) Integer academicYear){
+        var response = studentInvoicesService.reverseAll(term, academicYear);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasPermission(null, 'invoice:reverse')")
+    @PostMapping("reverse/grade/{gradeId}/{term}")
+    ResponseEntity<?> reverseGradeInvoices(@PathVariable Long gradeId,
+                                           @PathVariable Term term,
+                                           @RequestParam(required = false) Integer academicYear){
+        var response = studentInvoicesService.reverseByGrade(gradeId, term, academicYear);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasPermission(null, 'invoice:reverse')")
+    @GetMapping("reversals")
+    ResponseEntity<?> getReversals(){
+        var response = studentInvoicesService.getReversals();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
 
 
 

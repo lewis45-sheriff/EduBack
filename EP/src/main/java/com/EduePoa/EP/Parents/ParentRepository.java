@@ -11,4 +11,7 @@ public interface ParentRepository extends TenantAwareRepository<Parent, Long> {
     Optional<Parent> findByPhoneNumber(String phoneNumber);
     boolean existsByEmail(String email);
     boolean existsByPhoneNumber(String phoneNumber);
+
+    /** Resolve the parent linked to a given portal user account. */
+    Optional<Parent> findByUser_Id(Long userId);
 }

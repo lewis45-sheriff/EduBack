@@ -4,6 +4,10 @@ import com.EduePoa.EP.Authentication.AuditLogs.AuditAnnotation.Audit;
 import com.EduePoa.EP.Authentication.AuditLogs.AuditService;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Finance.Responses.StudentBalanceDTO;
+import com.EduePoa.EP.StudentInvoices.InvoiceReversal;
+import com.EduePoa.EP.StudentInvoices.InvoiceReversalRepository;
+import com.EduePoa.EP.StudentInvoices.StudentInvoices;
+import com.EduePoa.EP.StudentInvoices.StudentInvoicesRepository;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.StudentRegistration.StudentRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
@@ -14,9 +18,11 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Year;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,16 +31,40 @@ public class FinanceServiceImpl implements FinanceService {
     private final FinanceRepository financeRepository;
     private final StudentRepository studentRepository;
     private final AuditService auditService;
+    private final InvoiceReversalRepository invoiceReversalRepository;
+    private final StudentInvoicesRepository studentInvoicesRepository;
 
     @Override
     @Audit(module = "FINANCE", action = "GET_BALANCES")
     public CustomResponse<?> getStudentsWithBalances() {
         CustomResponse<List<StudentBalanceDTO>> response = new CustomResponse<>();
         try {
-            // Fetch all finances, including those with 0 balance
             List<Finance> finances = financeRepository.findAll();
 
+            // Build the set of (student, term, year) keys whose invoice has been
+            // reversed and NOT re-invoiced. Reversal hard-deletes the invoice (freeing
+            // the term to be re-invoiced) and records an InvoiceReversal snapshot, so a
+            // student is treated as "reversed" only when a reversal record exists and no
+            // live (isDeleted = 'N') invoice currently exists for that same term/year.
+            // This is independent of the balance amount.
+            Set<String> reversedKeys = invoiceReversalRepository.findAll().stream()
+                    .map(r -> financeKey(r.getStudentId(), r.getTerm(), r.getAcademicYear()))
+                    .collect(Collectors.toCollection(HashSet::new));
+
+            if (!reversedKeys.isEmpty()) {
+                // Any term that has since been re-invoiced has a live invoice again, so
+                // remove those keys - the student should reappear in the listing.
+                studentInvoicesRepository.findByIsDeleted('N').stream()
+                        .filter(inv -> inv.getStudent() != null)
+                        .map(inv -> financeKey(inv.getStudent().getId(), inv.getTerm(), inv.getAcademicYear()))
+                        .forEach(reversedKeys::remove);
+            }
+
             List<StudentBalanceDTO> studentBalances = finances.stream()
+                    // Hide only students whose invoice for this term/year was reversed
+                    // (and not re-invoiced), regardless of their balance.
+                    .filter(finance -> !reversedKeys.contains(
+                            financeKey(finance.getStudentId(), finance.getTerm(), finance.getYear())))
                     .map(finance -> {
                         // Fetch student details
                         Student student = studentRepository.findById(finance.getStudentId())
@@ -52,6 +82,7 @@ public class FinanceServiceImpl implements FinanceService {
                         }
 
                         return StudentBalanceDTO.builder()
+                                .studentId(finance.getStudentId())
                                 .studentName(student.getFirstName() + " " + student.getLastName())
                                 .gradeName(student.getGradeName()) // Add grade name
                                 .totalFeeAmount(finance.getTotalFeeAmount())
@@ -75,6 +106,16 @@ public class FinanceServiceImpl implements FinanceService {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
         return response;
+    }
+
+    /**
+     * Builds a stable lookup key identifying a student's fee position for a given
+     * term and year, used to match Finance rows against reversed / re-invoiced
+     * invoices. Null-safe so partially populated records never throw.
+     */
+    private String financeKey(Long studentId, Term term, Year year) {
+        return studentId + "|" + (term != null ? term.name() : "null")
+                + "|" + (year != null ? year.toString() : "null");
     }
 
     @Override

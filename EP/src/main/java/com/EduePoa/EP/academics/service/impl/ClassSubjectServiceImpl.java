@@ -49,17 +49,40 @@ public class ClassSubjectServiceImpl implements ClassSubjectService {
             Grade grade = gradeOpt.get();
             Year year = Year.of(request.getYear());
 
-            List<AcademicSubject> allSubjects = subjectRepository.findAll();
-            if (allSubjects.isEmpty()) {
-                response.setStatusCode(HttpStatus.NOT_FOUND.value());
-                response.setMessage("No subjects found in the system. Please create subjects first.");
-                return response;
+            // Determine which subjects to assign:
+            //  - explicit subjectIds (one or many) => assign only those (validated)
+            //  - null/empty                        => assign ALL subjects (backward-compatible)
+            List<AcademicSubject> subjectsToAssign;
+            List<Long> invalidIds = new ArrayList<>();
+
+            if (request.getSubjectIds() != null && !request.getSubjectIds().isEmpty()) {
+                subjectsToAssign = new ArrayList<>();
+                for (Long subjectId : request.getSubjectIds()) {
+                    Optional<AcademicSubject> subjectOpt = subjectRepository.findById(subjectId);
+                    if (subjectOpt.isPresent()) {
+                        subjectsToAssign.add(subjectOpt.get());
+                    } else {
+                        invalidIds.add(subjectId);
+                    }
+                }
+                if (subjectsToAssign.isEmpty()) {
+                    response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                    response.setMessage("None of the provided subject ids were found: " + invalidIds);
+                    return response;
+                }
+            } else {
+                subjectsToAssign = subjectRepository.findAll();
+                if (subjectsToAssign.isEmpty()) {
+                    response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                    response.setMessage("No subjects found in the system. Please create subjects first.");
+                    return response;
+                }
             }
 
             List<String> assignedNames = new ArrayList<>();
             int newAssignments = 0;
 
-            for (AcademicSubject subject : allSubjects) {
+            for (AcademicSubject subject : subjectsToAssign) {
                 boolean alreadyExists = assignmentRepository
                         .existsByGradeAndAcademicSubjectAndYear(grade, subject, year);
                 if (!alreadyExists) {
@@ -80,9 +103,14 @@ public class ClassSubjectServiceImpl implements ClassSubjectService {
             result.setTotalSubjectsAssigned(assignedNames.size());
             result.setAssignedSubjectNames(assignedNames);
 
+            int alreadyExisted = assignedNames.size() - newAssignments;
+            String message = newAssignments + " new subject(s) assigned to " + grade.getName()
+                    + ". " + alreadyExisted + " already existed.";
+            if (!invalidIds.isEmpty()) {
+                message += " Skipped invalid subject id(s): " + invalidIds + ".";
+            }
             response.setStatusCode(HttpStatus.OK.value());
-            response.setMessage(newAssignments + " new subject(s) assigned to " + grade.getName() +
-                    ". " + (assignedNames.size() - newAssignments) + " already existed.");
+            response.setMessage(message);
             response.setEntity(result);
 
         } catch (Exception e) {
