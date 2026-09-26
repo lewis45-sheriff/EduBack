@@ -80,8 +80,16 @@ jobs:
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
             export APP_IMAGE="$APP_IMAGE"
+
+            # Free disk before pulling (small instance) - remove dangling images & build cache.
+            docker image prune -f || true
+            docker builder prune -af || true
+
             docker compose -f docker-compose.prod.yml pull app
-            docker compose -f docker-compose.prod.yml up -d
-            docker image prune -f
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Remove the now-unused previous image to reclaim disk.
+            docker image prune -af || true
+
             docker compose -f docker-compose.prod.yml ps
             echo "Deployment completed."

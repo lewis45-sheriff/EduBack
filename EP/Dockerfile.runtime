@@ -1,0 +1,19 @@
+# Runtime-only image: expects app.jar to already be built and present in the build context.
+# Used for the low-disk EC2 first deploy where the fat maven build image doesn't fit alongside everything.
+FROM eclipse-temurin:21-jre-jammy
+
+WORKDIR /app
+
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+COPY app.jar app.jar
+COPY JasperReports ./JasperReports
+
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8085
+
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=30"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-docker}"]
