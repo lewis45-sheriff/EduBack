@@ -1,0 +1,62 @@
+# Production compose for the EC2 server.
+# The app image is built and pushed to GHCR by GitHub Actions; the server only pulls & runs it.
+# Secrets/config come from a .env file that sits next to this file on the server.
+
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/lewis45-sheriff/eduback:latest}
+    container_name: edupoa-backend
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://db:3306/bureti
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-root}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ENCODER_SECRET=${JWT_ENCODER_SECRET:-mysecret}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      # M-Pesa
+      - MPESA_APP_KEY=${MPESA_APP_KEY:-}
+      - MPESA_APP_SECRET=${MPESA_APP_SECRET:-}
+      - MPESA_STK_PASSWORD=${MPESA_STK_PASSWORD:-}
+      - MPESA_SHORTCODE=${MPESA_SHORTCODE:-174379}
+      - MPESA_CALLBACK_URL=${MPESA_CALLBACK_URL:-}
+      - MPESA_B2C_SECURITY_CREDENTIAL=${MPESA_B2C_SECURITY_CREDENTIAL:-}
+      - MPESA_B2C_INITIATOR_PASSWORD=${MPESA_B2C_INITIATOR_PASSWORD:-}
+      - MPESA_B2C_TIMEOUT_URL=${MPESA_B2C_TIMEOUT_URL:-}
+      - MPESA_B2C_CALLBACK_URL=${MPESA_B2C_CALLBACK_URL:-}
+      - MPESA_B2C_INITIATOR_NAME=${MPESA_B2C_INITIATOR_NAME:-testapi}
+      - MPESA_PAYBILL_APP_KEY=${MPESA_PAYBILL_APP_KEY:-}
+      - MPESA_PAYBILL_APP_SECRET=${MPESA_PAYBILL_APP_SECRET:-}
+      # Bank callback
+      - BANK_CALLBACK_USERNAME=${BANK_CALLBACK_USERNAME:-kipkemoi}
+      - BANK_CALLBACK_PASSWORD=${BANK_CALLBACK_PASSWORD:-kipkemoi}
+      # JVM memory cap so the small instance does not OOM
+      - JAVA_OPTS=-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=30
+    volumes:
+      - app_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mariadb:11
+    container_name: edupoa-db
+    environment:
+      - MARIADB_ROOT_PASSWORD=${DB_PASSWORD:-root}
+      - MARIADB_DATABASE=bureti
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:
+  app_uploads:

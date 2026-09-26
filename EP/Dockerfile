@@ -33,4 +33,6 @@ USER appuser
 
 EXPOSE 8085
 
-ENTRYPOINT ["java", "-jar", "app.jar", "--spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod}"]
+# JAVA_OPTS lets us cap heap on small instances; SPRING_PROFILES_ACTIVE defaults to docker.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=30"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-docker}"]
