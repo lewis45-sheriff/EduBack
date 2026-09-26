@@ -13,33 +13,77 @@ push to main/Lewis
       ▼
 GitHub Actions ── build image ──► GHCR (ghcr.io/lewis45-sheriff/eduback:latest)
       │
-      └── SSH to EC2 ──► docker compose pull + up  ──►  edupoa-backend + edupoa-db
+      └── SSH to EC2 ──► docker compose pull + up
+                              │
+     Internet ──► :80 ──► [ edupoa-nginx ] ──► [ edupoa-backend :8085 ] ──► [ edupoa-db ]
+                              │                    (internal only)
+                              └── serves frontend SPA at /
 ```
 
-- App container: `edupoa-backend` (Spring Boot, port 8085, profile `docker`)
+Nginx is the single public entry point (port 80). It reverse-proxies API traffic to the
+backend and serves the frontend static build, so frontend and API share one origin
+(no CORS issues). The backend port 8085 is **not** exposed to the host.
+
+- Nginx container: `edupoa-nginx` (port 80, config `/opt/edupoa/nginx/nginx.conf`)
+- App container: `edupoa-backend` (Spring Boot, internal 8085, profile `docker`)
 - DB container: `edupoa-db` (MariaDB 11, volume `mariadb_data`)
 - Uploads volume: `app_uploads` → `/app/uploads`
 - Server working dir: `/opt/edupoa`
   - `docker-compose.prod.yml` — the running stack definition
   - `.env` — secrets/config (NOT in git)
+  - `nginx/nginx.conf` — reverse proxy + SPA config
+  - `frontend/` — frontend production build served at `/`
+
+### Nginx routes
+
+| Path              | Goes to                                 |
+|-------------------|-----------------------------------------|
+| `/api/...`        | backend (Spring Boot)                   |
+| `/swagger-ui/...` | backend (Swagger UI)                    |
+| `/v3/api-docs`    | backend (OpenAPI JSON)                  |
+| `/uploads/...`    | backend (uploaded files)                |
+| `/ws`             | backend (WebSocket / SockJS)            |
+| `/` (everything else) | frontend SPA (`try_files ... /index.html`) |
 
 ## Swagger UI
 
-Once port 8085 is open in the security group:
+Once port 80 is open in the security group:
 
-- Swagger UI: http://35.175.109.77:8085/swagger-ui/index.html
-- OpenAPI JSON: http://35.175.109.77:8085/v3/api-docs
+- Swagger UI: http://35.175.109.77/swagger-ui/index.html
+- OpenAPI JSON: http://35.175.109.77/v3/api-docs
+- API base: http://35.175.109.77/api/v1/
 
-## Required: open the port in the AWS Security Group
+## Required: open port 80 in the AWS Security Group
 
-The app is confirmed running, but AWS blocks inbound 8085 by default. Open it once:
+The stack is confirmed running, but AWS blocks inbound 80 by default. Open it once:
 
 1. AWS Console → EC2 → Instances → select the instance (public IP `35.175.109.77`).
 2. Security tab → click the attached Security Group.
 3. Inbound rules → Edit inbound rules → Add rule:
-   - Type: Custom TCP, Port range: `8085`, Source: `0.0.0.0/0` (or your IP for tighter access).
+   - Type: HTTP, Port range: `80`, Source: `0.0.0.0/0`.
    - Keep the existing SSH (22) rule.
-4. Save. External access to Swagger works immediately.
+   - (Later, when you add TLS: also add HTTPS port `443`.)
+4. Save. External access works immediately.
+
+You no longer need port 8085 open — Nginx handles all public traffic on 80.
+
+## Deploying the frontend
+
+Build your frontend for production, then copy the build output into `/opt/edupoa/frontend`
+on the server. Nginx serves it at `/` with SPA fallback.
+
+```bash
+# From your frontend project (example for Vite/React; adjust to your tooling)
+npm run build            # produces dist/ (or build/ for CRA)
+
+# Copy the build to the server
+scp -i "Eduapp.pem" -r dist/* ubuntu@35.175.109.77:/opt/edupoa/frontend/
+
+# No restart needed - nginx serves the new files immediately.
+```
+
+Point your frontend's API base URL at the same origin, e.g. `/api/v1` (relative), so it
+works through Nginx without CORS. WebSocket/SockJS endpoint is `/ws`.
 
 ## Required GitHub secrets
 
