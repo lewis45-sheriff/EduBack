@@ -6,6 +6,7 @@ import com.EduePoa.EP.Authentication.User.UserRepository;
 import com.EduePoa.EP.Communications.Enums.*;
 import com.EduePoa.EP.Communications.Requests.*;
 import com.EduePoa.EP.Communications.Responses.*;
+import com.EduePoa.EP.Communications.SMS.BulkSmsDispatchResult;
 import com.EduePoa.EP.Communications.SMS.SmsDispatchResult;
 import com.EduePoa.EP.Communications.SMS.SmsGatewayService;
 import com.EduePoa.EP.Communications.WhatsApp.WhatsAppGatewayService;
@@ -727,8 +728,9 @@ public class CommunicationServiceImpl implements CommunicationService {
                     .recipientName(parent.getFirstName() + " " + parent.getLastName())
                     .phone(phone)
                     .email(parent.getEmail())
-                    .deliveryStatus(result.isSuccess() ? DeliveryStatus.DELIVERED : DeliveryStatus.FAILED)
-                    .deliveredAt(result.isSuccess() ? LocalDateTime.now() : null)
+                    // AT accepted = SENT (awaiting delivery report), not yet DELIVERED.
+                    .deliveryStatus(result.isSuccess() ? DeliveryStatus.PENDING : DeliveryStatus.FAILED)
+                    .providerMessageId(result.getMessageId())
                     .message(message)
                     .build();
 
@@ -768,8 +770,10 @@ public class CommunicationServiceImpl implements CommunicationService {
                     .build());
 
             List<Student> students = studentRepository.findAllByIsDeleted(false);
-            List<MessageRecipient> recipients = new ArrayList<>();
 
+            // Collect one primary-guardian phone per student, keeping the parent behind each
+            // normalised-ish phone so we can map the AT per-recipient results back to a parent.
+            java.util.LinkedHashMap<String, com.EduePoa.EP.Parents.Parent> phoneToParent = new java.util.LinkedHashMap<>();
             for (Student student : students) {
                 studentGuardianRepository.findByStudentId(student.getId()).stream()
                         .filter(StudentGuardian::isPrimaryContact)
@@ -778,19 +782,53 @@ public class CommunicationServiceImpl implements CommunicationService {
                         .ifPresent(parent -> {
                             String phone = parent.getPhoneNumber();
                             if (phone != null && !phone.isBlank()) {
-                                SmsDispatchResult result = smsGatewayService.sendSms(phone, content);
-                                recipients.add(MessageRecipient.builder()
-                                        .recipientType(RecipientType.PARENT)
-                                        .recipientId(parent.getId())
-                                        .recipientName(parent.getFirstName() + " " + parent.getLastName())
-                                        .phone(phone)
-                                        .email(parent.getEmail())
-                                        .deliveryStatus(result.isSuccess() ? DeliveryStatus.DELIVERED : DeliveryStatus.FAILED)
-                                        .deliveredAt(result.isSuccess() ? LocalDateTime.now() : null)
-                                        .message(message)
-                                        .build());
+                                phoneToParent.putIfAbsent(phone.trim(), parent);
                             }
                         });
+            }
+
+            List<MessageRecipient> recipients = new ArrayList<>();
+
+            if (!phoneToParent.isEmpty()) {
+                List<String> numbers = new ArrayList<>(phoneToParent.keySet());
+
+                // Send in batches via a single AT bulk call per batch. Track the AT messageId per
+                // accepted number so we can persist it for the delivery-report callback.
+                final int BATCH_SIZE = 300;
+                java.util.Map<String, String> acceptedNumberToMsgId = new java.util.HashMap<>();
+
+                for (int i = 0; i < numbers.size(); i += BATCH_SIZE) {
+                    List<String> slice = numbers.subList(i, Math.min(i + BATCH_SIZE, numbers.size()));
+                    BulkSmsDispatchResult bulk = smsGatewayService.sendBulkSms(slice, content);
+                    if (bulk.getRecipients() != null) {
+                        for (BulkSmsDispatchResult.Recipient r : bulk.getRecipients()) {
+                            if (r.isSuccess() && r.getNumber() != null) {
+                                acceptedNumberToMsgId.put(r.getNumber(), r.getMessageId());
+                            }
+                        }
+                    }
+                }
+
+                // Build a MessageRecipient row per parent, matching AT's returned (E.164) number.
+                for (var entry : phoneToParent.entrySet()) {
+                    String phone = entry.getKey();
+                    var parent = entry.getValue();
+                    String msgId = acceptedNumberToMsgId.getOrDefault(phone,
+                            acceptedNumberToMsgId.get(toE164(phone)));
+                    boolean accepted = acceptedNumberToMsgId.containsKey(phone)
+                            || acceptedNumberToMsgId.containsKey(toE164(phone));
+                    recipients.add(MessageRecipient.builder()
+                            .recipientType(RecipientType.PARENT)
+                            .recipientId(parent.getId())
+                            .recipientName(parent.getFirstName() + " " + parent.getLastName())
+                            .phone(phone)
+                            .email(parent.getEmail())
+                            // Accepted by AT = PENDING (awaiting delivery report); rejected = FAILED.
+                            .deliveryStatus(accepted ? DeliveryStatus.PENDING : DeliveryStatus.FAILED)
+                            .providerMessageId(msgId)
+                            .message(message)
+                            .build());
+                }
             }
 
             messageRecipientRepository.saveAll(recipients);
@@ -814,6 +852,132 @@ public class CommunicationServiceImpl implements CommunicationService {
         return response;
     }
 
+
+    /**
+     * Sends the same SMS to an explicit list of phone numbers in one (batched) Africa's Talking
+     * bulk request. Records a Message with per-number recipient rows.
+     */
+    @Override
+    @Transactional
+    public CustomResponse<?> sendBulkSms(List<String> numbers, String content, String username) {
+        CustomResponse<MessageResponse> response = new CustomResponse<>();
+        try {
+            List<String> clean = numbers == null ? List.of()
+                    : numbers.stream().filter(n -> n != null && !n.isBlank()).map(String::trim).distinct().toList();
+
+            if (clean.isEmpty()) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("No valid phone numbers provided");
+                return response;
+            }
+
+            Message message = messageRepository.save(Message.builder()
+                    .subject("Bulk SMS to " + clean.size() + " recipient(s)")
+                    .content(content)
+                    .messageType(MessageType.SMS)
+                    .status(MessageStatus.SENT)
+                    .sentAt(LocalDateTime.now())
+                    .createdBy(username)
+                    .deletedFlag('N')
+                    .build());
+
+            final int BATCH_SIZE = 300;
+            java.util.Map<String, String> acceptedToMsgId = new java.util.HashMap<>();
+            for (int i = 0; i < clean.size(); i += BATCH_SIZE) {
+                List<String> slice = clean.subList(i, Math.min(i + BATCH_SIZE, clean.size()));
+                BulkSmsDispatchResult bulk = smsGatewayService.sendBulkSms(slice, content);
+                if (bulk.getRecipients() != null) {
+                    bulk.getRecipients().stream()
+                            .filter(BulkSmsDispatchResult.Recipient::isSuccess)
+                            .forEach(r -> { if (r.getNumber() != null) acceptedToMsgId.put(r.getNumber(), r.getMessageId()); });
+                }
+            }
+
+            List<MessageRecipient> recipients = new ArrayList<>();
+            for (String phone : clean) {
+                String msgId = acceptedToMsgId.getOrDefault(phone, acceptedToMsgId.get(toE164(phone)));
+                boolean accepted = acceptedToMsgId.containsKey(phone) || acceptedToMsgId.containsKey(toE164(phone));
+                recipients.add(MessageRecipient.builder()
+                        .recipientType(RecipientType.PARENT)
+                        .recipientId(0L) // ad-hoc number, not tied to a parent entity
+                        .recipientName(phone)
+                        .phone(phone)
+                        // Accepted by AT = PENDING (awaiting delivery report); rejected = FAILED.
+                        .deliveryStatus(accepted ? DeliveryStatus.PENDING : DeliveryStatus.FAILED)
+                        .providerMessageId(msgId)
+                        .message(message)
+                        .build());
+            }
+            messageRecipientRepository.saveAll(recipients);
+            message.setRecipients(recipients);
+
+            long sent = recipients.stream().filter(r -> r.getDeliveryStatus() == DeliveryStatus.DELIVERED).count();
+            long failed = recipients.size() - sent;
+
+            auditService.log("COMMUNICATION", "Bulk SMS — sent:", String.valueOf(sent),
+                    "failed:", String.valueOf(failed));
+
+            response.setStatusCode(HttpStatus.CREATED.value());
+            response.setMessage("Bulk SMS dispatched — " + sent + " delivered, " + failed + " failed out of " + recipients.size());
+            response.setEntity(mapToMessageResponse(message));
+
+        } catch (Exception e) {
+            log.error("Error sending bulk SMS: ", e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error: " + e.getMessage());
+        }
+        return response;
+    }
+
+
+    @Override
+    @Transactional
+    public void handleSmsDeliveryReport(String providerMessageId, String status, String phoneNumber, String failureReason) {
+        if (providerMessageId == null || providerMessageId.isBlank()) {
+            log.warn("[SMS-DLR] Received delivery report with no message id — ignoring");
+            return;
+        }
+
+        var opt = messageRecipientRepository.findByProviderMessageIdNative(providerMessageId);
+        if (opt.isEmpty()) {
+            log.warn("[SMS-DLR] No recipient found for provider messageId {} (phone {})", providerMessageId, phoneNumber);
+            return;
+        }
+
+        MessageRecipient recipient = opt.get();
+        recipient.setProviderStatus(status);
+
+        String s = status == null ? "" : status.trim().toLowerCase();
+        switch (s) {
+            case "success", "delivered" -> {
+                recipient.setDeliveryStatus(DeliveryStatus.DELIVERED);
+                recipient.setDeliveredAt(LocalDateTime.now());
+            }
+            case "sent", "submitted", "buffered" ->
+                // In-flight — keep PENDING until a terminal report arrives.
+                recipient.setDeliveryStatus(DeliveryStatus.PENDING);
+            case "failed", "rejected", "undeliverable" ->
+                recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+            default ->
+                log.info("[SMS-DLR] Unhandled AT status '{}' for messageId {}", status, providerMessageId);
+        }
+
+        messageRecipientRepository.save(recipient);
+        log.info("[SMS-DLR] messageId {} → status '{}' ({}){}", providerMessageId, status, phoneNumber,
+                failureReason != null && !failureReason.isBlank() ? " reason=" + failureReason : "");
+    }
+
+    private String toE164(String phone) {
+        if (phone == null) return null;
+        String cleaned = phone.replaceAll("[\\s\\-()]", "");
+        if (cleaned.startsWith("07") || cleaned.startsWith("01")) {
+            return "+254" + cleaned.substring(1);
+        }
+        if (cleaned.startsWith("254") && !cleaned.startsWith("+")) {
+            return "+" + cleaned;
+        }
+        return cleaned;
+    }
 
     private void dispatchSmsToRecipients(Message message, List<MessageRecipient> recipients, String content) {
         for (MessageRecipient recipient : recipients) {
@@ -845,12 +1009,7 @@ public class CommunicationServiceImpl implements CommunicationService {
         }
     }
 
-    /**
-     * Dispatches email to recipients. Email is sent asynchronously by
-     * {@link EmailService} (fire-and-forget), so a successful hand-off is treated
-     * as delivered; recipients without an email address are marked failed.
-     * The message subject is used as the email subject and its content as the body.
-     */
+
     private void dispatchEmailToRecipients(Message message, List<MessageRecipient> recipients, String content) {
         for (MessageRecipient recipient : recipients) {
             String email = recipient.getEmail();
@@ -870,12 +1029,6 @@ public class CommunicationServiceImpl implements CommunicationService {
         }
     }
 
-    /**
-     * Records the outcome of one channel attempt on a recipient. Because a
-     * recipient may be targeted over several channels (MessageType.ALL), the
-     * recipient is considered DELIVERED if ANY channel succeeds, and only stays
-     * FAILED when no attempted channel has succeeded yet.
-     */
     private void markChannelResult(MessageRecipient recipient, boolean success) {
         if (success) {
             recipient.setDeliveryStatus(DeliveryStatus.DELIVERED);
@@ -887,11 +1040,7 @@ public class CommunicationServiceImpl implements CommunicationService {
         }
     }
 
-    /**
-     * Fans a message out over every channel implied by its {@link MessageType}.
-     * ALL sends via SMS, WhatsApp, and Email. Each recipient's delivery status
-     * reflects whether at least one channel succeeded.
-     */
+
     private void dispatchByChannel(Message message, List<MessageRecipient> recipients, String content) {
         MessageType type = message.getMessageType();
         boolean all = type == MessageType.ALL;

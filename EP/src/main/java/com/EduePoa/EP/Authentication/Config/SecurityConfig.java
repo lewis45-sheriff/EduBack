@@ -51,6 +51,8 @@ public class SecurityConfig {
                                 "/api/v1/transactions/c2b/confirmation",
                                 "/api/v1/payments/stk-callback",
                                 "/api/v1/validate",
+                                // Africa's Talking SMS delivery-report callback (no JWT)
+                                "/api/v1/communication/sms/delivery-report",
                                 // WebSocket handshake — the STOMP CONNECT frame is
                                 // authenticated separately by StompAuthChannelInterceptor
                                 "/ws/**",

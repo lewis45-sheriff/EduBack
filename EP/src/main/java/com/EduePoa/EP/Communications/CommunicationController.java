@@ -9,6 +9,7 @@ import com.EduePoa.EP.Communications.Requests.AnnouncementCreateRequest;
 import com.EduePoa.EP.Communications.Requests.AnnouncementUpdateRequest;
 import com.EduePoa.EP.Communications.Requests.MessageBulkSendRequest;
 import com.EduePoa.EP.Communications.Requests.MessageSendRequest;
+import com.EduePoa.EP.Communications.Requests.BulkSmsSendRequest;
 import com.EduePoa.EP.Communications.Requests.SmsSendRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -130,5 +131,29 @@ public class CommunicationController {
         String username = authentication != null ? authentication.getName() : "system";
         var response = communicationService.sendSmsToAllParents(request.getContent(), username);
         return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    @PostMapping("sms/send-bulk")
+    @PreAuthorize("hasPermission(null, 'message:send')")
+    public ResponseEntity<?> sendBulkSms(@Valid @RequestBody BulkSmsSendRequest request, Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : "system";
+        var response = communicationService.sendBulkSms(request.getNumbers(), request.getContent(), username);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    /**
+     * Africa's Talking SMS delivery-report (DLR) callback. Public (no auth) — AT posts here
+     * as {@code application/x-www-form-urlencoded}. Register this URL in the AT dashboard under
+     * SMS -> Delivery Reports. Always returns 200 so AT does not retry unnecessarily.
+     */
+    @PostMapping(value = "sms/delivery-report",
+            consumes = org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<String> smsDeliveryReport(
+            @RequestParam(value = "id", required = false) String id,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "phoneNumber", required = false) String phoneNumber,
+            @RequestParam(value = "failureReason", required = false) String failureReason) {
+        communicationService.handleSmsDeliveryReport(id, status, phoneNumber, failureReason);
+        return ResponseEntity.ok("OK");
     }
 }

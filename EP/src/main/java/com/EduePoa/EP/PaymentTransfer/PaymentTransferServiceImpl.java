@@ -377,6 +377,8 @@ public class PaymentTransferServiceImpl implements PaymentTransferService {
         tx.setInvoiceId(invoice.getId());
         tx.setTerm(invoice.getTerm());
         tx.setYear(invoice.getAcademicYear());
+        // Link both legs of the transfer so the UI/statement can group them as one line.
+        tx.setTransferGroupId(transfer.getId());
         financeTransactionRepository.save(tx);
     }
 

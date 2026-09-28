@@ -11,7 +11,10 @@ import okhttp3.*;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -81,6 +84,123 @@ public class AfricasTalkingSmsService implements SmsGatewayService {
         }
     }
 
+    @Override
+    public BulkSmsDispatchResult sendBulkSms(List<String> phoneNumbers, String message) {
+        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+            return BulkSmsDispatchResult.failed("No recipients — bulk SMS not sent");
+        }
+        if (message == null || message.isBlank()) {
+            return BulkSmsDispatchResult.failed("Message content is blank — bulk SMS not sent");
+        }
+
+        // Normalise, drop blanks, de-duplicate, then join with commas (AT bulk "to" format).
+        String to = phoneNumbers.stream()
+                .filter(p -> p != null && !p.isBlank())
+                .map(this::normalisePhone)
+                .distinct()
+                .collect(Collectors.joining(","));
+
+        if (to.isBlank()) {
+            return BulkSmsDispatchResult.failed("No valid recipients after normalisation");
+        }
+
+        String senderId = resolveSenderId();
+        String apiKey = resolveApiKey();
+        int count = (int) java.util.Arrays.stream(to.split(",")).filter(s -> !s.isBlank()).count();
+        log.info("[SMS] Bulk dispatch to {} recipient(s) via Africa's Talking", count);
+        // Diagnostic: confirm what config the app actually resolved (key masked).
+        log.info("[SMS-DIAG] username='{}' url='{}' senderId='{}' apiKeyLen={} apiKeyMasked='{}'",
+                smsConfig.getUsername(),
+                smsConfig.getSms().getUrl(),
+                senderId,
+                apiKey == null ? 0 : apiKey.length(),
+                maskKey(apiKey));
+
+        try {
+            FormBody.Builder formBuilder = new FormBody.Builder()
+                    .add("username", smsConfig.getUsername())
+                    .add("to", to)
+                    .add("message", message)
+                    .add("bulkSMSMode", "1")   // treat as bulk send
+                    .add("enqueue", "1");      // recommended for large batches
+
+            if (senderId != null && !senderId.isBlank()) {
+                formBuilder.add("from", senderId);
+            }
+
+            Request request = new Request.Builder()
+                    .url(smsConfig.getSms().getUrl())
+                    .addHeader("Accept", "application/json")
+                    .addHeader("apiKey", apiKey)
+                    .post(formBuilder.build())
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
+                log.debug("[SMS] AT bulk response [{}]: {}", response.code(), responseBody);
+
+                if (!response.isSuccessful()) {
+                    log.error("[SMS] Africa's Talking bulk HTTP error {}: {}", response.code(), responseBody);
+                    return BulkSmsDispatchResult.failed("HTTP " + response.code() + ": " + responseBody);
+                }
+
+                return parseBulkResponse(responseBody);
+            }
+
+        } catch (IOException e) {
+            log.error("[SMS] Network error contacting Africa's Talking (bulk): {}", e.getMessage(), e);
+            return BulkSmsDispatchResult.failed("Network error: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("[SMS] Unexpected error dispatching bulk SMS: {}", e.getMessage(), e);
+            return BulkSmsDispatchResult.failed("Unexpected error: " + e.getMessage());
+        }
+    }
+
+    private BulkSmsDispatchResult parseBulkResponse(String json) {
+        try {
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            JsonObject smsData = root.getAsJsonObject("SMSMessageData");
+            JsonArray recipients = smsData != null ? smsData.getAsJsonArray("Recipients") : null;
+
+            List<BulkSmsDispatchResult.Recipient> out = new ArrayList<>();
+            if (recipients != null) {
+                for (var el : recipients) {
+                    JsonObject r = el.getAsJsonObject();
+                    int code = r.has("statusCode") ? r.get("statusCode").getAsInt() : -1;
+                    out.add(BulkSmsDispatchResult.Recipient.builder()
+                            .number(r.has("number") ? r.get("number").getAsString() : null)
+                            .statusCode(code)
+                            .status(r.has("status") ? r.get("status").getAsString() : null)
+                            .messageId(r.has("messageId") ? r.get("messageId").getAsString() : null)
+                            .cost(r.has("cost") ? r.get("cost").getAsString() : null)
+                            .success(code == 101 || code == 102)
+                            .build());
+                }
+            }
+
+            if (out.isEmpty()) {
+                String msg = (smsData != null && smsData.has("Message"))
+                        ? smsData.get("Message").getAsString()
+                        : "No recipients in AT response";
+                return BulkSmsDispatchResult.failed(msg);
+            }
+
+            boolean anyAccepted = out.stream().anyMatch(BulkSmsDispatchResult.Recipient::isSuccess);
+            long accepted = out.stream().filter(BulkSmsDispatchResult.Recipient::isSuccess).count();
+            log.info("[SMS] AT bulk accepted {}/{} recipient(s)", accepted, out.size());
+
+            return BulkSmsDispatchResult.builder()
+                    .success(anyAccepted)
+                    .errorMessage(anyAccepted ? null : "No recipients accepted by Africa's Talking")
+                    .recipients(out)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("[SMS] Failed to parse AT bulk response: {}", e.getMessage());
+            return BulkSmsDispatchResult.failed("Response parse error: " + e.getMessage());
+        }
+    }
+
     /**
      * Resolves the SMS sender ID from tenant-specific configuration.
      * Falls back to the application-level SmsConfig if no tenant config is set or TenantContext is absent.
@@ -113,6 +233,12 @@ public class AfricasTalkingSmsService implements SmsGatewayService {
         return smsConfig.getApiKey();
     }
 
+
+    private String maskKey(String key) {
+        if (key == null || key.isBlank()) return "<EMPTY>";
+        if (key.length() <= 8) return "***";
+        return key.substring(0, 4) + "..." + key.substring(key.length() - 4);
+    }
 
     private String normalisePhone(String phone) {
         String cleaned = phone.replaceAll("[\\s\\-()]", "");

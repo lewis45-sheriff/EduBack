@@ -18,4 +18,12 @@ public interface MessageRecipientRepository extends TenantAwareRepository<Messag
 
     @Query("SELECT COUNT(mr) FROM MessageRecipient mr WHERE mr.message.id = :messageId AND mr.deliveryStatus = :status")
     Long countByMessageIdAndStatus(@Param("messageId") Long messageId, @Param("status") DeliveryStatus status);
+
+    /**
+     * Look up a recipient by the provider (Africa's Talking) message id. Used by the delivery-report
+     * callback, which arrives without tenant context — a native query bypasses the tenant Hibernate
+     * filter so the row can be found regardless of the active tenant.
+     */
+    @Query(value = "SELECT * FROM message_recipients WHERE provider_message_id = :providerMessageId LIMIT 1", nativeQuery = true)
+    java.util.Optional<MessageRecipient> findByProviderMessageIdNative(@Param("providerMessageId") String providerMessageId);
 }

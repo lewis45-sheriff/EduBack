@@ -90,6 +90,16 @@ public class FinanceTransaction extends TenantScopedEntity {
     @Column(name = "attachment_url")
     private String attachmentUrl;
 
+    /**
+     * Groups the two legs of a payment transfer. A transfer writes an EXPENSE leg on
+     * the source student and an INCOME leg on the destination student (correct
+     * double-entry accounting on each account); both legs carry the same
+     * {@code transferGroupId} (the PaymentTransfer id) so a UI/statement can collapse
+     * them into a single "Transfer" line. Null for non-transfer transactions.
+     */
+    @Column(name = "transfer_group_id")
+    private Long transferGroupId;
+
     @PrePersist
     protected void onCreate() {
         // createdAt is NOT NULL in the DB. Populate it on insert unless the caller

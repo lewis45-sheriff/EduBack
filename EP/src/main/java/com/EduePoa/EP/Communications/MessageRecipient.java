@@ -42,6 +42,14 @@ public class MessageRecipient extends TenantScopedEntity {
     @Column(nullable = false)
     private DeliveryStatus deliveryStatus;
 
+    /** Provider (Africa's Talking) message id, used to match asynchronous delivery reports. */
+    @Column(name = "provider_message_id")
+    private String providerMessageId;
+
+    /** Last raw provider delivery status (e.g. Success, Failed, Rejected). */
+    @Column(name = "provider_status")
+    private String providerStatus;
+
     private LocalDateTime deliveredAt;
 
     private LocalDateTime readAt;

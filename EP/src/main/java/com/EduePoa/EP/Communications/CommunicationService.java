@@ -40,4 +40,8 @@ public interface CommunicationService {
     CustomResponse<?> sendSmsToParentOfStudent(Long studentId, String content, String username);
 
     CustomResponse<?> sendSmsToAllParents(String content, String username);
+
+    CustomResponse<?> sendBulkSms(java.util.List<String> numbers, String content, String username);
+
+    void handleSmsDeliveryReport(String providerMessageId, String status, String phoneNumber, String failureReason);
 }
