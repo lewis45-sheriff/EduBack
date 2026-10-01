@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Transport;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.FinanceTransaction.Request.CreateTransactionDTO;
 import com.EduePoa.EP.Transport.AssignTransport.Request.AssignTransportRequestDTO;
 import com.EduePoa.EP.Transport.Request.TransportRequestDTO;
@@ -22,6 +23,11 @@ public class TransportController {
     @GetMapping("{id}")
     ResponseEntity<?> getById(@PathVariable Long id){
         var response = transportService.getById(id);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+    @GetMapping("{id}/students")
+    ResponseEntity<?> getByIdWithStudents(@PathVariable Long id){
+        var response = transportService.getByIdWithStudents(id);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
     @GetMapping("all")
@@ -75,7 +81,16 @@ public class TransportController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @GetMapping("arrears/student/{studentId}")
+    ResponseEntity<?> getStudentTransportArrears(@PathVariable Long studentId){
+        var response = transportService.getStudentTransportArrears(studentId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
-
+    @GetMapping("arrears")
+    ResponseEntity<?> getTransportArrearsForTermYear(@RequestParam Term term, @RequestParam Integer year){
+        var response = transportService.getTransportArrearsForTermYear(term, year);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
 
 }

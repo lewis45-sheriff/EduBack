@@ -123,6 +123,14 @@ public enum Permissions {
     ROUTE_MANAGE("route:manage", "Add/Edit/Delete transport routes"),
     TRANSPORT_ASSIGN("transport:assign", "Assign students to transport"),
     TRANSPORT_READ("transport:read", "View transport details"),
+    TRANSPORT_BOARDING_MARK("transport_boarding:mark", "Record transport boarding events at the bus"),
+    TRANSPORT_BOARDING_READ("transport_boarding:read", "View transport boarding attendance and history"),
+    TRANSPORT_BIOMETRIC_ENROLL("transport_biometric:enroll",
+            "Enrol a student's transport biometric/card/QR token"),
+    TRANSPORT_TRANSACTION_CREATE("transport_transaction:create",
+            "Submit a transport fee payment for approval (maker)"),
+    TRANSPORT_TRANSACTION_APPROVE("transport_transaction:approve",
+            "Approve or reject a pending transport fee payment (checker)"),
 
     // Communication
     ANNOUNCEMENT_CREATE("announcement:create", "Post school-wide announcements"),

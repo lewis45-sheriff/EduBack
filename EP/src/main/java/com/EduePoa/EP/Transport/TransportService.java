@@ -1,5 +1,6 @@
 package com.EduePoa.EP.Transport;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Transport.AssignTransport.Request.AssignTransportRequestDTO;
 import com.EduePoa.EP.Transport.Request.TransportRequestDTO;
 import com.EduePoa.EP.Transport.TransportTransactions.Requests.TransportTransactionRequestDTO;
@@ -10,6 +11,8 @@ public interface TransportService {
     CustomResponse<?> create(TransportRequestDTO transportRequestDTO);
 
     CustomResponse<?> getById(Long id);
+
+    CustomResponse<?> getByIdWithStudents(Long id);
 
     CustomResponse<?> getAll();
 
@@ -23,4 +26,6 @@ public interface TransportService {
     CustomResponse<?>createTransportTransaction(Long id,TransportTransactionRequestDTO transportTransactionRequestDTO);
     CustomResponse<?>getAllTransportTransactions();
     CustomResponse<?>getUtilizationSummary();
+    CustomResponse<?>getStudentTransportArrears(Long studentId);
+    CustomResponse<?>getTransportArrearsForTermYear(Term term, Integer year);
 }

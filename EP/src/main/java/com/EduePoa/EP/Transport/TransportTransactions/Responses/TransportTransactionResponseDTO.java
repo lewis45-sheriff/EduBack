@@ -1,10 +1,10 @@
 package com.EduePoa.EP.Transport.TransportTransactions.Responses;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Transport.TransportType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 
 @Data
 public class TransportTransactionResponseDTO {
@@ -13,7 +13,7 @@ public class TransportTransactionResponseDTO {
     private String paymentMethod;
     private Term term;
     private Integer year;
-    private String transportType;
+    private TransportType transportType;
     private String studentFullName;
     private String transportName;
     private Double expectedFee;

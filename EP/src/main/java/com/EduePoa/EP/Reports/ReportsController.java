@@ -191,6 +191,37 @@ public class ReportsController {
     }
 
     /**
+     * Generates the transport boarding manifest (BOARDED vs MISSING students for a vehicle on a
+     * service date and leg) as a PDF. Returns application/pdf on success, or the CustomResponse
+     * JSON on error.
+     *
+     * @param vehicleId   the vehicle whose manifest is requested
+     * @param serviceDate school service date, ISO {@code yyyy-MM-dd}
+     * @param leg         MORNING_PICKUP | MORNING_DROPOFF | EVENING_PICKUP | EVENING_DROPOFF
+     */
+    @GetMapping("/transport-boarding-manifest")
+    public ResponseEntity<?> generateTransportBoardingManifest(
+            @RequestParam Long vehicleId,
+            @RequestParam String serviceDate,
+            @RequestParam String leg) {
+
+        CustomResponse<?> res = reportsService.generateTransportBoardingManifest(vehicleId, serviceDate, leg);
+
+        if (res.getStatusCode() == HttpStatus.OK.value()) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=boarding-manifest-" + vehicleId + "-" + serviceDate + "-" + leg + ".pdf");
+
+            return ResponseEntity.status(res.getStatusCode())
+                    .headers(headers)
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(res.getEntity());
+        }
+
+        return ResponseEntity.status(res.getStatusCode()).body(res);
+    }
+
+    /**
      * Generates the CBC learner report card (new curriculum/assessment tables) as a PDF.
      * Returns application/pdf on success, or the CustomResponse JSON on error.
      */

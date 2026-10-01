@@ -3,6 +3,7 @@ package com.EduePoa.EP.Transport.TransportTransactions;
 import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Multitenancy.repository.TenantAwareRepository;
 import com.EduePoa.EP.Transport.Transport;
+import com.EduePoa.EP.Transport.TransportType;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,6 +11,10 @@ import java.util.List;
 
 public interface TransportTransactionsRepository extends TenantAwareRepository<TransportTransactions, Long> {
         List<TransportTransactions> findByTransport(Transport transport);
+
+        List<TransportTransactions> findByStudentIdOrderByTransactionTimeDescIdDesc(Long studentId);
+
+        List<TransportTransactions> findByTermAndYearOrderByTransactionTimeDescIdDesc(Term term, Integer year);
 
         @Query("SELECT COALESCE(SUM(t.amount), 0.0) FROM TransportTransactions t")
         Double sumTotalRevenue();
@@ -25,7 +30,7 @@ public interface TransportTransactionsRepository extends TenantAwareRepository<T
                         @Param("transportId") Long transportId,
                         @Param("term") Term term,
                         @Param("year") Integer year,
-                        @Param("transportType") String transportType);
+                        @Param("transportType") TransportType transportType);
         // In TransportTransactionsRepository
 
         @Query("SELECT t.arrearsAfterThis FROM TransportTransactions t " +
@@ -40,7 +45,7 @@ public interface TransportTransactionsRepository extends TenantAwareRepository<T
                         @Param("transportId") Long transportId,
                         @Param("term") Term term,
                         @Param("year") Integer year,
-                        @Param("transportType") String transportType);
+                        @Param("transportType") TransportType transportType);
 
         @Query("SELECT t FROM TransportTransactions t " +
                         "WHERE t.student.id = :studentId " +
@@ -54,6 +59,6 @@ public interface TransportTransactionsRepository extends TenantAwareRepository<T
                         @Param("transportId") Long transportId,
                         @Param("term") Term term,
                         @Param("year") Integer year,
-                        @Param("transportType") String transportType);
+                        @Param("transportType") TransportType transportType);
 
 }

@@ -7,11 +7,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.nio.file.Paths;
 
-/**
- * Serves uploaded files (school logos, etc.) over HTTP so they can be displayed
- * dynamically. Files stored on disk under {@code file.upload.dir} are exposed at
- * the {@code file.upload.url-prefix} URL path (default {@code /uploads/**}).
- */
+
 @Configuration
 public class FileStorageWebConfig implements WebMvcConfigurer {
 

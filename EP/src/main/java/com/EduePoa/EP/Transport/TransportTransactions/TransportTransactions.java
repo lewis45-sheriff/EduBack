@@ -4,6 +4,7 @@ import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.Transport.Transport;
+import com.EduePoa.EP.Transport.TransportType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -46,8 +47,9 @@ public class TransportTransactions extends TenantScopedEntity {
     @JoinColumn(name = "transport_id", nullable = false)
     private Transport transport;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String transportType;
+    private TransportType transportType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnore

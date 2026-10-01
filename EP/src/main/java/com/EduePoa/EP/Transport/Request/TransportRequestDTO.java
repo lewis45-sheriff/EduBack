@@ -1,6 +1,10 @@
 package com.EduePoa.EP.Transport.Request;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -21,9 +25,24 @@ public class TransportRequestDTO {
 
     private String route;
 
-    private Double routePriceOneWay;
-
-    private Double routePriceTwoWay;
-
     private String status;
+
+    /**
+     * Per-term prices for this vehicle. Each entry defines the one-way and two-way
+     * amounts for a specific term and year.
+     */
+    @Builder.Default
+    private List<TermPriceDTO> termPrices = new ArrayList<>();
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class TermPriceDTO {
+        private Term term;
+        private Integer year;
+        private Double oneWayAmount;
+        private Double twoWayAmount;
+    }
 }

@@ -299,6 +299,141 @@ public class ReportsService {
         }
     }
 
+    /**
+     * Generates the transport boarding manifest PDF for one vehicle / service date / leg. The
+     * template lists the students expected on that leg split into BOARDED and MISSING groups,
+     * applying the same "one trip per day, first phase claims the day" rule the boarding API and
+     * scan endpoint enforce (a ONE_WAY student who already boarded in the other phase that day is
+     * not expected on this leg).
+     * <p>
+     * Jasper fills the report over a raw JDBC connection, which bypasses the Hibernate tenant
+     * filter, so the current tenant is passed explicitly as {@code tenantId} and every query in the
+     * template is scoped by {@code tenant_id = $P{tenantId}}.
+     *
+     * @param vehicleId   the vehicle whose manifest is requested (required)
+     * @param serviceDate the school service date, ISO {@code yyyy-MM-dd} (required)
+     * @param leg         one of MORNING_PICKUP, MORNING_DROPOFF, EVENING_PICKUP, EVENING_DROPOFF
+     */
+    public CustomResponse<?> generateTransportBoardingManifest(Long vehicleId, String serviceDate, String leg) {
+        CustomResponse<Object> res = new CustomResponse<>();
+
+        if (vehicleId == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("vehicleId is required");
+            return res;
+        }
+        if (!StringUtils.hasText(serviceDate)) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("serviceDate is required (yyyy-MM-dd)");
+            return res;
+        }
+        try {
+            java.time.LocalDate.parse(serviceDate.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("serviceDate must be a valid ISO date (yyyy-MM-dd)");
+            return res;
+        }
+
+        String normalizedLeg = normalizeLegValue(leg);
+        if (normalizedLeg == null) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("Invalid leg '" + leg + "'. Use MORNING_PICKUP, MORNING_DROPOFF, "
+                    + "EVENING_PICKUP or EVENING_DROPOFF.");
+            return res;
+        }
+
+        if (!TenantContext.isSet()) {
+            res.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            res.setMessage("Tenant context is required to generate a boarding manifest");
+            return res;
+        }
+        String tenantId = TenantContext.getCurrentTenant();
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("vehicleId", vehicleId);
+        parameters.put("serviceDate", serviceDate.trim());
+        parameters.put("leg", normalizedLeg);
+        parameters.put("tenantId", tenantId);
+        parameters.put("Logo", safeLogo(resolveLogoPath(null)));
+
+        Map<String, String> branding = getTenantBranding();
+        if (branding.containsKey("SchoolName")) {
+            parameters.put("SchoolName", branding.get("SchoolName"));
+        }
+        if (branding.containsKey("Logo")) {
+            parameters.put("Logo", safeLogo(branding.get("Logo")));
+        }
+        if (branding.containsKey("SchoolAddress")) {
+            parameters.put("SchoolAddress", branding.get("SchoolAddress"));
+        }
+
+        String reportPath = path + FileTypeEnums.TRANSPORT_BOARDING_MANIFEST.getReportTypeString();
+        File reportFile = new File(reportPath);
+        if (!reportFile.exists()) {
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Boarding manifest template not found at " + reportPath);
+            return res;
+        }
+
+        try (InputStream reportStream = new FileInputStream(reportFile);
+             Connection connection = DriverManager.getConnection(db, username, password)) {
+            JasperReport compiledReport = JasperCompileManager.compileReport(reportStream);
+            JasperPrint report = JasperFillManager.fillReport(compiledReport, parameters, connection);
+            if (report.getPages() == null || report.getPages().isEmpty()) {
+                res.setStatusCode(HttpStatus.NOT_FOUND.value());
+                res.setMessage(String.format(
+                        "No students expected for vehicleId=%s on %s for leg %s",
+                        vehicleId, serviceDate, normalizedLeg));
+                return res;
+            }
+            byte[] data = JasperExportManager.exportReportToPdf(report);
+            res.setEntity(data);
+            res.setStatusCode(HttpStatus.OK.value());
+            res.setMessage("Transport boarding manifest generated successfully");
+            return res;
+        } catch (JRException e) {
+            log.error("Boarding manifest report generation error: {}", e.getMessage(), e);
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Report generation error: " + e.getMessage());
+            return res;
+        } catch (Exception e) {
+            log.error("Unexpected error generating boarding manifest: {}", e.getMessage(), e);
+            res.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.setMessage("Unexpected error: " + e.getMessage());
+            return res;
+        }
+    }
+
+    /**
+     * Normalizes the many representations a client may send for a boarding leg into the canonical
+     * enum-string form stored in the database. Accepts "MORNING_PICKUP", "morning pickup",
+     * "morningPickup", etc. Returns {@code null} if it cannot be resolved.
+     */
+    private String normalizeLegValue(String leg) {
+        if (!StringUtils.hasText(leg)) {
+            return null;
+        }
+        String normalized = leg.trim().toUpperCase().replaceAll("[^A-Z]", "");
+        boolean morning = normalized.contains("MORNING");
+        boolean evening = normalized.contains("EVENING");
+        boolean pickup = normalized.contains("PICKUP");
+        boolean dropoff = normalized.contains("DROPOFF") || normalized.contains("DROP");
+        if (morning && pickup) {
+            return "MORNING_PICKUP";
+        }
+        if (morning && dropoff) {
+            return "MORNING_DROPOFF";
+        }
+        if (evening && pickup) {
+            return "EVENING_PICKUP";
+        }
+        if (evening && dropoff) {
+            return "EVENING_DROPOFF";
+        }
+        return null;
+    }
+
     public CustomResponse<?> dynamicReportCreate(
             Long studentID,
             ReportModel model,

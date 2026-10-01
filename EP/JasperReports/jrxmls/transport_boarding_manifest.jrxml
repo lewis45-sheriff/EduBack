@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Jaspersoft Studio version 6.20.5.final using JasperReports Library version 6.20.5-3efcf2e67f959db3888d79f73dde2dbd7acb4f8e  -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="transport_boarding_manifest" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="6b1c2d34-5e6f-4a7b-8c9d-0e1f2a3b4c5d">
+	<property name="com.jaspersoft.studio.unit." value="pixel"/>
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="Ms-edutect2"/>
+	<style name="TitleStyle" forecolor="#333333" fontName="Arial" fontSize="22" isBold="true"/>
+	<style name="SubTitleStyle" forecolor="#555555" fontName="Arial" fontSize="14"/>
+	<style name="SectionHeader" forecolor="#333333" fontName="Arial" fontSize="12" isBold="true"/>
+	<style name="TableHeader" mode="Opaque" forecolor="#FFFFFF" backcolor="#333333" fontName="Arial" fontSize="11" isBold="true" isItalic="false">
+		<box>
+			<pen lineWidth="0.5" lineColor="#FFFFFF"/>
+			<bottomPen lineWidth="0.5" lineColor="#E6E6E6"/>
+		</box>
+	</style>
+	<style name="DetailStyle" fontName="Arial" fontSize="10">
+		<box>
+			<pen lineWidth="0.5" lineColor="#E6E6E6"/>
+		</box>
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+			<style mode="Opaque" backcolor="#F2F2F2"/>
+		</conditionalStyle>
+	</style>
+	<style name="GroupHeaderStyle" mode="Opaque" forecolor="#FFFFFF" backcolor="#555555" fontName="Arial" fontSize="11" isBold="true"/>
+	<style name="StudentInfoLabel" forecolor="#333333" fontName="Arial" fontSize="10" isBold="true"/>
+	<style name="StudentInfoValue" fontName="Arial" fontSize="10"/>
+	<parameter name="vehicleId" class="java.lang.Long"/>
+	<parameter name="serviceDate" class="java.lang.String"/>
+	<parameter name="leg" class="java.lang.String"/>
+	<parameter name="tenantId" class="java.lang.String"/>
+	<parameter name="Logo" class="java.lang.String"/>
+	<parameter name="SchoolName" class="java.lang.String">
+		<defaultValueExpression><![CDATA["EXCELLENCE ACADEMY"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="SchoolMotto" class="java.lang.String">
+		<defaultValueExpression><![CDATA["Nurturing Minds, Building Futures"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="SchoolContact" class="java.lang.String">
+		<defaultValueExpression><![CDATA["Tel: (123) 456-7890 | Email: info@excellenceacademy.edu"]]></defaultValueExpression>
+	</parameter>
+	<queryString language="SQL">
+		<![CDATA[WITH target AS (
+    SELECT
+        CAST($P{leg} AS CHAR) AS leg,
+        CASE
+            WHEN $P{leg} IN ('MORNING_PICKUP','MORNING_DROPOFF') THEN 'MORNING'
+            ELSE 'EVENING'
+        END AS phase,
+        CASE
+            WHEN $P{leg} IN ('MORNING_PICKUP','MORNING_DROPOFF') THEN 'EVENING'
+            ELSE 'MORNING'
+        END AS other_phase
+),
+expected AS (
+    /* Students assigned to this vehicle for the service date's term/year who are
+       eligible for the requested leg under the "one trip per day" rule:
+       TWO_WAY are always eligible; ONE_WAY are eligible only if they have NOT already
+       boarded that day in the OTHER phase (first phase claims the day). */
+    SELECT
+        st.id                                   AS assignment_id,
+        s.id                                    AS student_id,
+        s.admission_number                      AS admission_number,
+        CONCAT_WS(' ', s.first_name, s.last_name) AS full_name,
+        st.transport_type                       AS transport_type,
+        st.pickup_location                      AS pickup_location
+    FROM student_transport st
+    JOIN student s ON s.id = st.student_id
+    CROSS JOIN target tg
+    WHERE st.vehicle_id = $P{vehicleId}
+      AND st.tenant_id  = $P{tenantId}
+      AND s.tenant_id   = $P{tenantId}
+      AND (
+            st.transport_type = 'TWO_WAY'
+            OR NOT EXISTS (
+                SELECT 1
+                FROM transport_boarding_event ob
+                WHERE ob.student_id  = s.id
+                  AND ob.service_date = $P{serviceDate}
+                  AND ob.tenant_id   = $P{tenantId}
+                  AND (
+                        (tg.other_phase = 'MORNING' AND ob.leg IN ('MORNING_PICKUP','MORNING_DROPOFF'))
+                     OR (tg.other_phase = 'EVENING' AND ob.leg IN ('EVENING_PICKUP','EVENING_DROPOFF'))
+                  )
+            )
+      )
+)
+SELECT
+    e.student_id,
+    e.admission_number,
+    e.full_name,
+    e.transport_type,
+    e.pickup_location,
+    CASE WHEN be.id IS NULL THEN 1 ELSE 0 END AS is_missing,
+    CASE WHEN be.id IS NULL THEN 'MISSING' ELSE 'BOARDED' END AS boarding_state,
+    be.method     AS method,
+    be.status     AS status,
+    be.captured_at AS captured_at
+FROM expected e
+LEFT JOIN transport_boarding_event be
+       ON be.student_id  = e.student_id
+      AND be.service_date = $P{serviceDate}
+      AND be.leg          = $P{leg}
+      AND be.tenant_id    = $P{tenantId}
+ORDER BY is_missing ASC, e.full_name ASC;]]>
+	</queryString>
+	<field name="student_id" class="java.lang.Long"/>
+	<field name="admission_number" class="java.lang.String"/>
+	<field name="full_name" class="java.lang.String"/>
+	<field name="transport_type" class="java.lang.String"/>
+	<field name="pickup_location" class="java.lang.String"/>
+	<field name="is_missing" class="java.lang.Integer"/>
+	<field name="boarding_state" class="java.lang.String"/>
+	<field name="method" class="java.lang.String"/>
+	<field name="status" class="java.lang.String"/>
+	<field name="captured_at" class="java.sql.Timestamp"/>
+	<variable name="boardedCount" class="java.lang.Integer" calculation="Sum">
+		<variableExpression><![CDATA[$F{is_missing} == 0 ? 1 : 0]]></variableExpression>
+	</variable>
+	<variable name="missingCount" class="java.lang.Integer" calculation="Sum">
+		<variableExpression><![CDATA[$F{is_missing} == 1 ? 1 : 0]]></variableExpression>
+	</variable>
+	<group name="StateGroup">
+		<groupExpression><![CDATA[$F{boarding_state}]]></groupExpression>
+		<groupHeader>
+			<band height="24">
+				<rectangle>
+					<reportElement style="GroupHeaderStyle" mode="Opaque" x="20" y="4" width="515" height="18" backcolor="#555555" uuid="1a2b3c4d-1111-2222-3333-444455556666"/>
+					<graphicElement>
+						<pen lineWidth="0.0"/>
+					</graphicElement>
+				</rectangle>
+				<textField>
+					<reportElement style="GroupHeaderStyle" x="30" y="4" width="505" height="18" forecolor="#FFFFFF" uuid="1a2b3c4d-1111-2222-3333-444455557777"/>
+					<textElement verticalAlignment="Middle">
+						<font fontName="Arial" size="11" isBold="true"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$F{boarding_state}.equals("BOARDED") ? "BOARDED STUDENTS" : "MISSING STUDENTS"]]></textFieldExpression>
+				</textField>
+			</band>
+		</groupHeader>
+	</group>
+	<background>
+		<band height="802" splitType="Stretch">
+			<rectangle>
+				<reportElement mode="Transparent" x="0" y="0" width="555" height="802" forecolor="#E6E6E6" uuid="47c025fb-b994-4c3d-8608-1f5c601ffafb">
+					<printWhenExpression><![CDATA[false]]></printWhenExpression>
+				</reportElement>
+				<graphicElement>
+					<pen lineWidth="0.0" lineStyle="Dashed"/>
+				</graphicElement>
+			</rectangle>
+		</band>
+	</background>
+	<title>
+		<band height="180" splitType="Stretch">
+			<rectangle>
+				<reportElement mode="Opaque" x="0" y="0" width="555" height="100" backcolor="#333333" uuid="8c13e6c7-db0a-47cf-88ca-11296a96b083"/>
+				<graphicElement>
+					<pen lineWidth="0.0"/>
+				</graphicElement>
+			</rectangle>
+			<image scaleImage="RetainShape" onErrorType="Blank">
+				<reportElement x="20" y="15" width="70" height="70" uuid="b6c29eae-fe3d-4c94-b23f-43fe46c610ca">
+					<printWhenExpression><![CDATA[$P{Logo} != null]]></printWhenExpression>
+				</reportElement>
+				<imageExpression><![CDATA[$P{Logo}]]></imageExpression>
+			</image>
+			<textField>
+				<reportElement style="TitleStyle" x="100" y="15" width="435" height="30" forecolor="#FFFFFF" uuid="df82786c-d711-47b7-8c30-5376c3c7ae91"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="20" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{SchoolName}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="SubTitleStyle" x="100" y="45" width="435" height="25" forecolor="#E6E6E6" uuid="3e7a68d9-abc9-47e4-b76e-a34b0932eb2b"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="16" isBold="true"/>
+				</textElement>
+				<text><![CDATA[TRANSPORT BOARDING MANIFEST]]></text>
+			</staticText>
+			<textField>
+				<reportElement style="SubTitleStyle" x="100" y="70" width="435" height="20" forecolor="#E6E6E6" uuid="47d0e4fc-cf36-4ca6-a9c6-cf550b8b3e28"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="10" isItalic="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{SchoolMotto} + " | " + $P{SchoolContact}]]></textFieldExpression>
+			</textField>
+			<rectangle radius="0">
+				<reportElement mode="Opaque" x="0" y="100" width="555" height="25" backcolor="#E6E6E6" uuid="1f02481e-dac2-49aa-a818-336a771cafff"/>
+			</rectangle>
+			<textField>
+				<reportElement x="20" y="100" width="300" height="25" forecolor="#333333" uuid="4883017f-04bc-4935-9245-976da0891742"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Arial" size="12" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["LEG: " + $P{leg}]]></textFieldExpression>
+			</textField>
+			<textField pattern="MMMMM dd, yyyy">
+				<reportElement x="340" y="100" width="195" height="25" forecolor="#333333" uuid="0eb00515-9a89-424f-9391-f2802a97e60e"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="Arial" size="10" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Generated: " + new java.text.SimpleDateFormat("MMMM dd, yyyy").format(new java.util.Date())]]></textFieldExpression>
+			</textField>
+			<rectangle radius="10">
+				<reportElement mode="Opaque" x="20" y="135" width="515" height="35" backcolor="#F2F2F2" uuid="8e81313a-e62c-4b4e-bf71-ae7b37d7cfd3"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#E6E6E6"/>
+				</graphicElement>
+			</rectangle>
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="30" y="145" width="70" height="15" uuid="08de2dd4-ba1a-4b6e-8f97-e34df3c91b3b"/>
+				<text><![CDATA[Service Date:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="100" y="145" width="120" height="15" uuid="cc9ea4d2-a0a6-4962-91d1-a4c07ef8da2d"/>
+				<textFieldExpression><![CDATA[$P{serviceDate}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="230" y="145" width="70" height="15" uuid="70c3ba6a-c548-4a6f-a54d-2f85cfd551db"/>
+				<text><![CDATA[Boarded:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="300" y="145" width="60" height="15" uuid="7d61640a-d37c-48ce-9526-b3b8b32033c3"/>
+				<textFieldExpression><![CDATA[String.valueOf($V{boardedCount} == null ? 0 : $V{boardedCount})]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="370" y="145" width="70" height="15" uuid="70c3ba6a-c548-4a6f-a54d-2f85cfd551dc"/>
+				<text><![CDATA[Missing:]]></text>
+			</staticText>
+			<textField isBlankWhenNull="true">
+				<reportElement style="StudentInfoValue" x="440" y="145" width="60" height="15" uuid="7d61640a-d37c-48ce-9526-b3b8b3203bcd"/>
+				<textFieldExpression><![CDATA[String.valueOf($V{missingCount} == null ? 0 : $V{missingCount})]]></textFieldExpression>
+			</textField>
+		</band>
+	</title>
+	<columnHeader>
+		<band height="30" splitType="Stretch">
+			<staticText>
+				<reportElement style="TableHeader" x="20" y="5" width="30" height="20" uuid="a7645219-1eec-4274-9a0a-bd8310be4f3e"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[#]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="50" y="5" width="80" height="20" uuid="f5b44558-e7e8-4dae-a84d-7052e52b830d"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<paragraph leftIndent="5"/>
+				</textElement>
+				<text><![CDATA[ADM NO.]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="130" y="5" width="150" height="20" uuid="e6c5a69e-4fa4-459c-935e-b7a0cc2f6c02"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<paragraph leftIndent="5"/>
+				</textElement>
+				<text><![CDATA[STUDENT NAME]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="280" y="5" width="70" height="20" uuid="2d2f90ac-6a3f-48a1-8d56-f22c07faceb8"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[TYPE]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="350" y="5" width="75" height="20" uuid="a32bc7e8-1b0e-4a4c-9fb8-7749885eba8a"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[METHOD]]></text>
+			</staticText>
+			<staticText>
+				<reportElement style="TableHeader" x="425" y="5" width="120" height="20" uuid="f8a8e4a3-fb06-4f7c-9832-45c8ca31dd83"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<text><![CDATA[CAPTURED AT]]></text>
+			</staticText>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="25" splitType="Stretch">
+			<textField>
+				<reportElement style="DetailStyle" x="20" y="0" width="30" height="25" uuid="bf07b36f-43ac-4d58-9fa4-79aed64db8e1"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="50" y="0" width="80" height="25" uuid="e1cfcb60-e18b-43ca-9ce5-d6a8af8f2bca"/>
+				<textElement verticalAlignment="Middle">
+					<paragraph leftIndent="5"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{admission_number}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="130" y="0" width="150" height="25" uuid="e1cfcb60-e18b-43ca-9ce5-d6a8af8f2bcb"/>
+				<textElement verticalAlignment="Middle">
+					<paragraph leftIndent="5"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{full_name}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement style="DetailStyle" x="280" y="0" width="70" height="25" uuid="f4d7b9fb-75e3-4b03-891c-1b8b9edabf37"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{transport_type}]]></textFieldExpression>
+			</textField>
+			<textField isBlankWhenNull="true">
+				<reportElement style="DetailStyle" x="350" y="0" width="75" height="25" uuid="ba7ee28a-5b69-408f-8dd3-8c7cfacafcd2"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{is_missing} == 1 ? "—" : $F{method}]]></textFieldExpression>
+			</textField>
+			<textField pattern="yyyy-MM-dd HH:mm" isBlankWhenNull="true">
+				<reportElement style="DetailStyle" x="425" y="0" width="120" height="25" uuid="a3ddc6e9-0e0f-4635-8add-94e946be06e7"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[$F{is_missing} == 1 ? "—" : ($F{captured_at} == null ? "" : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format($F{captured_at}))]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+	<summary>
+		<band height="120" splitType="Stretch">
+			<rectangle radius="10">
+				<reportElement mode="Opaque" x="20" y="15" width="515" height="30" backcolor="#F2F2F2" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a1111"/>
+				<graphicElement>
+					<pen lineWidth="0.5" lineColor="#E6E6E6"/>
+				</graphicElement>
+			</rectangle>
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="40" y="22" width="120" height="16" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a2222"/>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[Total Expected:]]></text>
+			</staticText>
+			<textField>
+				<reportElement style="StudentInfoValue" x="160" y="22" width="60" height="16" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a3333"/>
+				<textElement verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[String.valueOf(($V{boardedCount} == null ? 0 : $V{boardedCount}) + ($V{missingCount} == null ? 0 : $V{missingCount}))]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="240" y="22" width="70" height="16" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a4444"/>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[Boarded:]]></text>
+			</staticText>
+			<textField>
+				<reportElement style="StudentInfoValue" x="310" y="22" width="50" height="16" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a5555"/>
+				<textElement verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[String.valueOf($V{boardedCount} == null ? 0 : $V{boardedCount})]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement style="StudentInfoLabel" x="380" y="22" width="70" height="16" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a6666"/>
+				<textElement verticalAlignment="Middle"/>
+				<text><![CDATA[Missing:]]></text>
+			</staticText>
+			<textField>
+				<reportElement style="StudentInfoValue" x="450" y="22" width="60" height="16" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a7777"/>
+				<textElement verticalAlignment="Middle"/>
+				<textFieldExpression><![CDATA[String.valueOf($V{missingCount} == null ? 0 : $V{missingCount})]]></textFieldExpression>
+			</textField>
+			<rectangle radius="10">
+				<reportElement mode="Opaque" x="20" y="70" width="515" height="30" backcolor="#333333" uuid="18fa60d3-1fd5-4fab-947f-e78b6e2a8888"/>
+			</rectangle>
+			<staticText>
+				<reportElement x="30" y="75" width="495" height="20" forecolor="#FFFFFF" uuid="cb0cf3c4-d2cd-45b7-8f3a-fe9d3bfb1234"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font isBold="true"/>
+				</textElement>
+				<text><![CDATA[Manifest reflects the "one trip per day" rule; missing students are those expected on this leg but not yet recorded.]]></text>
+			</staticText>
+		</band>
+	</summary>
+</jasperReport>

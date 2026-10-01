@@ -1,8 +1,10 @@
 package com.EduePoa.EP.Transport.AssignTransport;
 
+import com.EduePoa.EP.Authentication.Enum.Term;
 import com.EduePoa.EP.Multitenancy.base.TenantScopedEntity;
 import com.EduePoa.EP.StudentRegistration.Student;
 import com.EduePoa.EP.Transport.Transport;
+import com.EduePoa.EP.Transport.TransportType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,7 +13,13 @@ import org.hibernate.annotations.Filter;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "student_transport")
+@Table(
+        name = "student_transport",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_student_term_year",
+                columnNames = {"student_id", "term", "year"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,8 +45,23 @@ public class AssignTransport extends TenantScopedEntity {
     @Column(name = "pickup_location", nullable = false)
     private String pickupLocation;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "transport_type", nullable = false)
-    private String transportType;
+    private TransportType transportType;
+
+    /**
+     * Academic term this assignment applies to. Nullable at the DB level so pre-existing
+     * (pre per-term) rows are not invalidated during schema update; required for new assignments.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "term")
+    private Term term;
+
+    /**
+     * Calendar year for {@link #term}. Nullable for backward compatibility; required for new assignments.
+     */
+    @Column(name = "year")
+    private Integer year;
 
     @Column(name = "assignment_date", nullable = false)
     private LocalDate assignmentDate;

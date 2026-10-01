@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Transport.TransportTransactions.Requests;
 
 import com.EduePoa.EP.Authentication.Enum.Term;
+import com.EduePoa.EP.Transport.TransportType;
 import lombok.Data;
 
 @Data
@@ -10,5 +11,5 @@ public class TransportTransactionRequestDTO {
     private Term term;
     private Integer year;
     private Long vehicleId;
-    private String transportType;
+    private TransportType transportType;
 }

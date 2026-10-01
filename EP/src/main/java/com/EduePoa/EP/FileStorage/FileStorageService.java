@@ -16,11 +16,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Stores uploaded files on the local filesystem and returns a web-accessible
- * path (NOT base64). Only the relative URL path is persisted in the database
- * (e.g. in {@code Tenant.logoUrl}); the binary bytes live on disk.
- */
+
 @Slf4j
 @Service
 public class FileStorageService {
@@ -28,11 +24,9 @@ public class FileStorageService {
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS =
             Set.of("png", "jpg", "jpeg", "gif", "webp", "svg");
 
-    /** Attachment types accepted for supporting documents (receipts, proofs, etc.). */
     private static final Set<String> ALLOWED_DOCUMENT_EXTENSIONS =
             Set.of("png", "jpg", "jpeg", "pdf", "doc", "docx");
 
-    /** Maximum size for an uploaded supporting document (10 MB). */
     private static final long MAX_DOCUMENT_SIZE_BYTES = 10L * 1024 * 1024;
 
     private final Path uploadRoot;
@@ -59,36 +53,16 @@ public class FileStorageService {
         }
     }
 
-    /**
-     * Stores an uploaded image under the given sub-directory and returns the
-     * public URL path (e.g. {@code /uploads/logos/<uuid>.png}) to persist.
-     *
-     * @param file          the uploaded multipart file
-     * @param subDirectory  logical folder to group files (e.g. "logos")
-     * @return the web path where the file can be served from
-     */
+
     public String storeImage(MultipartFile file, String subDirectory) {
         return store(file, subDirectory, ALLOWED_IMAGE_EXTENSIONS, 0L, "image");
     }
 
-    /**
-     * Stores an uploaded supporting document (PNG/JPG/PDF/Word) under the given
-     * sub-directory and returns the public URL path to persist. Enforces the
-     * document type allow-list and a 10 MB size cap.
-     *
-     * @param file          the uploaded multipart file
-     * @param subDirectory  logical folder to group files (e.g. "transaction-attachments")
-     * @return the web path where the file can be served from
-     */
+
     public String storeDocument(MultipartFile file, String subDirectory) {
         return store(file, subDirectory, ALLOWED_DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE_BYTES, "document");
     }
 
-    /**
-     * Shared store routine: validates emptiness, extension allow-list and (when
-     * {@code maxSizeBytes > 0}) size, writes the bytes under a UUID filename in the
-     * sanitised sub-directory, and returns the servable web path.
-     */
     private String store(MultipartFile file, String subDirectory, Set<String> allowedExtensions,
                          long maxSizeBytes, String kind) {
         if (file == null || file.isEmpty()) {
@@ -129,10 +103,7 @@ public class FileStorageService {
         }
     }
 
-    /**
-     * Deletes a previously stored file given its public URL path. Silently
-     * ignores files that no longer exist or paths outside the upload root.
-     */
+
     public void deleteByWebPath(String webPath) {
         if (!StringUtils.hasText(webPath) || !webPath.startsWith(urlPrefix + "/")) {
             return;

@@ -14,7 +14,8 @@ public enum  FileTypeEnums {
     REPORT_CARD("report_card", "term_performance_report.jrxml"),
     CBC_REPORT_CARD("cbc_report_card", "cbc_report_card.jrxml"),
     FEE_STRUCTURE_STUDENT("fee_structure_student", "fee_structure_student.jrxml"),
-    FEE_STRUCTURE_STUDENT_TERM("fee_structure_student_term", "fee_structure_student_term.jrxml");
+    FEE_STRUCTURE_STUDENT_TERM("fee_structure_student_term", "fee_structure_student_term.jrxml"),
+    TRANSPORT_BOARDING_MANIFEST("transport_boarding_manifest", "transport_boarding_manifest.jrxml");
 
     private final String fileName;
     private final String reportTypeString;
