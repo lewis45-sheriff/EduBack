@@ -37,6 +37,11 @@ public class SchemaUpdater implements ApplicationRunner {
             log.warn("student_transport term/year column check skipped (table may not exist yet): {}", e.getMessage());
         }
         try {
+            ensureFinanceTransactionColumns();
+        } catch (Exception e) {
+            log.warn("finance_transactions column check skipped (table may not exist yet): {}", e.getMessage());
+        }
+        try {
             normalizeTransportTypeValues();
         } catch (Exception e) {
             log.warn("Transport type normalization skipped (tables may not exist yet): {}", e.getMessage());
@@ -61,6 +66,22 @@ public class SchemaUpdater implements ApplicationRunner {
         if (!columnExists("student_transport", "year")) {
             jdbcTemplate.execute("ALTER TABLE student_transport ADD COLUMN year INT NULL");
             log.info("Added missing column student_transport.year");
+        }
+    }
+
+    /**
+     * Ensures columns added to the {@code FinanceTransaction} entity after the table was first
+     * created exist in the database. Hibernate's {@code ddl-auto=update} is unreliable at adding
+     * columns to an existing table, which causes "Unknown column 'transfer_group_id'" (and similar)
+     * errors when listing transactions. All columns are nullable for backward compatibility.
+     */
+    private void ensureFinanceTransactionColumns() {
+        if (!tableExists("finance_transactions")) {
+            return;
+        }
+        if (!columnExists("finance_transactions", "transfer_group_id")) {
+            jdbcTemplate.execute("ALTER TABLE finance_transactions ADD COLUMN transfer_group_id BIGINT NULL");
+            log.info("Added missing column finance_transactions.transfer_group_id");
         }
     }
 

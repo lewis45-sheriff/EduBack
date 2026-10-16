@@ -17,6 +17,27 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
+# JasperReports renders PDFs with the AWT font system, which needs real fonts AND
+# fontconfig present in the image. The slim JRE base has neither, so report downloads
+# fail with: Font "Arial" is not available to the JVM.
+#
+# We install fontconfig plus the Liberation fonts (Liberation Sans is metric-compatible
+# with Arial) and register a fontconfig alias so any request for "Arial" resolves to
+# Liberation Sans. This keeps the existing .jrxml templates (which use fontName="Arial")
+# working without editing every template.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fontconfig fonts-liberation \
+    && printf '%s\n' \
+        '<?xml version="1.0"?>' \
+        '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
+        '<fontconfig>' \
+        '  <alias><family>Arial</family><prefer><family>Liberation Sans</family></prefer></alias>' \
+        '  <alias><family>Helvetica</family><prefer><family>Liberation Sans</family></prefer></alias>' \
+        '</fontconfig>' \
+        > /etc/fonts/conf.d/99-arial-alias.conf \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
