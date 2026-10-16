@@ -3,6 +3,7 @@ package com.EduePoa.EP.Multitenancy.config;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -130,6 +131,38 @@ public class TenantExceptionHandler {
         return buildErrorResponse(
                 HttpStatus.CONFLICT,
                 "DUPLICATE_ENTRY",
+                message,
+                TenantContext.getCurrentTenant(),
+                request.getRequestURI()
+        );
+    }
+
+    /**
+     * Handles malformed-SQL errors, most commonly a missing database column
+     * ("Unknown column ... in ...") that occurs when the entity model is ahead of the
+     * database schema. We log the full technical detail but return a clean, generic
+     * message so the raw SQL and stack trace are never exposed to API clients.
+     */
+    @ExceptionHandler(BadSqlGrammarException.class)
+    public ResponseEntity<Map<String, Object>> handleBadSqlGrammar(
+            BadSqlGrammarException ex, HttpServletRequest request) {
+        String rootMessage = ex.getMostSpecificCause().getMessage();
+
+        String message = "The server could not process this request due to a temporary data problem. "
+                + "Please try again later or contact support if the issue persists.";
+
+        // Give a slightly more specific (but still safe) hint for the common missing-column case.
+        Matcher matcher = Pattern.compile("Unknown column '([^']+)'").matcher(rootMessage);
+        if (matcher.find()) {
+            message = "This feature is temporarily unavailable while the system finishes an update. "
+                    + "Please try again shortly.";
+        }
+
+        log.error("SQL grammar error on {} {}: {}",
+                request.getMethod(), request.getRequestURI(), rootMessage);
+        return buildErrorResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "DATA_SCHEMA_ERROR",
                 message,
                 TenantContext.getCurrentTenant(),
                 request.getRequestURI()

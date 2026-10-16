@@ -32,10 +32,44 @@ public class SchemaUpdater implements ApplicationRunner {
             log.warn("Schema update for role_permissions skipped (table may not exist yet): {}", e.getMessage());
         }
         try {
+            ensureStudentTransportTermColumns();
+        } catch (Exception e) {
+            log.warn("student_transport term/year column check skipped (table may not exist yet): {}", e.getMessage());
+        }
+        try {
             normalizeTransportTypeValues();
         } catch (Exception e) {
             log.warn("Transport type normalization skipped (tables may not exist yet): {}", e.getMessage());
         }
+    }
+
+    /**
+     * Ensures the per-term columns on {@code student_transport} exist. Hibernate's
+     * {@code ddl-auto=update} does not reliably add these columns on an existing table
+     * (the unique constraint on {student_id, term, year} references them), which causes
+     * "Unknown column 'term'" errors at query time. These columns are nullable for
+     * backward compatibility with pre per-term rows.
+     */
+    private void ensureStudentTransportTermColumns() {
+        if (!tableExists("student_transport")) {
+            return;
+        }
+        if (!columnExists("student_transport", "term")) {
+            jdbcTemplate.execute("ALTER TABLE student_transport ADD COLUMN term VARCHAR(50) NULL");
+            log.info("Added missing column student_transport.term");
+        }
+        if (!columnExists("student_transport", "year")) {
+            jdbcTemplate.execute("ALTER TABLE student_transport ADD COLUMN year INT NULL");
+            log.info("Added missing column student_transport.year");
+        }
+    }
+
+    private boolean columnExists(String table, String column) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns " +
+                        "WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?",
+                Integer.class, table, column);
+        return count != null && count > 0;
     }
 
     private void widenRolePermissionsColumn() {
