@@ -40,6 +40,11 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-resources/**",
                                 "/swagger-ui.html",
+                                // Spring's error dispatch target — must be permitted so that a
+                                // failure/forward to /error renders the real error instead of being
+                                // masked by a second 403 (which the error page can't satisfy once
+                                // the security context is anonymous on the error dispatch).
+                                "/error",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/verify-otp",

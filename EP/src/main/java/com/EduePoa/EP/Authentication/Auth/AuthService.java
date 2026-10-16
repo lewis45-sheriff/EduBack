@@ -114,6 +114,7 @@ public class AuthService {
                         .tenantId(user.getTenantId())
                         .schoolName(schoolName)
                         .logoUrl(logoUrl)
+
                         .passwordReset(true)
                         .build();
 
@@ -183,6 +184,7 @@ public class AuthService {
                     .tenantId(user.getTenantId())
                     .schoolName(schoolName)
                     .logoUrl(logoUrl)
+                    .accessToken(jwtToken)
                     .passwordReset(false)
                     .permissions(permissionDTOs)
                     .build();

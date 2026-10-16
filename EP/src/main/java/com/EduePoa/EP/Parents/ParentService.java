@@ -8,6 +8,7 @@ import com.EduePoa.EP.Utils.CustomResponse;
 public interface ParentService {
     CustomResponse<?> getAllParents();
     CustomResponse<?> getParentById(Long id);
+    CustomResponse<?> getParentStudents(Long parentId);
     CustomResponse<?> createParent(CreateParentRequestDTO request);
     CustomResponse<?> updateParent(Long id, UpdateParentRequestDTO request);
     CustomResponse<?> deleteParent(Long id);

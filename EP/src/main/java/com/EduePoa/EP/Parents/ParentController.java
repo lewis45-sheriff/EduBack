@@ -44,6 +44,12 @@ public class ParentController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @GetMapping("/{parentId}/students")
+    public ResponseEntity<?> getParentStudents(@PathVariable Long parentId) {
+        var response = parentService.getParentStudents(parentId);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateParent(@PathVariable Long id, @RequestBody UpdateParentRequestDTO request) {
         var response = parentService.updateParent(id, request);

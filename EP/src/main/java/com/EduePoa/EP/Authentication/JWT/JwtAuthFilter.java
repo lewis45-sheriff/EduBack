@@ -175,18 +175,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     private String extractJwtToken(HttpServletRequest request) {
-        // First, try to get token from cookie
+        // Prefer the Authorization: Bearer header (used by native/mobile clients and any
+        // non-browser caller). Case-insensitive prefix match, tolerant of extra whitespace.
+        final String authHeader = request.getHeader("Authorization");
+        if (authHeader != null) {
+            String trimmed = authHeader.trim();
+            if (trimmed.regionMatches(true, 0, "Bearer ", 0, 7)) {
+                String headerToken = trimmed.substring(7).trim();
+                if (!headerToken.isBlank()) {
+                    log.debug("JWT token found in Authorization header");
+                    return headerToken;
+                }
+            }
+        }
+
+        // Fall back to the HttpOnly accessToken cookie (used by the browser web portal).
         String tokenFromCookie = cookieService.getAccessToken(request);
         if (tokenFromCookie != null && !tokenFromCookie.isBlank()) {
             log.debug("JWT token found in cookie");
             return tokenFromCookie;
-        }
-
-        // If no cookie, try Authorization header
-        final String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            log.debug("JWT token found in Authorization header");
-            return authHeader.substring(7);
         }
 
         return null;

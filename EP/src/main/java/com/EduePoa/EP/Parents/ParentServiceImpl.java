@@ -11,6 +11,10 @@ import com.EduePoa.EP.Parents.Request.ParentInfoDTO;
 import com.EduePoa.EP.Parents.Request.PortalAccessRequestDTO;
 import com.EduePoa.EP.Parents.Request.UpdateParentRequestDTO;
 import com.EduePoa.EP.Parents.Response.ParentResponseDTO;
+import com.EduePoa.EP.Parents.Response.ParentStudentDTO;
+import com.EduePoa.EP.StudentRegistration.Student;
+import com.EduePoa.EP.StudentRegistration.StudentGuardian;
+import com.EduePoa.EP.StudentRegistration.StudentGuardianRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +39,7 @@ public class ParentServiceImpl implements ParentService {
     private final RoleRepository   roleRepository;
     private final PasswordEncoder  passwordEncoder;
     private final EmailService     emailService;
+    private final StudentGuardianRepository studentGuardianRepository;
 
     @Override
     public CustomResponse<?> createParent(CreateParentRequestDTO request) {
@@ -243,6 +248,99 @@ public class ParentServiceImpl implements ParentService {
             response.setMessage("Error fetching parent: " + e.getMessage());
         }
         return response;
+    }
+
+    @Override
+    public CustomResponse<?> getParentStudents(Long parentId) {
+        CustomResponse<List<ParentStudentDTO>> response = new CustomResponse<>();
+        try {
+            // SECURITY: ignore the supplied parentId and derive the parent from the authenticated
+            // user. This prevents a logged-in parent from reading another parent's children by
+            // changing the path id. The frontend may keep sending an id; it has no effect.
+            Parent parent = resolveCurrentParent();
+            if (parent == null) {
+                response.setStatusCode(HttpStatus.FORBIDDEN.value());
+                response.setMessage("No parent profile is linked to the current user");
+                response.setEntity(null);
+                return response;
+            }
+            Long resolvedParentId = parent.getId();
+
+            // The parent's children, derived from the student_guardian links. Tenant-isolated via
+            // the Hibernate filter; the student graph is eagerly fetched to avoid N+1. Each DTO
+            // carries that student's identity plus THIS parent's guardian attributes.
+            List<ParentStudentDTO> students = studentGuardianRepository.findByParent_Id(resolvedParentId).stream()
+                    .filter(g -> g.getStudent() != null)
+                    .filter(g -> g.getStudent().getIsDeleted() == null || !g.getStudent().getIsDeleted())
+                    .map(g -> {
+                        Student s = g.getStudent();
+                        return ParentStudentDTO.builder()
+                                .studentId(s.getId())
+                                .admissionNumber(s.getAdmissionNumber())
+                                .fullName(fullName(s))
+                                .gradeName(s.getGradeName())
+                                .streamName(s.getStreamName())
+                                .gender(s.getGender())
+                                .relationship(g.getRelationship())
+                                .primaryContact(g.isPrimaryContact())
+                                .feePayer(g.isFeePayer())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Parent's students retrieved successfully (" + students.size() + " student(s))");
+            response.setEntity(students);
+        } catch (Exception e) {
+            log.error("Error fetching students for the current parent: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error fetching parent's students: " + e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    /**
+     * Resolves the {@link Parent} linked to the currently authenticated user, or {@code null} if
+     * there is no authenticated user or no parent profile is linked to it. The authenticated
+     * principal is a {@link User}; the parent is resolved via its {@code user_id} link.
+     */
+    private Parent resolveCurrentParent() {
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return null;
+        }
+        Object principal = auth.getPrincipal();
+        Long userId = null;
+        String email = null;
+        if (principal instanceof User u) {
+            userId = u.getId();
+            email = u.getEmail();
+        } else {
+            // Fallback: principal name is the username (email) in this app.
+            email = auth.getName();
+        }
+
+        Parent parent = null;
+        if (userId != null) {
+            parent = parentRepository.findByUser_Id(userId).orElse(null);
+        }
+        if (parent == null && email != null) {
+            // Fallback for accounts where the parent↔user link isn't populated but the
+            // parent record shares the login email.
+            parent = parentRepository.findByEmail(email).orElse(null);
+        }
+        if (parent != null && parent.getDeletedFlag() != 'N') {
+            return null;
+        }
+        return parent;
+    }
+
+    private static String fullName(Student s) {
+        String first = s.getFirstName() != null ? s.getFirstName() : "";
+        String last = s.getLastName() != null ? s.getLastName() : "";
+        return (first + " " + last).trim();
     }
 
     @Override
