@@ -67,7 +67,37 @@ The stack is confirmed running, but AWS blocks inbound 80 by default. Open it on
 
 You no longer need port 8085 open — Nginx handles all public traffic on 80.
 
-## Deploying the frontend
+## Backend and frontend are deployed independently
+
+The backend and frontend are **separate deployments** that happen to share one Docker
+network so Nginx can reach both:
+
+- **Backend stack** — `docker-compose.prod.yml` (services `app`, `db`, `nginx`). Deployed by
+  this repo's GitHub Actions pipeline on push to `main`/`Lewis`.
+- **Frontend** — `docker-compose.frontend.yml` (service `frontend`, image
+  `ghcr.io/lewis45-sheriff/edupoa-frontend:latest`). Built and deployed from the separate
+  `SchoolManagementFrontEnd` repo. It attaches to the backend's `edupoa_default` network as
+  an `external` network.
+
+Because both compose files use the same compose project (`edupoa`), a backend deploy must be
+careful not to disturb the frontend. The backend deploy script therefore:
+
+- **Does not** pass `--remove-orphans` (that would delete the frontend container, which is an
+  "orphan" relative to `docker-compose.prod.yml`).
+- Starts only its own services explicitly: `up -d app db nginx`.
+- **Never** runs `docker image prune -af` (that removes every image not tied to a running
+  container, which previously deleted the frontend image). It only prunes dangling layers and
+  old images **of the backend repository**, keeping the image the backend is currently running.
+
+To (re)deploy the frontend manually on the server without touching the backend:
+
+```bash
+cd /opt/edupoa
+docker compose -f docker-compose.frontend.yml pull
+docker compose -f docker-compose.frontend.yml up -d
+```
+
+## Deploying the frontend (static build alternative)
 
 Build your frontend for production, then copy the build output into `/opt/edupoa/frontend`
 on the server. Nginx serves it at `/` with SPA fallback.

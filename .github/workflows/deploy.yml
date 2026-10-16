@@ -81,15 +81,35 @@ jobs:
 
             export APP_IMAGE="$APP_IMAGE"
 
-            # Free disk before pulling (small instance) - remove dangling images & build cache.
-            docker image prune -f || true
+            # Reclaim disk before pulling (small instance). Only remove the build cache and
+            # DANGLING (untagged) images. We intentionally do NOT use "prune -af", because that
+            # removes every image not attached to a running container - including the separately
+            # managed frontend image (ghcr.io/lewis45-sheriff/edupoa-frontend:latest).
             docker builder prune -af || true
+            docker image prune -f || true
 
+            # Pull and (re)start ONLY the backend stack services. No --remove-orphans:
+            # the frontend container belongs to the same compose project but a different
+            # compose file, so --remove-orphans would delete it.
             docker compose -f docker-compose.prod.yml pull app
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml up -d app db nginx
 
-            # Remove the now-unused previous image to reclaim disk.
-            docker image prune -af || true
+            # Reclaim disk from OLD backend images only, matched by repository name.
+            # Keep the image the backend container is currently running; delete the rest of
+            # that repository's images. This never touches the frontend image or any other repo.
+            BACKEND_REPO="${APP_IMAGE%:*}"
+            CURRENT_ID="$(docker inspect --format '{{.Image}}' edupoa-backend 2>/dev/null || true)"
+            if [ -n "$CURRENT_ID" ]; then
+              docker images "$BACKEND_REPO" --no-trunc --format '{{.ID}}' \
+                | sort -u \
+                | grep -v -F "$CURRENT_ID" \
+                | xargs -r docker rmi -f || true
+            else
+              echo "Backend container not found; skipping old-image cleanup to avoid removing the new image."
+            fi
 
+            echo "--- backend stack ---"
             docker compose -f docker-compose.prod.yml ps
+            echo "--- frontend (left untouched) ---"
+            docker compose -f docker-compose.frontend.yml ps || true
             echo "Deployment completed."
