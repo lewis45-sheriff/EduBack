@@ -11,6 +11,7 @@ import com.EduePoa.EP.Multitenancy.config.TenantContext;
 import com.EduePoa.EP.Multitenancy.entity.Tenant;
 import com.EduePoa.EP.Multitenancy.entity.TenantConfiguration;
 import com.EduePoa.EP.Multitenancy.repository.TenantConfigurationRepository;
+import com.EduePoa.EP.HR.config.seed.StatutoryConfigSeeder;
 import com.EduePoa.EP.academics.curriculum.seed.CurriculumSeeder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class TenantProvisioningService {
     private final TenantConfigurationRepository tenantConfigurationRepository;
     private final PasswordEncoder passwordEncoder;
     private final CurriculumSeeder curriculumSeeder;
+    private final StatutoryConfigSeeder statutoryConfigSeeder;
 
 
     @Transactional
@@ -57,7 +59,18 @@ public class TenantProvisioningService {
                 log.error("Curriculum seeding failed during provisioning of tenant {}: {}",
                         tenantIdentifier, e.getMessage(), e);
             }
-            // Re-assert this tenant's context (the seeder cleared it in its finally block).
+
+            // Seed the national-default Kenyan statutory payroll config (PAYE bands, NSSF, SHIF,
+            // AHL, NITA, relief) so the new tenant can run payroll without manual setup. Idempotent
+            // and self-managing its own TenantContext, exactly like the curriculum seeder.
+            try {
+                statutoryConfigSeeder.seedForTenant(tenantIdentifier);
+            } catch (Exception e) {
+                log.error("Statutory config seeding failed during provisioning of tenant {}: {}",
+                        tenantIdentifier, e.getMessage(), e);
+            }
+
+            // Re-assert this tenant's context (the seeders cleared it in their finally blocks).
             TenantContext.setCurrentTenant(tenantIdentifier);
 
             log.info("Tenant provisioned successfully: identifier={}, schoolName={}",
