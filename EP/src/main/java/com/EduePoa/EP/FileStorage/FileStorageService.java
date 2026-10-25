@@ -119,6 +119,28 @@ public class FileStorageService {
         }
     }
 
+    /**
+     * Resolves a served web path (e.g. {@code /uploads/logos/x.png}) back to the
+     * absolute file on disk so server-side consumers such as report generation can
+     * read the bytes directly. Returns {@code null} when the path is blank, is not
+     * served from this storage root, or the file does not exist. Guards against
+     * path traversal by confirming the resolved file stays under the upload root.
+     *
+     * @param webPath the served path, typically beginning with the url prefix
+     * @return the absolute file-system path, or {@code null} if it cannot be resolved
+     */
+    public String resolveToFilePath(String webPath) {
+        if (!StringUtils.hasText(webPath) || !webPath.startsWith(urlPrefix + "/")) {
+            return null;
+        }
+        String relative = webPath.substring((urlPrefix + "/").length());
+        Path target = uploadRoot.resolve(relative).normalize();
+        if (!target.startsWith(uploadRoot) || !Files.isRegularFile(target)) {
+            return null;
+        }
+        return target.toString();
+    }
+
     private static String getExtension(String originalFilename) {
         String ext = StringUtils.getFilenameExtension(
                 StringUtils.cleanPath(originalFilename == null ? "" : originalFilename));

@@ -13,4 +13,7 @@ public interface GradeStreamRepository extends TenantAwareRepository<GradeStream
     Optional<GradeStream> findByGradeIdAndName(Long gradeId, String name);
 
     Optional<GradeStream> findByClassTeacherId(Long classTeacherId);
+
+    /** All streams a staff member is the class teacher of (a teacher may own several). */
+    List<GradeStream> findAllByClassTeacherId(Long classTeacherId);
 }

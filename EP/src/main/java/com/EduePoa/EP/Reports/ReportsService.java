@@ -1,6 +1,9 @@
 package com.EduePoa.EP.Reports;
 
+import com.EduePoa.EP.FileStorage.FileStorageService;
 import com.EduePoa.EP.Multitenancy.config.TenantContext;
+import com.EduePoa.EP.Multitenancy.entity.Tenant;
+import com.EduePoa.EP.Multitenancy.repository.TenantRepository;
 import com.EduePoa.EP.Multitenancy.service.TenantConfigurationService;
 import com.EduePoa.EP.Utils.CustomResponse;
 import com.google.gson.Gson;
@@ -37,6 +40,12 @@ public class ReportsService {
     @Autowired
     private TenantConfigurationService tenantConfigurationService;
 
+    @Autowired
+    private TenantRepository tenantRepository;
+
+    @Autowired
+    private FileStorageService fileStorageService;
+
     // Config keys for tenant branding
     private static final String CONFIG_SCHOOL_NAME = "reports.school_name";
     private static final String CONFIG_LOGO_URL = "reports.logo_url";
@@ -62,24 +71,71 @@ public class ReportsService {
 
         String tenantId = TenantContext.getCurrentTenant();
 
-        String schoolName = tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_SCHOOL_NAME, null);
-        String logoUrl = tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_LOGO_URL, null);
-        String address = tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_ADDRESS, null);
+        // Primary source: explicit report branding configured per tenant.
+        String schoolName = trimToNull(tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_SCHOOL_NAME, null));
+        String logoUrl = trimToNull(tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_LOGO_URL, null));
+        String address = trimToNull(tenantConfigurationService.getConfigOrDefault(tenantId, CONFIG_ADDRESS, null));
+
+        // Fallback: the tenant's own record holds the school name, logo and address
+        // captured at onboarding. The report branding config is often left blank, so
+        // without this fallback every report shows the generic template defaults.
+        if (schoolName == null || logoUrl == null || address == null) {
+            Tenant tenant = tenantRepository.findByTenantIdentifier(tenantId).orElse(null);
+            if (tenant != null) {
+                if (schoolName == null) {
+                    schoolName = trimToNull(tenant.getSchoolName());
+                }
+                if (logoUrl == null) {
+                    logoUrl = trimToNull(tenant.getLogoUrl());
+                }
+                if (address == null) {
+                    address = trimToNull(tenant.getPhysicalAddress());
+                }
+            }
+        }
+
+        // The logo may be stored as a served web path (e.g. /uploads/logos/x.png).
+        // Jasper needs a readable file, so resolve it to an absolute disk path when possible.
+        String resolvedLogo = resolveLogoLocation(logoUrl);
 
         if (schoolName != null) {
             branding.put("SchoolName", schoolName);
         }
-        if (logoUrl != null) {
-            branding.put("Logo", logoUrl);
+        if (resolvedLogo != null) {
+            branding.put("Logo", resolvedLogo);
         }
         if (address != null) {
             branding.put("SchoolAddress", address);
         }
 
         log.debug("Resolved tenant branding for tenant '{}': schoolName={}, logo={}, address={}",
-                tenantId, schoolName, logoUrl != null ? "[set]" : "[not set]", address);
+                tenantId, schoolName, resolvedLogo != null ? "[set]" : "[not set]", address);
 
         return branding;
+    }
+
+    /** Null-safe trim that converts blank/empty strings to {@code null}. */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Resolves a configured logo reference to something Jasper can read. A served
+     * web path (e.g. {@code /uploads/logos/x.png}) is mapped to its file on disk;
+     * absolute paths, URLs and classpath resources are passed through unchanged for
+     * {@link #safeLogo(String)} to validate. Returns {@code null} when blank.
+     */
+    private String resolveLogoLocation(String logo) {
+        String value = trimToNull(logo);
+        if (value == null) {
+            return null;
+        }
+        String onDisk = fileStorageService.resolveToFilePath(value);
+        return onDisk != null ? onDisk : value;
     }
 
     private Map<String, Object> setParameters(ReportModel reportRequestObject) {

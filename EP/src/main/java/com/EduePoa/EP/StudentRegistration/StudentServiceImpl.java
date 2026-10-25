@@ -1109,6 +1109,138 @@ public class StudentServiceImpl implements StudentService {
     }
 
     @Override
+    @Audit(module = "STUDENT MANAGEMENT", action = "ADD_GUARDIAN")
+    @Transactional
+    public CustomResponse<?> addGuardianToStudent(Long studentId, GuardianDTO guardianDTO) {
+        CustomResponse<com.EduePoa.EP.StudentRegistration.Response.StudentGuardianResponseDTO> response =
+                new CustomResponse<>();
+        try {
+            if (guardianDTO == null
+                    || (guardianDTO.getParentId() == null && guardianDTO.getParent() == null)) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Guardian must reference an existing parentId or include a parent object");
+                return response;
+            }
+
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+
+            // Resolve the parent: either an existing one by id, or create a new one from the payload
+            // (provisioning a portal user when an email is supplied) — identical to captureNewStudent.
+            Parent parent;
+            if (guardianDTO.getParentId() != null) {
+                parent = parentRepository.findById(guardianDTO.getParentId())
+                        .orElseThrow(() -> new RuntimeException(
+                                "Parent not found with ID: " + guardianDTO.getParentId()));
+            } else {
+                ParentInfoDTO pDto = guardianDTO.getParent();
+                if (pDto.getEmail() != null && !pDto.getEmail().isBlank()
+                        && parentRepository.existsByEmail(pDto.getEmail())) {
+                    // Reuse the existing parent with this email rather than creating a duplicate.
+                    parent = parentRepository.findByEmail(pDto.getEmail())
+                            .orElse(null);
+                } else {
+                    parent = null;
+                }
+
+                if (parent == null) {
+                    parent = new Parent();
+                    parent.setFirstName(pDto.getFirstName());
+                    parent.setLastName(pDto.getLastName());
+                    parent.setOtherNames(pDto.getOtherNames());
+                    parent.setPhoneNumber(pDto.getPhoneNumber());
+                    parent.setAlternatePhoneNumber(pDto.getAlternatePhoneNumber());
+                    parent.setEmail(pDto.getEmail());
+                    parent.setNationalIdOrPassport(pDto.getNationalIdOrPassport());
+                    parent.setOccupation(pDto.getOccupation());
+                    parent.setAddress(pDto.getAddress());
+                    boolean hasEmail = pDto.getEmail() != null && !pDto.getEmail().trim().isEmpty();
+                    parent.setPortalAccessEnabled(pDto.isPortalAccessEnabled() || hasEmail);
+                    parent.setReceiveSms(pDto.isReceiveSms());
+                    parent.setReceiveEmail(pDto.isReceiveEmail());
+                    parent.setDeletedFlag('N');
+
+                    if (hasEmail) {
+                        if (!userRepository.existsByEmail(pDto.getEmail())) {
+                            Role parentRole = roleRepository.findByName("ROLE_PARENT")
+                                    .orElseGet(() -> {
+                                        Role newRole = new Role();
+                                        newRole.setName("ROLE_PARENT");
+                                        newRole.setEnabledFlag('Y');
+                                        newRole.setDeletedFlag('N');
+                                        newRole.setStatus(Status.ACTIVE);
+                                        return roleRepository.save(newRole);
+                                    });
+                            User user = new User();
+                            user.setFirstName(pDto.getFirstName());
+                            user.setLastName(pDto.getLastName());
+                            user.setEmail(pDto.getEmail());
+                            user.setPhoneNumber(pDto.getPhoneNumber());
+                            user.setPassword(passwordEncoder.encode("1234"));
+                            user.setForcePasswordReset(true);
+                            user.setRole(parentRole);
+                            user.setStatus(Status.ACTIVE);
+                            user.setEnabledFlag('Y');
+                            user.setDeletedFlag('N');
+                            user.setIs_lockedFlag('N');
+                            parent.setUser(userRepository.save(user));
+                        } else {
+                            userRepository.findByEmail(pDto.getEmail()).ifPresent(parent::setUser);
+                        }
+                    }
+                    parent = parentRepository.save(parent);
+                }
+            }
+
+            // Idempotency: if this parent is already a guardian of this student, return that link.
+            StudentGuardian existing = studentGuardianRepository
+                    .findByStudent_IdAndParent_Id(studentId, parent.getId())
+                    .orElse(null);
+            StudentGuardian guardian = (existing != null)
+                    ? existing
+                    : getStudentGuardian(guardianDTO, student, parent);
+            if (existing == null) {
+                guardian = studentGuardianRepository.save(guardian);
+            }
+
+            String fullName = buildFullName(parent.getFirstName(), parent.getOtherNames(), parent.getLastName());
+            var dto = com.EduePoa.EP.StudentRegistration.Response.StudentGuardianResponseDTO.builder()
+                    .id(guardian.getId())
+                    .studentId(studentId)
+                    .parentId(parent.getId())
+                    .fullName(fullName)
+                    .relationship(guardian.getRelationship() != null ? guardian.getRelationship().name() : null)
+                    .phoneNumber(parent.getPhoneNumber())
+                    .email(parent.getEmail())
+                    .nationalIdOrPassport(parent.getNationalIdOrPassport())
+                    .isPrimaryContact(guardian.isPrimaryContact())
+                    .isFeePayer(guardian.isFeePayer())
+                    .pickupAuthorized(guardian.isPickupAuthorized())
+                    .feeResponsibilityPercent(guardian.getFeeResponsibilityPercent())
+                    .build();
+
+            response.setStatusCode(existing != null ? HttpStatus.OK.value() : HttpStatus.CREATED.value());
+            response.setMessage(existing != null
+                    ? "Parent is already linked to this student"
+                    : "Guardian linked to student successfully");
+            response.setEntity(dto);
+            auditService.log("STUDENT_MANAGEMENT", "Linked guardian", fullName,
+                    "to student", String.valueOf(studentId));
+        } catch (RuntimeException e) {
+            log.error("Error linking guardian to student {}: {}", studentId, e.getMessage());
+            response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            response.setMessage(e.getMessage());
+            response.setEntity(null);
+        } catch (Exception e) {
+            log.error("Unexpected error linking guardian to student {}: {}", studentId, e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error linking guardian to student");
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
     public CustomResponse<?> getNemisStatus(Long studentId) {
         CustomResponse<com.EduePoa.EP.StudentRegistration.Response.NemisStatusResponseDTO> response = new CustomResponse<>();
         try {

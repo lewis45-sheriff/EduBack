@@ -30,6 +30,18 @@ public class StaffController {
     }
 
     /**
+     * Returns only staff who are teachers (linked system user with ROLE_TEACHER). Backs teacher
+     * pickers such as "assign class teacher". Readable by staff:read or class:update holders so the
+     * class-management UI can populate the dropdown without full staff-management rights.
+     */
+    @GetMapping("/teachers")
+    @PreAuthorize("hasPermission(null, 'staff:read') or hasPermission(null, 'class:update') or hasPermission(null, 'class:read')")
+    public ResponseEntity<?> getTeachers() {
+        var response = staffService.getTeachers();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    /**
      * Self-service: returns the authenticated caller's own staff identity and class
      * assignment. Authorized by identity only — deliberately NOT gated by staff:read,
      * so teachers do not need admin staff-management permissions to reach it.
@@ -66,6 +78,18 @@ public class StaffController {
     public ResponseEntity<?> updatePortalAccess(@PathVariable Long id,
                                                 @RequestBody PortalAccessRequestDTO request) {
         var response = staffService.updatePortalAccess(id, request);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    /**
+     * Idempotently syncs this tenant's ROLE_TEACHER permission set with the current Teacher Portal
+     * features (adds any missing permissions such as curriculum:read / report:generate). Requires
+     * role management permission. Safe to call repeatedly.
+     */
+    @PostMapping("/roles/teacher/sync-permissions")
+    @PreAuthorize("hasPermission(null, 'role:update')")
+    public ResponseEntity<?> syncTeacherRolePermissions() {
+        var response = staffService.syncTeacherRolePermissions();
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 }

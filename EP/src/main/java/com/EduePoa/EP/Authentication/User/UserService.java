@@ -25,11 +25,16 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 
 public class UserService {
+    /** Role name that must stay in sync with a Staff record. */
+    private static final String TEACHER_ROLE_NAME = "ROLE_TEACHER";
+
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
 
     private final PasswordEncoder passwordEncoder;
+
+    private final com.EduePoa.EP.Staff.StaffService staffService;
 
 
 
@@ -40,6 +45,12 @@ public class UserService {
             user.setFirstName(userRequest.getFirstName());
             user.setLastName(userRequest.getLastName());
             user.setEmail(userRequest.getEmail());
+            user.setUsername(userRequest.getUsername() != null
+                    ? userRequest.getUsername() : userRequest.getEmail());
+            user.setPhoneNumber(userRequest.getPhoneNumber());
+            user.setIdNumber(userRequest.getIdNumber());
+            user.setGender(userRequest.getGender());
+            user.setLocation(userRequest.getLocation());
 
             String rawPassword = "1234";
             String encodedPassword = passwordEncoder.encode(rawPassword);
@@ -57,6 +68,16 @@ public class UserService {
 
             user.setRole(role);
             User savedUser = userRepository.save(user);
+
+            // Keep staff and user in sync: a teacher login must also exist as a staff member so
+            // they appear in teacher pickers and can be assigned as a class teacher.
+            if (role.getName() != null && TEACHER_ROLE_NAME.equalsIgnoreCase(role.getName())) {
+                Long staffId = staffService.ensureStaffForTeacherUser(savedUser);
+                auditService.log("USER_MANAGEMENT",
+                        "Linked/created staff record for teacher user:", savedUser.getEmail(),
+                        "staffId:", String.valueOf(staffId));
+            }
+
             UserResponse userResponse = getUserResponse(savedUser);
 
             response.setStatusCode(HttpStatus.OK.value());

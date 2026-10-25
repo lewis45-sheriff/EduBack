@@ -23,4 +23,13 @@ public interface StudentService {
     CustomResponse<?> getStudentGuardians(Long studentId);
     CustomResponse<?> getNemisStatus(Long studentId);
 
+    /**
+     * Links a guardian (an existing parent by id, or a new parent created from the payload) to an
+     * already-registered student. Mirrors the guardian handling of {@link #captureNewStudent} so
+     * portal users are provisioned the same way. Idempotent per (student, parent): an existing link
+     * is returned rather than duplicated.
+     */
+    CustomResponse<?> addGuardianToStudent(Long studentId,
+            com.EduePoa.EP.StudentRegistration.Request.GuardianDTO guardian);
+
 }

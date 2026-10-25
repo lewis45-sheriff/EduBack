@@ -28,4 +28,6 @@ public class StaffResponseDTO {
     private boolean portalAccessEnabled;
     /** System user ID — populated when the staff member has a login account. */
     private Long userId;
+    /** The login account's role name (e.g. ROLE_TEACHER), or null when no login exists. */
+    private String roleName;
 }

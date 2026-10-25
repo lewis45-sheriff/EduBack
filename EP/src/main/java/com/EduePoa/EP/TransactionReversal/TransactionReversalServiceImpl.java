@@ -80,10 +80,6 @@ public class TransactionReversalServiceImpl implements TransactionReversalServic
                         + " is not linked to an invoice and cannot be deleted here");
             }
 
-            // Deletion eligibility by origin: only manual entries (and payment-transfer
-            // legs, which are undone by reversing the transfer) may be deleted. Money that
-            // arrived via an M-Pesa callback/STK push is real and can only be transferred,
-            // never deleted.
             if (!isDeletable(txn)) {
                 return conflict(response, "Transaction " + financeTransactionId
                         + " originated from an M-Pesa payment and cannot be deleted. "
@@ -133,7 +129,6 @@ public class TransactionReversalServiceImpl implements TransactionReversalServic
         return response;
     }
 
-    // ---- Approve (checker): the only place balances are restored ------------
 
     @Override
     @Audit(module = "TRANSACTION REVERSAL", action = "APPROVE")
@@ -196,7 +191,6 @@ public class TransactionReversalServiceImpl implements TransactionReversalServic
         return response;
     }
 
-    // ---- Reject (checker): no financial effect ------------------------------
 
     @Override
     @Audit(module = "TRANSACTION REVERSAL", action = "REJECT")

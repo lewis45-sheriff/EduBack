@@ -142,7 +142,13 @@ public enum Permissions {
     STAFF_READ("staff:read", "View staff profiles"),
     STAFF_UPDATE("staff:update", "Update staff details"),
     STAFF_DELETE("staff:delete", "Remove/deactivate staff members"),
-    PAYROLL_MANAGE("payroll:manage", "Manage staff salaries"),
+    // HR & Payroll (segregated duties: manage != process != approve != config)
+    PAYROLL_MANAGE("payroll:manage", "Manage compensation and prepare payroll inputs"),
+    PAYROLL_PROCESS("payroll:process", "Process and recalculate eligible draft payroll runs"),
+    PAYROLL_APPROVE("payroll:approve", "Approve processed payroll runs"),
+    PAYROLL_CONFIG("payroll:config", "Create or modify statutory payroll configuration"),
+    PAYROLL_READ("payroll:read", "Read payroll runs, payslips and statutory summaries"),
+    PAYROLL_SELF_READ("payroll:self:read", "Access the authenticated employee's own payslips"),
     LEAVE_MANAGE("leave:manage", "Approve/Reject leave requests"),
 
     // Library

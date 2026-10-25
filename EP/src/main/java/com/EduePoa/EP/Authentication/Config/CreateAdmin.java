@@ -193,7 +193,7 @@ public class CreateAdmin implements ApplicationRunner {
         try {
             TenantContext.setCurrentTenant(DEFAULT_TENANT);
 
-            Optional<User> existing = userRepository.findByEmail("platform@edupoa.com");
+            Optional<User> existing = userRepository.findByEmail("platform1@edupoa.com");
 
             if (existing.isPresent()) {
                 log.info("Platform_Admin user already exists.");

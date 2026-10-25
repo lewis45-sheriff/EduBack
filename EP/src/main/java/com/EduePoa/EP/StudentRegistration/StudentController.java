@@ -74,6 +74,13 @@ public class StudentController {
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 
+    @PostMapping("{studentId}/guardians")
+    ResponseEntity<?> addGuardian(@PathVariable Long studentId,
+                                  @RequestBody com.EduePoa.EP.StudentRegistration.Request.GuardianDTO guardian) {
+        var response = studentService.addGuardianToStudent(studentId, guardian);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
     @GetMapping({"{studentId}/parents"})
     public ResponseEntity<?> getStudentGuardians(@PathVariable Long studentId) {
         var response = studentService.getStudentGuardians(studentId);

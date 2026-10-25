@@ -22,6 +22,7 @@ import com.EduePoa.EP.Staff.Response.StaffResponseDTO;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,6 +40,30 @@ public class StaffServiceImpl implements StaffService {
     private static final String TEACHER_ROLE_NAME = "ROLE_TEACHER";
     private static final String STAFF_ROLE_NAME   = "ROLE_STAFF";
     private static final String TEMP_PASSWORD      = "Staff@1234";
+
+    /**
+     * Canonical permission set for a teacher login. Kept in one place so both newly-created roles
+     * and existing {@code ROLE_TEACHER} rows (via {@link #syncTeacherRolePermissions()}) stay in
+     * step with the features the Teacher Portal exposes:
+     *  - class/exam/attendance/student reads and marks entry,
+     *  - exam grading + result computation,
+     *  - curriculum reads (learning areas, competencies, values) and competency assessment,
+     *  - report generation (report forms, class performance).
+     */
+    private static final java.util.List<Permissions> TEACHER_PERMISSIONS = java.util.List.of(
+            Permissions.CLASS_READ,
+            Permissions.EXAM_READ,
+            Permissions.EXAM_MARK_ENTER,
+            Permissions.CAT_MARK_ENTER,
+            Permissions.EXAM_GRADE,
+            Permissions.ATTENDANCE_MARK,
+            Permissions.ATTENDANCE_READ,
+            Permissions.STUDENT_READ,
+            Permissions.STAFF_READ,
+            Permissions.CURRICULUM_READ,
+            Permissions.COMPETENCY_ASSESS,
+            Permissions.REPORT_GENERATE
+    );
 
     private final StaffRepository       staffRepository;
     private final UserRepository        userRepository;
@@ -114,12 +139,50 @@ public class StaffServiceImpl implements StaffService {
             response.setEntity(toResponseDTO(saved));
             log.info("Created staff id={} type={} userId={}", saved.getId(), saved.getStaffType(), userId);
 
+        } catch (DataIntegrityViolationException e) {
+            // A database unique constraint was violated despite the pre-checks above. This mainly
+            // happens when a value (e.g. phone number / email) collides with a row in ANOTHER
+            // tenant, because that constraint is global while the pre-checks are tenant-scoped.
+            // Translate the raw SQL error into a clean, user-friendly conflict message.
+            String friendly = friendlyConstraintMessage(e);
+            log.warn("Staff create conflict (unique constraint): {}", e.getMostSpecificCause().getMessage());
+            response.setStatusCode(HttpStatus.CONFLICT.value());
+            response.setMessage(friendly);
+            response.setEntity(null);
         } catch (Exception e) {
             log.error("Error creating staff: {}", e.getMessage(), e);
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-            response.setMessage("Error creating staff: " + e.getMessage());
+            response.setMessage("Could not create the staff member. Please try again or contact support.");
         }
         return response;
+    }
+
+    /**
+     * Maps a unique-constraint violation to a human-readable message by inspecting which field
+     * collided. Falls back to a generic conflict message when the field can't be determined.
+     * Never exposes raw SQL or constraint names to the caller.
+     */
+    private String friendlyConstraintMessage(DataIntegrityViolationException e) {
+        String cause = e.getMostSpecificCause() != null
+                ? String.valueOf(e.getMostSpecificCause().getMessage()).toLowerCase()
+                : "";
+        // MariaDB reports the duplicate value and the (hashed) constraint key name, e.g.
+        //   Duplicate entry '+2547...' for key 'UKrpkd84jnduk7tp07j3tlpne15'
+        // so match on the column name when present, and on the known constraint keys as a fallback.
+        if (cause.contains("phone") || cause.contains("ukrpkd84jnduk7tp07j3tlpne15")) {
+            return "A staff member with that phone number already exists.";
+        }
+        if (cause.contains("email")) {
+            return "A staff member with that email already exists.";
+        }
+        if (cause.contains("employee")) {
+            return "A staff member with that employee number already exists.";
+        }
+        if (cause.contains("national_id") || cause.contains("passport")) {
+            return "A staff member with that national ID / passport already exists.";
+        }
+        return "A staff member with those details already exists. "
+                + "The phone number, email, employee number or national ID may already be in use.";
     }
 
     @Override
@@ -143,6 +206,83 @@ public class StaffServiceImpl implements StaffService {
             response.setEntity(null);
         }
         return response;
+    }
+
+    @Override
+    public CustomResponse<?> getTeachers() {
+        CustomResponse<List<StaffResponseDTO>> response = new CustomResponse<>();
+        try {
+            // "Teacher" is resolved from the login role in the database (ROLE_TEACHER), not inferred
+            // from StaffType — a staff member is a teacher iff they have the teacher login role.
+            List<StaffResponseDTO> teachers = staffRepository.findAllByUserRoleName(TEACHER_ROLE_NAME)
+                    .stream()
+                    .map(this::toResponseDTO)
+                    .collect(Collectors.toList());
+
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage("Teachers fetched successfully");
+            response.setEntity(teachers);
+            log.info("Fetched {} teachers (role={})", teachers.size(), TEACHER_ROLE_NAME);
+        } catch (Exception e) {
+            log.error("Error fetching teachers: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error fetching teachers: " + e.getMessage());
+            response.setEntity(null);
+        }
+        return response;
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public Long ensureStaffForTeacherUser(User user) {
+        if (user == null) {
+            return null;
+        }
+        try {
+            // Already linked by user id? Nothing to do.
+            Staff existingByUser = staffRepository.findByUserId(user.getId()).orElse(null);
+            if (existingByUser != null) {
+                return existingByUser.getId();
+            }
+
+            // A staff row may already exist with the same email but no link — link it.
+            if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                Staff existingByEmail = staffRepository.findByEmail(user.getEmail()).orElse(null);
+                if (existingByEmail != null) {
+                    if (existingByEmail.getUser() == null) {
+                        existingByEmail.setUser(user);
+                        staffRepository.save(existingByEmail);
+                    }
+                    return existingByEmail.getId();
+                }
+            }
+
+            // Otherwise create a new TEACHER staff record seeded from the user's details.
+            Staff staff = new Staff();
+            staff.setFirstName(user.getFirstName());
+            staff.setLastName(user.getLastName());
+            staff.setEmail(user.getEmail());
+            staff.setPhoneNumber(user.getPhoneNumber()); // may be null; phone is nullable
+            staff.setNationalIdOrPassport(user.getIdNumber());
+            staff.setGender(user.getGender());
+            staff.setStaffType(StaffType.TEACHER);
+            staff.setPortalAccessEnabled(true);
+            staff.setUser(user);
+            staff.setDeletedFlag('N');
+            Staff saved = staffRepository.save(staff);
+            log.info("Auto-created TEACHER staff id={} for user id={} (email={})",
+                    saved.getId(), user.getId(), user.getEmail());
+            return saved.getId();
+        } catch (DataIntegrityViolationException e) {
+            // A unique field (phone/email/employee number) collided — the staff likely already
+            // exists under another tenant or row. Log and skip rather than failing user creation.
+            log.warn("Could not auto-create staff for teacher user id={} ({}): {}",
+                    user.getId(), user.getEmail(), e.getMostSpecificCause().getMessage());
+            return staffRepository.findByUserId(user.getId()).map(Staff::getId).orElse(null);
+        } catch (Exception e) {
+            log.error("Error ensuring staff for teacher user id={}: {}", user.getId(), e.getMessage(), e);
+            return null;
+        }
     }
 
     @Override
@@ -471,22 +611,74 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private Role resolveRole(String roleName, StaffType staffType) {
-        return roleRepository.findByName(roleName).orElseGet(() -> {
-            Role role = new Role();
-            role.setName(roleName);
-            role.setStatus(Status.ACTIVE);
-            if (staffType == StaffType.TEACHER) {
-                role.addPermission(Permissions.CLASS_READ);
-                role.addPermission(Permissions.EXAM_READ);
-                role.addPermission(Permissions.EXAM_MARK_ENTER);
-                role.addPermission(Permissions.ATTENDANCE_MARK);
-                role.addPermission(Permissions.ATTENDANCE_READ);
-                role.addPermission(Permissions.STUDENT_READ);
-            } else {
-                role.addPermission(Permissions.STAFF_READ);
+        Role existing = roleRepository.findByName(roleName).orElse(null);
+        if (existing != null) {
+            // Heal an already-seeded role so earlier teachers gain any newly-required
+            // permissions (e.g. curriculum:read, report:generate) without a manual migration.
+            if (staffType == StaffType.TEACHER && addMissingPermissions(existing, TEACHER_PERMISSIONS)) {
+                return roleRepository.save(existing);
             }
-            return roleRepository.save(role);
-        });
+            return existing;
+        }
+        Role role = new Role();
+        role.setName(roleName);
+        role.setStatus(Status.ACTIVE);
+        if (staffType == StaffType.TEACHER) {
+            TEACHER_PERMISSIONS.forEach(role::addPermission);
+        } else {
+            role.addPermission(Permissions.STAFF_READ);
+        }
+        return roleRepository.save(role);
+    }
+
+    /**
+     * Idempotently adds any of {@code required} that the role does not already hold. Returns true
+     * when at least one permission was added (so the caller knows to persist). Never creates a
+     * duplicate {@link com.EduePoa.EP.Authentication.Role.RolePermission} row.
+     */
+    private boolean addMissingPermissions(Role role, java.util.List<Permissions> required) {
+        java.util.Set<Permissions> current = role.getRolePermissions().stream()
+                .map(com.EduePoa.EP.Authentication.Role.RolePermission::getPermission)
+                .collect(Collectors.toSet());
+        boolean changed = false;
+        for (Permissions p : required) {
+            if (!current.contains(p)) {
+                role.addPermission(p);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    @Override
+    public CustomResponse<?> syncTeacherRolePermissions() {
+        CustomResponse<java.util.List<String>> response = new CustomResponse<>();
+        try {
+            Role teacherRole = roleRepository.findByName(TEACHER_ROLE_NAME).orElse(null);
+            if (teacherRole == null) {
+                response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                response.setMessage("ROLE_TEACHER not found for this tenant");
+                return response;
+            }
+            boolean changed = addMissingPermissions(teacherRole, TEACHER_PERMISSIONS);
+            if (changed) {
+                roleRepository.save(teacherRole);
+            }
+            java.util.List<String> granted = teacherRole.getRolePermissions().stream()
+                    .map(rp -> rp.getPermission().getPermission())
+                    .sorted()
+                    .collect(Collectors.toList());
+            response.setStatusCode(HttpStatus.OK.value());
+            response.setMessage(changed
+                    ? "ROLE_TEACHER permissions updated"
+                    : "ROLE_TEACHER already up to date");
+            response.setEntity(granted);
+        } catch (Exception e) {
+            log.error("Error syncing ROLE_TEACHER permissions: {}", e.getMessage(), e);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            response.setMessage("Error syncing teacher permissions: " + e.getMessage());
+        }
+        return response;
     }
 
     private void sendWelcomeEmail(Staff staff, String email) {
@@ -551,6 +743,8 @@ public class StaffServiceImpl implements StaffService {
                 .dateOfEmployment(s.getDateOfEmployment())
                 .portalAccessEnabled(s.isPortalAccessEnabled())
                 .userId(s.getUser() != null ? s.getUser().getId() : null)
+                .roleName(s.getUser() != null && s.getUser().getRole() != null
+                        ? s.getUser().getRole().getName() : null)
                 .build();
     }
 

@@ -46,6 +46,55 @@ public class SchemaUpdater implements ApplicationRunner {
         } catch (Exception e) {
             log.warn("Transport type normalization skipped (tables may not exist yet): {}", e.getMessage());
         }
+        try {
+            backfillPayrollPermissions();
+        } catch (Exception e) {
+            log.warn("Payroll permission backfill skipped (tables may not exist yet): {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Grants the segregated HR &amp; Payroll permissions to every pre-existing full-access role
+     * (ROLE_ADMIN and each tenant's School_Admin). New permissions added to the {@code Permissions}
+     * enum are only auto-granted to roles created/re-synced after the enum change; existing
+     * tenants' School_Admin rows are never force-re-synced, so without this backfill those admins
+     * would silently lack the new payroll:process / payroll:approve / payroll:config / payroll:read /
+     * payroll:self:read authorities. This is a data operation (not a schema change), kept here so it
+     * runs once per boot alongside the other idempotent adjustments. Each grant is guarded by a
+     * NOT EXISTS check, so it is safe to run repeatedly.
+     * <p>
+     * The {@code permission} column stores the enum CONSTANT NAME (JPA {@code @Enumerated(STRING)}),
+     * so we insert the constant names, not the colon-delimited authority strings.
+     */
+    private void backfillPayrollPermissions() {
+        if (!tableExists("role_permissions") || !tableExists("role")) {
+            return;
+        }
+        String[] constantNames = {
+                "PAYROLL_PROCESS", "PAYROLL_APPROVE", "PAYROLL_CONFIG",
+                "PAYROLL_READ", "PAYROLL_SELF_READ"
+        };
+        // Only full-access administrative roles are backfilled. Narrow roles (teacher, parent,
+        // supplier, platform admin) are intentionally excluded so segregation of duties and the
+        // self-service boundary are not accidentally widened.
+        String[] roleNames = {"ROLE_ADMIN", "School_Admin"};
+        int granted = 0;
+        for (String roleName : roleNames) {
+            for (String constant : constantNames) {
+                granted += jdbcTemplate.update(
+                        "INSERT INTO role_permissions (role_id, permission, tenant_id) " +
+                                "SELECT r.id, ?, r.tenant_id FROM role r " +
+                                "WHERE r.name = ? " +
+                                "AND NOT EXISTS (" +
+                                "  SELECT 1 FROM role_permissions rp " +
+                                "  WHERE rp.role_id = r.id AND rp.permission = ?" +
+                                ")",
+                        constant, roleName, constant);
+            }
+        }
+        if (granted > 0) {
+            log.info("Backfilled {} payroll permission grants onto existing admin roles", granted);
+        }
     }
 
     /**

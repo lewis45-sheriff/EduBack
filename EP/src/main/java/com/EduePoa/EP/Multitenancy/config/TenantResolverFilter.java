@@ -88,6 +88,7 @@ public class TenantResolverFilter extends OncePerRequestFilter {
             // Resolve effective tenant considering X-Tenant-ID header and user role
             String headerTenantId = request.getHeader(TENANT_HEADER);
             String effectiveTenantId;
+            boolean crossTenant = false;
 
             if (headerTenantId != null && !headerTenantId.isBlank()) {
                 boolean isPlatformAdmin = hasPlatformAdminRole(authentication);
@@ -112,8 +113,13 @@ public class TenantResolverFilter extends OncePerRequestFilter {
                     effectiveTenantId = jwtTenantId;
                 }
             } else {
-                // No X-Tenant-ID header — use JWT claim
+                // No X-Tenant-ID header — use JWT claim. A Platform_Admin in this branch is
+                // operating cross-tenant (platform scope): reads bypass the Hibernate tenant
+                // filter and writes must not be pinned to the admin's own JWT tenant. We mark the
+                // context accordingly so the write-side mismatch guard is relaxed to match the
+                // read-side bypass already done by HibernateFilterInterceptor.
                 effectiveTenantId = jwtTenantId;
+                crossTenant = hasPlatformAdminRole(authentication);
             }
 
             // Validate tenant exists and is ACTIVE
@@ -141,8 +147,9 @@ public class TenantResolverFilter extends OncePerRequestFilter {
 
             // Set tenant context
             TenantContext.setCurrentTenant(effectiveTenantId);
-            log.debug("Tenant context set to '{}' for user: '{}'",
-                    effectiveTenantId, authentication.getName());
+            TenantContext.setCrossTenant(crossTenant);
+            log.debug("Tenant context set to '{}' (crossTenant={}) for user: '{}'",
+                    effectiveTenantId, crossTenant, authentication.getName());
 
             filterChain.doFilter(request, response);
 

@@ -7,6 +7,8 @@ import com.EduePoa.EP.FeeComponents.Responses.FeeComponentResponse;
 import com.EduePoa.EP.FeeComponents.Responses.FeeStructureFormatedDTO;
 import com.EduePoa.EP.Utils.CustomResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class FeeComponentsServiceImpl implements FeeComponentsService {
     private final FeeComponentsRepository feeComponentsRepository;
@@ -31,9 +34,19 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
                 return response;
             }
 
+            String name = feeComponentRequest.getName().trim();
+
+            // Reject duplicates up front with a clear message
+            if (feeComponentsRepository.findByName(name).isPresent()) {
+                response.setEntity(null);
+                response.setStatusCode(HttpStatus.CONFLICT.value());
+                response.setMessage("A fee component named \"" + name + "\" already exists. Please use a different name.");
+                return response;
+            }
+
             // Map request to entity
             FeeComponents feeComponents = FeeComponents.builder()
-                    .name(feeComponentRequest.getName().trim())
+                    .name(name)
                     .description(
                             feeComponentRequest.getDescription() != null ? feeComponentRequest.getDescription().trim()
                                     : null)
@@ -65,10 +78,19 @@ public class FeeComponentsServiceImpl implements FeeComponentsService {
             auditService.log("FEE_COMPONENTS", "Created fee component:", savedComponent.getName(), "with ID:",
                     String.valueOf(savedComponent.getId()));
 
+        } catch (DataIntegrityViolationException e) {
+            // DB rejected the row (duplicate, missing required value, constraint, etc.).
+            // Log the technical detail but return a message a user can act on.
+            log.warn("Could not save fee component due to a data integrity violation", e);
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.CONFLICT.value());
+            response.setMessage("Could not save the fee component. Please check that all required fields are filled "
+                    + "and the name is not already in use, then try again.");
         } catch (RuntimeException e) {
+            log.error("Unexpected error while creating fee component", e);
             response.setEntity(null);
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
-            response.setMessage(e.getMessage());
+            response.setMessage("Something went wrong while creating the fee component. Please try again.");
         }
         return response;
     }
