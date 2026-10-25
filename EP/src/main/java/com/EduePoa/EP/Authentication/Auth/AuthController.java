@@ -1,6 +1,7 @@
 package com.EduePoa.EP.Authentication.Auth;
 
 
+import com.EduePoa.EP.Authentication.Auth.Request.GoogleLoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.LoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.RequestOTP;
 import com.EduePoa.EP.Authentication.Auth.Request.ResetPassword;
@@ -24,6 +25,14 @@ public class AuthController {
     @PostMapping("/login")
     ResponseEntity<?>login(@RequestBody LoginRequest loginRequest, HttpServletResponse httpResponse, HttpServletRequest httpRequest){
         var response = authService.login(loginRequest,httpResponse,httpRequest);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    /** "Sign in with Google" (SSO). Verifies a Google ID token and issues the app JWT. */
+    @PostMapping("/google")
+    ResponseEntity<?> googleLogin(@RequestBody GoogleLoginRequest request,
+                                  HttpServletResponse httpResponse, HttpServletRequest httpRequest){
+        var response = authService.googleLogin(request, httpResponse, httpRequest);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
     @PostMapping("validate-otp")

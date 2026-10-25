@@ -16,6 +16,12 @@ public interface FinanceTransactionRepository extends TenantAwareRepository<Fina
         List<FinanceTransaction> findByStudentId(Long studentId);
         boolean existsByReference(String reference);
 
+        // Fetch the finance posting (if any) behind a given reference, e.g. an M-Pesa
+        // receipt code (TransID). Used to derive reconciliation state for the C2B
+        // transactions dashboard. Returns the first match; references are effectively
+        // unique per gateway receipt.
+        java.util.Optional<FinanceTransaction> findFirstByReference(String reference);
+
         // Look up the single payment (INCOME) behind a unique reference, e.g. an
         // M-Pesa receipt code. Used as the source basis for a payment transfer.
         java.util.Optional<FinanceTransaction> findByReferenceAndTransactionType(

@@ -14,7 +14,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "expenses")
+@Table(name = "expenses", uniqueConstraints = {
+        // Expense numbers are generated per tenant (EXP-0001, EXP-0002, ...), so the
+        // uniqueness must be scoped to the tenant. A global unique constraint would
+        // make two tenants collide on EXP-0001.
+        @UniqueConstraint(name = "uk_expense_tenant_number", columnNames = {"tenant_id", "expenseNumber"})
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,7 +31,9 @@ public class Expenses extends TenantScopedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    // Unique per tenant via the table-level uk_expense_tenant_number constraint
+    // (NOT a global unique column).
+    @Column(nullable = false)
     private String expenseNumber;
 
     @Column(nullable = false)

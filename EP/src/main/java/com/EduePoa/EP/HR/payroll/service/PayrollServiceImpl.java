@@ -81,6 +81,7 @@ public class PayrollServiceImpl implements PayrollService {
     private final ObjectMapper objectMapper;
     private final PayslipPdfService payslipPdfService;
     private final com.EduePoa.EP.Multitenancy.repository.TenantRepository tenantRepository;
+    private final com.EduePoa.EP.GeneralLedger.service.posting.GlPostingGateway glPostingGateway;
 
     // ---- Create -------------------------------------------------------------
 
@@ -335,17 +336,53 @@ public class PayrollServiceImpl implements PayrollService {
             run.setPaymentReference(request != null ? request.getPaymentReference() : null);
             PayrollRun saved = runRepository.save(run);
 
-            // Phase 1: payment status is recorded WITHOUT posting to the Finance/Expenses ledger.
+            // Post the payroll ACCRUAL journal from the authoritative, reconciled run
+            // totals. This records the cost and the resulting liabilities
+            // (Dr salaries + Dr employer statutory; Cr net pay + each statutory
+            // liability + other deductions). It does NOT credit Cash/Bank, because
+            // markPaid is a status change only and the system does not model the
+            // actual bank settlement. Keyed on the run id, so it is idempotent.
+            try {
+                java.util.Map<String, java.math.BigDecimal> amounts = new java.util.HashMap<>();
+                amounts.put("totalGross", nzScale(saved.getTotalGross()));
+                amounts.put("totalEmployerContributions", nzScale(saved.getTotalEmployerContributions()));
+                amounts.put("totalNet", nzScale(saved.getTotalNet()));
+                amounts.put("totalPaye", nzScale(saved.getTotalPaye()));
+                amounts.put("totalNssf", nzScale(saved.getTotalNssfEmployee()).add(nzScale(saved.getTotalNssfEmployer())));
+                amounts.put("totalShif", nzScale(saved.getTotalShif()));
+                amounts.put("totalAhl", nzScale(saved.getTotalAhlEmployee()).add(nzScale(saved.getTotalAhlEmployer())));
+                amounts.put("totalNita", nzScale(saved.getTotalNita()));
+                amounts.put("totalOtherDeductions", nzScale(saved.getTotalOtherDeductions()));
+
+                com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload glPayload =
+                        new com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload(
+                                saved.getPaidAt() != null ? saved.getPaidAt().toLocalDate() : LocalDate.now(),
+                                saved.getPaymentReference(),
+                                "Payroll accrual " + saved.getPeriodMonth() + "/" + saved.getPeriodYear(),
+                                amounts);
+                glPostingGateway.requestPosting(
+                        com.EduePoa.EP.GeneralLedger.enums.GlSourceType.PAYROLL_RUN,
+                        saved.getId(), glPayload);
+            } catch (Exception glEx) {
+                // Never fail mark-paid for a GL concern; reconciliation surfaces a gap.
+                log.error("Failed to enqueue GL payroll posting for run {}: {}", runId, glEx.getMessage());
+            }
+
             auditService.log("PAYROLL", "Marked run PAID ID:", String.valueOf(runId),
                     "reference:", saved.getPaymentReference() != null ? saved.getPaymentReference() : "");
 
             response.setStatusCode(HttpStatus.OK.value());
-            response.setMessage("Payroll run marked as paid (no Finance posting in Phase 1)");
+            response.setMessage("Payroll run marked as paid; payroll accrual journal posted to the General Ledger");
             response.setEntity(toRunDto(saved, List.of()));
         } catch (RuntimeException e) {
             throw new RuntimeException("Failed to mark payroll run paid: " + e.getMessage(), e);
         }
         return response;
+    }
+
+    /** Null-safe, 2dp-scaled copy of a payroll total for GL posting. */
+    private static BigDecimal nzScale(BigDecimal v) {
+        return (v != null ? v : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
 
     // ---- Employee adjustments (joiners/leavers/unpaid) ----------------------

@@ -98,6 +98,17 @@ public enum Permissions {
     FINANCIAL_REPORT_READ("financial_report:read", "Access financial summaries"),
     SCHOLARSHIP_MANAGE("scholarship:manage", "Manage scholarships and bursaries"),
 
+    // Financial (single-entry) Ledger — required by the existing /api/v1/ledger endpoints
+    LEDGER_READ("ledger:read", "View the single-entry financial ledger entries and summary"),
+
+    // General Ledger (double-entry)
+    GL_READ("gl:read", "View GL chart of accounts, journals, ledgers and trial balance"),
+    GL_POST("gl:post", "Post a manual GL journal"),
+    GL_MANAGE("gl:manage", "Create and update GL chart-of-accounts entries"),
+    JOURNAL_REVERSAL_CREATE("journal_reversal:create", "Request reversal of a GL journal (maker)"),
+    JOURNAL_REVERSAL_APPROVE("journal_reversal:approve", "Approve or reject a GL journal reversal (checker)"),
+    GL_RECONCILE("gl:reconcile", "Inspect and retry failed/missing GL postings"),
+
     // Optional Fees
     OPTIONAL_FEE_ASSIGN("optional_fee:assign", "Assign optional fee items to students"),
     OPTIONAL_FEE_REMOVE("optional_fee:remove", "Remove optional fee assignments from students"),
@@ -114,6 +125,7 @@ public enum Permissions {
     BUDGET_AMEND("budget:amend", "Request controlled amendments to approved budgets"),
     BUDGET_CATEGORY_MANAGE("budget_category:manage", "Create, update, and deactivate budget categories"),
     BUDGET_REPORT_READ("budget_report:read", "View budget-vs-actual, summary, and monthly reports"),
+    ORG_UNIT_MANAGE("org_unit:manage", "Create, update, re-parent, and deactivate organizational units"),
 
     HELB_MANAGE("helb:manage", "Manage HELB loan allocations"),
     HELB_VIEW("helb:view", "View HELB loan details"),

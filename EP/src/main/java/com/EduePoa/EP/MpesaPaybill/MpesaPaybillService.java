@@ -45,8 +45,91 @@ public class MpesaPaybillService {
     private final FinanceRepository financeRepository;
     private final FinanceTransactionRepository financeTransactionRepository;
     private final MpesaCallbackTenantResolver mpesaCallbackTenantResolver;
+    private final com.EduePoa.EP.StudentRegistration.StudentRepository studentRepository;
+    private final com.EduePoa.EP.GeneralLedger.service.posting.GlPostingGateway glPostingGateway;
 
+    /**
+     * Lists all M-Pesa C2B (paybill) transactions for the current tenant, newest first,
+     * shaped for the reconciliation dashboard. Reconciliation state is derived by matching
+     * each paybill {@code TransID} to a {@link FinanceTransaction} with the same reference:
+     * when a posting exists, the row is considered reconciled and the linked student id /
+     * posting date are surfaced.
+     */
+    @Transactional(readOnly = true)
+    CustomResponse<java.util.List<com.EduePoa.EP.MpesaPaybill.Response.MpesaC2bTransactionResponse>> getAllC2bTransactions() {
+        java.util.List<MpesaPaybill> paybills = mpesaPaybillRepository.findAll();
 
+        java.util.List<com.EduePoa.EP.MpesaPaybill.Response.MpesaC2bTransactionResponse> items =
+                paybills.stream()
+                        .sorted(java.util.Comparator.comparing(MpesaPaybill::getId,
+                                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                        .map(this::toC2bResponse)
+                        .toList();
+
+        CustomResponse<java.util.List<com.EduePoa.EP.MpesaPaybill.Response.MpesaC2bTransactionResponse>> response =
+                new CustomResponse<>();
+        response.setStatusCode(HttpStatus.OK.value());
+        response.setMessage("M-Pesa C2B transactions retrieved");
+        response.setEntity(items);
+        return response;
+    }
+
+    private com.EduePoa.EP.MpesaPaybill.Response.MpesaC2bTransactionResponse toC2bResponse(MpesaPaybill p) {
+        String transId = p.getTransID();
+
+        // Derive reconciliation from the finance posting keyed on the same reference (TransID).
+        boolean reconciled = false;
+        String studentId = null;
+        String reconciledAt = null;
+        String reconciledBy = null;
+        if (transId != null && !transId.isBlank()) {
+            java.util.Optional<FinanceTransaction> ftOpt = financeTransactionRepository.findFirstByReference(transId);
+            if (ftOpt.isPresent()) {
+                FinanceTransaction ft = ftOpt.get();
+                reconciled = true;
+                studentId = ft.getStudentId() != null ? String.valueOf(ft.getStudentId()) : null;
+                reconciledAt = ft.getCreatedAt() != null ? ft.getCreatedAt().toString() : null;
+                reconciledBy = ft.getStudentName();
+            }
+        }
+        // Fall back to the account reference (BillRefNumber = student id) when no posting matched.
+        if (studentId == null && p.getBillRefNumber() != null && !p.getBillRefNumber().isBlank()) {
+            studentId = p.getBillRefNumber().trim();
+        }
+
+        return com.EduePoa.EP.MpesaPaybill.Response.MpesaC2bTransactionResponse.builder()
+                .internalId(p.getId() != null ? String.valueOf(p.getId()) : (transId != null ? transId : ""))
+                .transactionId(transId != null ? transId : "")
+                .transactionType(p.getTransactionType() != null ? p.getTransactionType() : "Pay Bill")
+                .transID(transId != null ? transId : "")
+                .transTime(p.getTransTime())
+                .transAmount(parseAmount(p.getTransAmount()))
+                .businessShortCode(p.getBusinessShortCode())
+                .billRefNumber(p.getBillRefNumber())
+                .invoiceNumber(p.getInvoiceNumber())
+                .orgAccountBalance(parseAmount(p.getOrgAccountBalance()))
+                .thirdPartyTransID(p.getThirdPartyTransID())
+                .msisdn(p.getMSISDN() != null ? p.getMSISDN() : "")
+                .firstName(p.getFirstName())
+                .middleName(p.getMiddleName())
+                .lastName(p.getLastName())
+                .isReconciled(reconciled)
+                .studentId(reconciled ? studentId : null)
+                .reconciledAt(reconciledAt)
+                .reconciledBy(reconciledBy)
+                .build();
+    }
+
+    private double parseAmount(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0d;
+        }
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (NumberFormatException e) {
+            return 0d;
+        }
+    }
 
 CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
     CustomResponse<String> response = new CustomResponse<>();
@@ -262,14 +345,26 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
 
             // Parse transaction details
             String transactionId = request.getTransID();
-            String accountNumber = request.getBillRefNumber();
+            // The account reference (BillRefNumber) is the student's ADMISSION NUMBER —
+            // the real, human-facing unique identifier a parent types when paying. We
+            // resolve the student from it rather than assuming a numeric primary key.
+            String admissionNumber = request.getBillRefNumber() != null
+                    ? request.getBillRefNumber().trim() : null;
             double amount = Double.parseDouble(request.getTransAmount());
             String phoneNumber = request.getMSISDN();
             String transactionTime = request.getTransTime();
             LocalDateTime transactionDate = parseTransactionTime(transactionTime);
 
-            // Parse student ID from account number
-            Long studentId = Long.parseLong(accountNumber);
+            if (admissionNumber == null || admissionNumber.isBlank()) {
+                throw new RuntimeException("Missing account reference (admission number) in callback");
+            }
+
+            // Resolve the student by admission number (tenant-scoped).
+            com.EduePoa.EP.StudentRegistration.Student student = studentRepository
+                    .findByAdmissionNumber(admissionNumber)
+                    .orElseThrow(() -> new RuntimeException(
+                            "No student found for admission number: " + admissionNumber));
+            Long studentId = student.getId();
 
             // Get current term and year
             Term currentTerm = Term.getCurrentTerm();
@@ -318,13 +413,18 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
 
             System.out.println("✓ Updated Finance table - New balance: " + newBalance);
 
-            // Create FinanceTransaction record
+            // Create FinanceTransaction record. Use the resolved student's own name and
+            // admission number (the authoritative record) rather than the free-text name
+            // fields on the M-Pesa payload, which reflect the paying phone's registered name.
+            String studentFullName = java.util.stream.Stream.of(
+                            student.getFirstName(), student.getMiddleName(), student.getLastName())
+                    .filter(s -> s != null && !s.isBlank())
+                    .reduce((a, b) -> a + " " + b)
+                    .orElse(admissionNumber);
             FinanceTransaction financeTransaction = new FinanceTransaction();
             financeTransaction.setStudentId(studentId);
-            financeTransaction.setStudentName(request.getFirstName() + " " +
-                    (request.getMiddleName() != null ? request.getMiddleName() + " " : "") +
-                    request.getLastName());
-            financeTransaction.setAdmissionNumber(accountNumber);
+            financeTransaction.setStudentName(studentFullName);
+            financeTransaction.setAdmissionNumber(admissionNumber);
             financeTransaction.setTransactionType(FinanceTransaction.TransactionType.INCOME);
             financeTransaction.setCategory("FEE_PAYMENT");
             financeTransaction.setSource(FinanceTransaction.TransactionSource.MPESA_CALLBACK);
@@ -334,9 +434,29 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
             financeTransaction.setPaymentMethod(FinanceTransaction.PaymentMethod.MPESA);
             financeTransaction.setReference(transactionId);
             financeTransaction.setYear(currentYear);
-            financeTransactionRepository.save(financeTransaction);
+            FinanceTransaction savedPaybillTxn = financeTransactionRepository.save(financeTransaction);
 
             System.out.println("✓ Created FinanceTransaction record");
+
+            // Durable double-entry GL posting for this confirmed C2B receipt. Keyed on
+            // the FinanceTransaction id; the GL idempotency constraint also protects
+            // against a duplicate C2B confirmation producing a second journal even
+            // though this legacy path has no transaction-level dedup of its own.
+            try {
+                com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload glPayload =
+                        new com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload(
+                                savedPaybillTxn.getTransactionDate(),
+                                savedPaybillTxn.getReference(),
+                                "M-Pesa paybill fee payment - " + transactionId,
+                                java.util.Map.of("amount",
+                                        paymentAmount.setScale(2, java.math.RoundingMode.HALF_UP)));
+                glPostingGateway.requestPosting(
+                        com.EduePoa.EP.GeneralLedger.enums.GlSourceType.STUDENT_FEE_RECEIPT,
+                        savedPaybillTxn.getId(), glPayload);
+            } catch (Exception glEx) {
+                log.error("Failed to enqueue GL posting for paybill transaction {}: {}",
+                        savedPaybillTxn.getId(), glEx.getMessage());
+            }
 
             // Optional: Send notifications
             // sendSmsConfirmation(phoneNumber, amount, transactionId);
@@ -380,10 +500,14 @@ CustomResponse<?> registerUrl(RegisterRequest registerRequest) {
             response.setMessage("Payment acknowledged with processing error");
 
             saveFailedTransaction(request, e.getMessage());
-        } finally {
-            // Always clear tenant context to prevent leakage between requests
-            TenantContext.clear();
         }
+        // NOTE: TenantContext is intentionally NOT cleared here. This method is
+        // @Transactional, so the commit (and the JPA flush that fires the
+        // TenantEntityListener @PreUpdate/@PrePersist callbacks) runs AFTER this
+        // method returns. Clearing the context in a finally block inside the
+        // transactional boundary would wipe it before flush, causing a spurious
+        // TenantContextMissingException and rolling back a successful payment.
+        // The caller (controller) clears the context after the transaction completes.
         return response;
     }
 

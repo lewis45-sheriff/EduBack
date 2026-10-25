@@ -70,6 +70,17 @@ public class Budget extends TenantScopedEntity {
     @Builder.Default
     private BigDecimal totalExpenseAllocated = BigDecimal.ZERO;
 
+    /**
+     * Optional per-budget override of the APPROACHING threshold (percentage). When null the
+     * tenant/system default from {@code BudgetThresholdConfig} applies (design §7.2).
+     */
+    @Column(name = "approaching_threshold_percent", precision = 5, scale = 2)
+    private BigDecimal approachingThresholdPercent;
+
+    /** Optional per-budget override of the OVER threshold (percentage). Null = use default. */
+    @Column(name = "over_threshold_percent", precision = 5, scale = 2)
+    private BigDecimal overThresholdPercent;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private User createdBy;

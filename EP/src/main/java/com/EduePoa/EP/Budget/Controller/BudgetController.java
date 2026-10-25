@@ -5,6 +5,7 @@ import com.EduePoa.EP.Budget.DTO.Request.BudgetApprovalRequest;
 import com.EduePoa.EP.Budget.DTO.Request.BudgetClosureRequest;
 import com.EduePoa.EP.Budget.DTO.Request.BudgetCreateRequest;
 import com.EduePoa.EP.Budget.DTO.Request.BudgetLineRequest;
+import com.EduePoa.EP.Budget.DTO.Request.BudgetThresholdRequest;
 import com.EduePoa.EP.Budget.DTO.Request.BudgetUpdateRequest;
 import com.EduePoa.EP.Budget.Enum.BudgetStatus;
 import com.EduePoa.EP.Budget.Service.BudgetService;
@@ -110,6 +111,16 @@ public class BudgetController {
     public ResponseEntity<?> close(@PathVariable Long id,
                                    @RequestBody(required = false) BudgetClosureRequest request) {
         var response = budgetService.close(id, request);
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
+    // ---- Performance threshold overrides ----
+
+    @PutMapping("/{id}/thresholds")
+    @PreAuthorize("hasPermission(null, 'budget:manage')")
+    public ResponseEntity<?> updateThresholds(@PathVariable Long id,
+                                              @Valid @RequestBody BudgetThresholdRequest request) {
+        var response = budgetService.updateThresholds(id, request);
         return ResponseEntity.status(response.getStatusCode()).body(response);
     }
 }

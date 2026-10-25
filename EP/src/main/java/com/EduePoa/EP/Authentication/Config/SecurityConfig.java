@@ -46,6 +46,7 @@ public class SecurityConfig {
                                 // the security context is anonymous on the error dispatch).
                                 "/error",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/google",
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/verify-otp",
                                 "/api/v1/auth/forgot-password",

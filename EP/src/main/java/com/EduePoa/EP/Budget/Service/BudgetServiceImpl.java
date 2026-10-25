@@ -25,6 +25,9 @@ import com.EduePoa.EP.Budget.Repository.BudgetCategoryRepository;
 import com.EduePoa.EP.Budget.Repository.BudgetLineMonthlyAllocationRepository;
 import com.EduePoa.EP.Budget.Repository.BudgetLineRepository;
 import com.EduePoa.EP.Budget.Repository.BudgetRepository;
+import com.EduePoa.EP.OrgUnit.Entity.OrgUnit;
+import com.EduePoa.EP.OrgUnit.Entity.OrgUnitStatus;
+import com.EduePoa.EP.OrgUnit.Repository.OrgUnitRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +58,7 @@ public class BudgetServiceImpl implements BudgetService {
     private final BudgetLineRepository budgetLineRepository;
     private final BudgetLineMonthlyAllocationRepository monthlyAllocationRepository;
     private final BudgetCategoryRepository categoryRepository;
+    private final OrgUnitRepository orgUnitRepository;
     private final UserRepository userRepository;
 
     /**
@@ -288,17 +292,29 @@ public class BudgetServiceImpl implements BudgetService {
             if (request.getAllocatedAmount().signum() < 0) {
                 return status(HttpStatus.BAD_REQUEST, "allocatedAmount must be zero or positive");
             }
-            // Category change: guard against duplicates.
+
+            // Resolve target category and org unit; enforce (budget, category, orgUnit) uniqueness
+            // against any OTHER line.
+            BudgetCategory targetCategory = line.getCategory();
             if (!line.getCategory().getId().equals(request.getCategoryId())) {
-                BudgetCategory category = categoryRepository.findById(request.getCategoryId()).orElse(null);
-                if (category == null || category.getStatus() != CategoryStatus.ACTIVE) {
+                targetCategory = categoryRepository.findById(request.getCategoryId()).orElse(null);
+                if (targetCategory == null || targetCategory.getStatus() != CategoryStatus.ACTIVE) {
                     return status(HttpStatus.BAD_REQUEST, "Active budget category not found: " + request.getCategoryId());
                 }
-                if (budgetLineRepository.existsByBudgetIdAndCategoryId(budgetId, request.getCategoryId())) {
-                    return status(HttpStatus.CONFLICT, "This budget already has a line for that category");
-                }
-                line.setCategory(category);
             }
+            OrgUnitResolution unitResolution = resolveOrgUnit(request.getOrgUnitId());
+            if (unitResolution.error() != null) {
+                return unitResolution.error();
+            }
+            OrgUnit targetUnit = unitResolution.orgUnit();
+
+            boolean pairChanged = !targetCategory.getId().equals(line.getCategory().getId())
+                    || !sameUnit(line.getOrgUnit(), targetUnit);
+            if (pairChanged && lineExists(budgetId, targetCategory.getId(), targetUnit)) {
+                return status(HttpStatus.CONFLICT, duplicateLineMessage(targetCategory, targetUnit));
+            }
+            line.setCategory(targetCategory);
+            line.setOrgUnit(targetUnit);
 
             CustomResponse<?> phasing = applyMonthlyPhasing(line, request);
             if (phasing != null) {
@@ -393,6 +409,15 @@ public class BudgetServiceImpl implements BudgetService {
             budget.setApprovedAt(LocalDateTime.now());
             budget.setApprovalComment(request != null ? request.getApprovalComment() : null);
             budget.setUpdatedAt(LocalDateTime.now());
+
+            // Capture the original approved baseline per line so amendments can diverge the current
+            // approved amount while keeping the original visible (design §8, §9).
+            for (BudgetLine line : budgetLineRepository.findByBudgetId(id)) {
+                if (line.getOriginalAllocatedAmount() == null) {
+                    line.setOriginalAllocatedAmount(line.getAllocatedAmount());
+                    budgetLineRepository.save(line);
+                }
+            }
             Budget saved = budgetRepository.save(budget);
 
             CustomResponse<BudgetResponse> response = new CustomResponse<>();
@@ -444,6 +469,43 @@ public class BudgetServiceImpl implements BudgetService {
         }
     }
 
+    // ---------------------------------------------------- THRESHOLD OVERRIDES
+
+    @Override
+    @Audit(module = "BUDGET", action = "UPDATE")
+    @Transactional
+    public CustomResponse<?> updateThresholds(Long id,
+                                              com.EduePoa.EP.Budget.DTO.Request.BudgetThresholdRequest request) {
+        try {
+            Budget budget = budgetRepository.findById(id).orElse(null);
+            if (budget == null) {
+                return status(HttpStatus.NOT_FOUND, "Budget not found with id: " + id);
+            }
+            if (budget.getStatus() == BudgetStatus.CLOSED) {
+                return status(HttpStatus.BAD_REQUEST, "Thresholds cannot be changed on a CLOSED budget");
+            }
+            BigDecimal approaching = request.getApproachingPercent();
+            BigDecimal over = request.getOverPercent();
+            if (approaching != null && over != null && approaching.compareTo(over) > 0) {
+                return status(HttpStatus.BAD_REQUEST, "approachingPercent must not exceed overPercent");
+            }
+            // Thresholds affect classification only, never allocations, so this is permitted outside
+            // the amendment workflow on both DRAFT and APPROVED budgets.
+            budget.setApproachingThresholdPercent(approaching);
+            budget.setOverThresholdPercent(over);
+            budget.setUpdatedAt(LocalDateTime.now());
+            Budget saved = budgetRepository.save(budget);
+
+            CustomResponse<BudgetResponse> response = new CustomResponse<>();
+            response.setMessage("Budget thresholds updated successfully");
+            response.setEntity(toResponse(saved));
+            response.setStatusCode(HttpStatus.OK.value());
+            return response;
+        } catch (Exception e) {
+            return fail(e);
+        }
+    }
+
     // ------------------------------------------------------------- HELPERS
 
     /**
@@ -462,6 +524,46 @@ public class BudgetServiceImpl implements BudgetService {
         return null;
     }
 
+    /** Resolution of an optional org unit: either a valid active unit (or null) or a failure response. */
+    private record OrgUnitResolution(OrgUnit orgUnit, CustomResponse<?> error) {
+    }
+
+    /** Resolve and validate an optional orgUnitId. Null id => null unit (school-wide), no error. */
+    private OrgUnitResolution resolveOrgUnit(Long orgUnitId) {
+        if (orgUnitId == null) {
+            return new OrgUnitResolution(null, null);
+        }
+        OrgUnit unit = orgUnitRepository.findById(orgUnitId).orElse(null);
+        if (unit == null) {
+            return new OrgUnitResolution(null, status(HttpStatus.BAD_REQUEST, "Organizational unit not found: " + orgUnitId));
+        }
+        if (unit.getStatus() != OrgUnitStatus.ACTIVE) {
+            return new OrgUnitResolution(null, status(HttpStatus.BAD_REQUEST, "Organizational unit is inactive: " + orgUnitId));
+        }
+        return new OrgUnitResolution(unit, null);
+    }
+
+    /**
+     * Uniqueness check for a (budget, category, orgUnit) line. Handles the null-org-unit
+     * (school-wide) case explicitly, since MariaDB treats NULLs as distinct in a unique index.
+     */
+    private boolean lineExists(Long budgetId, Long categoryId, OrgUnit orgUnit) {
+        return orgUnit == null
+                ? budgetLineRepository.existsByBudgetIdAndCategoryIdAndOrgUnitIsNull(budgetId, categoryId)
+                : budgetLineRepository.existsByBudgetIdAndCategoryIdAndOrgUnitId(budgetId, categoryId, orgUnit.getId());
+    }
+
+    private boolean sameUnit(OrgUnit a, OrgUnit b) {
+        Long ai = a != null ? a.getId() : null;
+        Long bi = b != null ? b.getId() : null;
+        return ai == null ? bi == null : ai.equals(bi);
+    }
+
+    private String duplicateLineMessage(BudgetCategory category, OrgUnit orgUnit) {
+        String where = orgUnit == null ? "school-wide (no organizational unit)" : "unit '" + orgUnit.getName() + "'";
+        return "This budget already has a line for category '" + category.getName() + "' and " + where;
+    }
+
     /**
      * Validate and persist a new line for the budget. Returns a failure CustomResponse
      * on validation error, or null on success.
@@ -474,13 +576,19 @@ public class BudgetServiceImpl implements BudgetService {
         if (category == null || category.getStatus() != CategoryStatus.ACTIVE) {
             return status(HttpStatus.BAD_REQUEST, "Active budget category not found: " + request.getCategoryId());
         }
-        if (budgetLineRepository.existsByBudgetIdAndCategoryId(budget.getId(), category.getId())) {
-            return status(HttpStatus.CONFLICT, "This budget already has a line for category '" + category.getName() + "'");
+        OrgUnitResolution unitResolution = resolveOrgUnit(request.getOrgUnitId());
+        if (unitResolution.error() != null) {
+            return unitResolution.error();
+        }
+        OrgUnit orgUnit = unitResolution.orgUnit();
+        if (lineExists(budget.getId(), category.getId(), orgUnit)) {
+            return status(HttpStatus.CONFLICT, duplicateLineMessage(category, orgUnit));
         }
 
         BudgetLine line = BudgetLine.builder()
                 .budget(budget)
                 .category(category)
+                .orgUnit(orgUnit)
                 .allocatedAmount(request.getAllocatedAmount())
                 .build();
         BudgetLine savedLine = budgetLineRepository.save(line);
@@ -568,6 +676,8 @@ public class BudgetServiceImpl implements BudgetService {
                     .categoryId(line.getCategory().getId())
                     .categoryName(line.getCategory().getName())
                     .categoryType(line.getCategory().getType())
+                    .orgUnitId(line.getOrgUnit() != null ? line.getOrgUnit().getId() : null)
+                    .orgUnitName(line.getOrgUnit() != null ? line.getOrgUnit().getName() : null)
                     .allocatedAmount(line.getAllocatedAmount())
                     .monthlyAllocations(months)
                     .build());
@@ -589,6 +699,8 @@ public class BudgetServiceImpl implements BudgetService {
                 .status(budget.getStatus())
                 .totalIncomeAllocated(budget.getTotalIncomeAllocated())
                 .totalExpenseAllocated(budget.getTotalExpenseAllocated())
+                .approachingThresholdPercent(budget.getApproachingThresholdPercent())
+                .overThresholdPercent(budget.getOverThresholdPercent())
                 .createdByName(fullName(budget.getCreatedBy()))
                 .approvedByName(fullName(budget.getApprovedBy()))
                 .closedByName(fullName(budget.getClosedBy()))

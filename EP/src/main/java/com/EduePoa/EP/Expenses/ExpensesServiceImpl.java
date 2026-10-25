@@ -30,6 +30,8 @@ public class ExpensesServiceImpl implements ExpensesService {
     private final ExpensesRepository expensesRepository;
     private final UserRepository userRepository;
     private final LedgerService ledgerService;
+    private final com.EduePoa.EP.GeneralLedger.service.posting.GlPostingGateway glPostingGateway;
+    private final com.EduePoa.EP.GeneralLedger.service.GeneralLedgerService generalLedgerService;
 
     @Override
     @Audit(module = "EXPENSES", action = "CREATE")
@@ -167,14 +169,28 @@ public class ExpensesServiceImpl implements ExpensesService {
             Expenses expense = expensesRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Expense not found with id: " + id));
 
-            if ("APPROVED".equalsIgnoreCase(expense.getStatus())) {
-                throw new RuntimeException(
-                        "Cannot delete expense '" + expense.getExpenseNumber() + "' because it has already been approved.");
+            boolean wasApproved = "APPROVED".equalsIgnoreCase(expense.getStatus());
+
+            // An approved expense already posted a GL journal (Dr General Expenses /
+            // Cr Cash). Deleting it must not leave a phantom entry in the ledger, so we
+            // first unwind the GL effect: cancel an un-posted outbox request, or reverse
+            // the posted journal with a balanced counter-journal (the original journal
+            // stays in history — the GL is append-only and remains auditable).
+            if (wasApproved) {
+                User actor = getCurrentUser();
+                generalLedgerService.reverseBySource(
+                        com.EduePoa.EP.GeneralLedger.enums.GlSourceType.EXPENSE_PAYMENT,
+                        expense.getId(),
+                        "Expense " + expense.getExpenseNumber() + " deleted",
+                        actor,
+                        actor != null ? actor.getUsername() : "SYSTEM:expense-delete");
             }
 
             expensesRepository.deleteById(id);
 
-            response.setMessage("Expense deleted successfully");
+            response.setMessage(wasApproved
+                    ? "Expense deleted and its General Ledger posting reversed."
+                    : "Expense deleted successfully");
             response.setEntity(null);
             response.setStatusCode(HttpStatus.OK.value());
 
@@ -251,6 +267,24 @@ public class ExpensesServiceImpl implements ExpensesService {
                     saved.getExpenseDate(),
                     approver
             );
+
+            // Durable double-entry GL posting for this approved expense (Dr General
+            // Expenses / Cr Cash). Approval is the cash-movement point in this model
+            // (no separate payment step). Keyed on the Expense id.
+            try {
+                com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload glPayload =
+                        new com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload(
+                                saved.getExpenseDate(),
+                                saved.getExpenseNumber(),
+                                "Expense approved: " + saved.getDescription(),
+                                java.util.Map.of("amount",
+                                        saved.getAmount().setScale(2, java.math.RoundingMode.HALF_UP)));
+                glPostingGateway.requestPosting(
+                        com.EduePoa.EP.GeneralLedger.enums.GlSourceType.EXPENSE_PAYMENT,
+                        saved.getId(), glPayload);
+            } catch (Exception glEx) {
+                // Defensive; reconciliation detects any missing posting.
+            }
 
             response.setMessage("Expense approved and ledger debit recorded successfully");
             response.setEntity(toResponseDTO(saved));

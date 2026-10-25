@@ -28,6 +28,8 @@ public class BudgetResponse {
     private BudgetStatus status;
     private BigDecimal totalIncomeAllocated;
     private BigDecimal totalExpenseAllocated;
+    private BigDecimal approachingThresholdPercent;
+    private BigDecimal overThresholdPercent;
     private List<BudgetLineResponse> lines;
     private String createdByName;
     private String approvedByName;

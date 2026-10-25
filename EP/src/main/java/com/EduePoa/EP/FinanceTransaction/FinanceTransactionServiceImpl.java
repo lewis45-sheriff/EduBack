@@ -40,6 +40,7 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
     private final StudentInvoicesRepository studentInvoicesRepository;
     private final AuditService auditService;
     private final LedgerService ledgerService;
+    private final com.EduePoa.EP.GeneralLedger.service.posting.GlPostingGateway glPostingGateway;
     private final UserRepository userRepository;
     private final com.EduePoa.EP.FileStorage.FileStorageService fileStorageService;
     private final com.EduePoa.EP.FinanceTransaction.PendingTransaction.PendingTransactionRepository pendingTransactionRepository;
@@ -374,6 +375,35 @@ public class FinanceTransactionServiceImpl implements FinanceTransactionService 
                     log.error("Failed to record ledger CREDIT for transaction {}: {}",
                             savedTransaction.getId(), ledgerEx.getMessage());
                 }
+            }
+
+            // Enqueue a durable double-entry General Ledger posting for this finalized
+            // money event (transactional outbox). Written in THIS transaction so it
+            // commits with the payment; the journal is posted inline after commit and,
+            // if that fails, by the recovery sweeper/retry — the payment is never at risk.
+            // A fee receipt (INCOME) credits fee income; a refund/adjustment (EXPENSE)
+            // reverses the income direction (contra revenue), not a general expense.
+            try {
+                com.EduePoa.EP.GeneralLedger.enums.GlSourceType glType =
+                        createTransactionDTO.getTransactionType() == FinanceTransaction.TransactionType.INCOME
+                                ? com.EduePoa.EP.GeneralLedger.enums.GlSourceType.STUDENT_FEE_RECEIPT
+                                : com.EduePoa.EP.GeneralLedger.enums.GlSourceType.STUDENT_FEE_REFUND;
+                com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload glPayload =
+                        new com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload(
+                                savedTransaction.getTransactionDate(),
+                                savedTransaction.getReference(),
+                                (glType == com.EduePoa.EP.GeneralLedger.enums.GlSourceType.STUDENT_FEE_RECEIPT
+                                        ? "Fee payment - " : "Fee refund/adjustment - ")
+                                        + student.getFirstName() + " " + student.getLastName()
+                                        + " (Invoice: " + invoice.getId() + ")",
+                                java.util.Map.of("amount",
+                                        savedTransaction.getAmount().setScale(2, java.math.RoundingMode.HALF_UP)));
+                glPostingGateway.requestPosting(glType, savedTransaction.getId(), glPayload);
+            } catch (Exception glEx) {
+                // Enqueue is defensive internally; this guard ensures GL concerns can
+                // never break fee processing. Reconciliation will still detect a gap.
+                log.error("Failed to enqueue GL posting for transaction {}: {}",
+                        savedTransaction.getId(), glEx.getMessage());
             }
 
             // Update Invoice based on transaction type

@@ -1,11 +1,13 @@
 package com.EduePoa.EP.Authentication.Auth;
 
+import com.EduePoa.EP.Authentication.Auth.Request.GoogleLoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.LoginRequest;
 import com.EduePoa.EP.Authentication.Auth.Request.RequestOTP;
 import com.EduePoa.EP.Authentication.Auth.Request.ResetPassword;
 import com.EduePoa.EP.Authentication.Auth.Request.ValidateOtp;
 import com.EduePoa.EP.Authentication.Auth.Response.AuthResponse;
 import com.EduePoa.EP.Authentication.Config.CookieService;
+import com.EduePoa.EP.Authentication.Config.GoogleTokenVerifier;
 import com.EduePoa.EP.Authentication.Config.TokenBlacklistService;
 import com.EduePoa.EP.Authentication.Email.EmailService;
 import com.EduePoa.EP.Authentication.Enum.Status;
@@ -53,6 +55,7 @@ public class AuthService {
     private final CookieService cookieService;
     private final TokenBlacklistService tokenBlacklistService;
     private final TenantRepository tenantRepository;
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     CustomResponse<?> login(LoginRequest loginRequest, HttpServletResponse httpResponse, HttpServletRequest httpRequest) {
         CustomResponse<AuthResponse> response = new CustomResponse<>();
@@ -213,6 +216,165 @@ public class AuthService {
             TenantContext.clear();
         }
 
+        return response;
+    }
+
+    /**
+     * "Sign in with Google" (SSO, Option A). Verifies the Google ID token, resolves
+     * the matching existing user (optionally disambiguated by tenant), and issues the
+     * app's own JWT exactly like {@link #login}. No password is required.
+     * <p>
+     * Policy: the account MUST already exist (no auto-provisioning); linking is by the
+     * Google-verified email. If the email exists in more than one tenant and no tenant
+     * hint is supplied, the request is rejected as ambiguous.
+     */
+    CustomResponse<?> googleLogin(GoogleLoginRequest request,
+                                  HttpServletResponse httpResponse,
+                                  HttpServletRequest httpRequest) {
+        CustomResponse<AuthResponse> response = new CustomResponse<>();
+        try {
+            if (request == null || request.getIdToken() == null || request.getIdToken().isBlank()) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST.value());
+                response.setMessage("Google ID token is required");
+                return response;
+            }
+            if (!googleTokenVerifier.isEnabled()) {
+                response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE.value());
+                response.setMessage("Google sign-in is not configured on this server");
+                return response;
+            }
+
+            // 1) Verify the token with Google (signature, issuer, audience, expiry).
+            var payload = googleTokenVerifier.verify(request.getIdToken());
+            if (payload == null) {
+                response.setStatusCode(HttpStatus.UNAUTHORIZED.value());
+                response.setMessage("Invalid or expired Google token");
+                return response;
+            }
+
+            String email = payload.getEmail();
+            boolean emailVerified = Boolean.TRUE.equals(payload.getEmailVerified());
+            if (email == null || email.isBlank() || !emailVerified) {
+                response.setStatusCode(HttpStatus.UNAUTHORIZED.value());
+                response.setMessage("Google account email is missing or not verified");
+                return response;
+            }
+
+            // 2) Resolve the existing user. Email is unique only per tenant, so use the
+            //    tenant hint when provided; otherwise require a single match across tenants.
+            User user;
+            String tenantHint = request.getTenantId();
+            if (tenantHint != null && !tenantHint.isBlank()) {
+                user = userRepository.findByEmailAndTenantId(email, tenantHint).orElse(null);
+                if (user == null) {
+                    response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                    response.setMessage("No account found for this Google email in the selected school");
+                    return response;
+                }
+            } else {
+                List<User> matches = userRepository.findAllByEmailAcrossTenants(email);
+                if (matches.isEmpty()) {
+                    response.setStatusCode(HttpStatus.NOT_FOUND.value());
+                    response.setMessage("No account found for this Google email. Contact your administrator.");
+                    return response;
+                }
+                if (matches.size() > 1) {
+                    response.setStatusCode(HttpStatus.CONFLICT.value());
+                    response.setMessage("This email is registered in multiple schools. "
+                            + "Please choose your school and try again.");
+                    return response;
+                }
+                user = matches.get(0);
+            }
+
+            // Set tenant context from the resolved user so any entity save passes the
+            // TenantEntityListener, mirroring the password login flow.
+            if (user.getTenantId() != null) {
+                TenantContext.setCurrentTenant(user.getTenantId());
+            }
+
+            Tenant tenant = user.getTenantId() != null
+                    ? tenantRepository.findByTenantIdentifier(user.getTenantId()).orElse(null)
+                    : null;
+            String schoolName = tenant != null ? tenant.getSchoolName() : null;
+            String logoUrl = tenant != null ? tenant.getLogoUrl() : null;
+
+            // 3) Same account-state gates as password login.
+            if (user.getStatus().equals(Status.INACTIVE)) {
+                response.setStatusCode(HttpStatus.FORBIDDEN.value());
+                response.setMessage("User Account is Inactive. Please Contact System Admin");
+                return response;
+            }
+            // A Google-verified identity satisfies the force-password-reset gate: these
+            // users authenticate via Google and need no local password. We proceed to
+            // issue tokens (and leave the flag as-is so password login still prompts).
+
+            // 4) Issue the app JWT + cookies + response, identical to password login.
+            try {
+                HttpSession oldSession = httpRequest.getSession(false);
+                if (oldSession != null) {
+                    oldSession.invalidate();
+                }
+            } catch (Exception e) {
+                log.warn("Could not invalidate old session: {}", e.getMessage());
+            }
+
+            cookieService.deleteAuthCookies(httpResponse);
+            SecurityContextHolder.clearContext();
+            httpRequest.getSession(true);
+
+            Map<String, Object> accessClaims = new HashMap<>();
+            accessClaims.put("type", "ACCESS");
+            String jwtToken = jwtService.generateJwtToken(accessClaims, user, ACCESS_TOKEN_DURATION);
+
+            Map<String, Object> refreshClaims = new HashMap<>();
+            refreshClaims.put("type", "REFRESH");
+            String refreshToken = jwtService.generateJwtToken(refreshClaims, user, REFRESH_TOKEN_DURATION);
+
+            cookieService.createAccessTokenCookie(httpResponse, jwtToken);
+            cookieService.createRefreshTokenCookie(httpResponse, refreshToken);
+
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(user, jwtToken, user.getAuthorities());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            List<PermissionDTO> permissionDTOs = user.getRole().getRolePermissions().stream()
+                    .map(rp -> new PermissionDTO(
+                            rp.getPermission().name(),
+                            rp.getPermission().getPermission(),
+                            rp.getPermission().getDescription()
+                    ))
+                    .collect(Collectors.toList());
+
+            AuthResponse authResponse = AuthResponse.builder()
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .email(user.getEmail())
+                    .firstname(user.getFirstName())
+                    .lastname(user.getLastName())
+                    .role(user.getRole().getName())
+                    .phoneNumber(user.getPhoneNumber())
+                    .tenantId(user.getTenantId())
+                    .schoolName(schoolName)
+                    .logoUrl(logoUrl)
+                    .accessToken(jwtToken)
+                    .passwordReset(false)
+                    .permissions(permissionDTOs)
+                    .build();
+
+            log.info("Google SSO login successful for user: {} (tenant {})", user.getEmail(), user.getTenantId());
+
+            response.setEntity(authResponse);
+            response.setMessage("Login successful.");
+            response.setStatusCode(HttpStatus.OK.value());
+        } catch (Exception e) {
+            log.error("Google login error: {}", e.getMessage(), e);
+            response.setMessage("An error occurred during Google sign-in. Please try again.");
+            response.setEntity(null);
+            response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        } finally {
+            TenantContext.clear();
+        }
         return response;
     }
 

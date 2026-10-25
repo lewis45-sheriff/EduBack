@@ -20,6 +20,9 @@ public class BudgetLineRequest {
     @NotNull(message = "categoryId is required")
     private Long categoryId;
 
+    /** Optional organizational unit; null = school-wide / unassigned allocation. */
+    private Long orgUnitId;
+
     @NotNull(message = "allocatedAmount is required")
     @PositiveOrZero(message = "allocatedAmount must be zero or positive")
     private BigDecimal allocatedAmount;

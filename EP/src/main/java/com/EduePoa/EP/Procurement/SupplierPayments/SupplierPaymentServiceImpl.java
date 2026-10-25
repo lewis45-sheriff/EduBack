@@ -39,6 +39,7 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
     private final SupplierOnboardingRepository supplierOnboardingRepository;
     private final UserRepository userRepository;
     private final LedgerService ledgerService;
+    private final com.EduePoa.EP.GeneralLedger.service.posting.GlPostingGateway glPostingGateway;
     private final AuditService auditService;
 
     @Override
@@ -180,6 +181,25 @@ public class SupplierPaymentServiceImpl implements SupplierPaymentService {
             } catch (Exception ledgerEx) {
                 // Log but don't fail the approval
                 // Ledger entry can be manually reconciled
+            }
+
+            // Durable double-entry GL posting: settle the accounts-payable liability
+            // against cash (Dr AP / Cr Cash) — NOT a fresh expense, since the supplier
+            // invoice already recorded the payable. Keyed on the Payment id.
+            try {
+                com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload glPayload =
+                        new com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload(
+                                payment.getPaymentDate(),
+                                payment.getReferenceNumber(),
+                                "Supplier payment to " + supplier.getBusinessName()
+                                        + " (Invoice: " + invoice.getInvoiceNumber() + ")",
+                                java.util.Map.of("amount",
+                                        payment.getAmount().setScale(2, java.math.RoundingMode.HALF_UP)));
+                glPostingGateway.requestPosting(
+                        com.EduePoa.EP.GeneralLedger.enums.GlSourceType.SUPPLIER_PAYMENT,
+                        payment.getId(), glPayload);
+            } catch (Exception glEx) {
+                // Never fail an approval for a GL concern; reconciliation detects gaps.
             }
 
             String statusMsg = invoice.getStatus() == InvoiceStatus.PAID

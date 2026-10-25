@@ -22,6 +22,6 @@ public class BudgetCategoryCreateRequest {
 
     private String description;
 
-    /** Optional ledger referenceType mapping, e.g. "SUPPLIER_PAYMENT" or "FEE_PAYMENT". */
+    /** Optional GL account systemKey mapping, e.g. "FEES_INCOME" or "EXPENSE_GENERAL". */
     private String mappingKey;
 }

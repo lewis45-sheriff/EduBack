@@ -11,6 +11,8 @@ import com.EduePoa.EP.Budget.Enum.CategoryStatus;
 import com.EduePoa.EP.Budget.Enum.CategoryType;
 import com.EduePoa.EP.Budget.Repository.BudgetCategoryRepository;
 import com.EduePoa.EP.Budget.Repository.BudgetLineRepository;
+import com.EduePoa.EP.Budget.Variance.BudgetActualsService;
+import com.EduePoa.EP.Budget.Variance.MappingStatus;
 import com.EduePoa.EP.Utils.CustomResponse;
 import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class BudgetCategoryServiceImpl implements BudgetCategoryService {
     private final BudgetCategoryRepository categoryRepository;
     private final BudgetLineRepository budgetLineRepository;
     private final UserRepository userRepository;
+    private final BudgetActualsService actualsService;
 
     @Override
     @Audit(module = "BUDGET_CATEGORY", action = "CREATE")
@@ -45,12 +48,19 @@ public class BudgetCategoryServiceImpl implements BudgetCategoryService {
             if (categoryRepository.existsByNameIgnoreCaseAndStatus(request.getName().trim(), CategoryStatus.ACTIVE)) {
                 return conflict("An active budget category with this name already exists");
             }
-            // A referenceType may map to at most one active category per side (type).
+            // A GL account systemKey may map to at most one active category per side (type),
+            // preventing the same GL activity from being counted under two categories.
             if (StringUtils.hasText(request.getMappingKey())
                     && categoryRepository.existsByMappingKeyAndTypeAndStatus(
                     request.getMappingKey().trim(), request.getType(), CategoryStatus.ACTIVE)) {
                 return conflict("Another active " + request.getType()
                         + " category is already mapped to '" + request.getMappingKey().trim() + "'");
+            }
+            // The mappingKey must resolve to a valid, tenant-owned GL account of a compatible type.
+            CustomResponse<BudgetCategoryResponse> mappingError =
+                    validateMapping(request.getMappingKey(), request.getType());
+            if (mappingError != null) {
+                return mappingError;
             }
 
             User currentUser = getCurrentUser();
@@ -101,6 +111,11 @@ public class BudgetCategoryServiceImpl implements BudgetCategoryService {
                             throw new IllegalStateException("Another active " + request.getType()
                                     + " category is already mapped to '" + request.getMappingKey().trim() + "'");
                         });
+                CustomResponse<BudgetCategoryResponse> mappingError =
+                        validateMapping(request.getMappingKey(), request.getType());
+                if (mappingError != null) {
+                    return mappingError;
+                }
             }
 
             existing.setName(newName);
@@ -196,6 +211,27 @@ public class BudgetCategoryServiceImpl implements BudgetCategoryService {
     }
 
     // ---- helpers ----
+
+    /**
+     * Validate that a mappingKey (when present) resolves to a valid, active, tenant-owned GL
+     * account whose type is compatible with the category type. Returns a BAD_REQUEST response on
+     * failure, or null when the mapping is absent or valid.
+     */
+    private CustomResponse<BudgetCategoryResponse> validateMapping(String mappingKey, CategoryType type) {
+        if (!StringUtils.hasText(mappingKey)) {
+            return null;
+        }
+        BudgetActualsService.ResolvedMapping resolved = actualsService.resolveMapping(mappingKey.trim(), type);
+        if (resolved.status() == MappingStatus.INVALID_MAPPING) {
+            CustomResponse<BudgetCategoryResponse> r = new CustomResponse<>();
+            r.setMessage("mappingKey '" + mappingKey.trim() + "' does not resolve to a valid, active "
+                    + type + " GL account for this tenant");
+            r.setStatusCode(HttpStatus.BAD_REQUEST.value());
+            r.setEntity(null);
+            return r;
+        }
+        return null;
+    }
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

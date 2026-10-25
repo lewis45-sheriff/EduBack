@@ -37,4 +37,7 @@ public interface BudgetService {
     CustomResponse<?> approve(Long id, BudgetApprovalRequest request);
 
     CustomResponse<?> close(Long id, BudgetClosureRequest request);
+
+    // Performance threshold overrides (allowed on DRAFT or APPROVED; does not alter allocations)
+    CustomResponse<?> updateThresholds(Long id, com.EduePoa.EP.Budget.DTO.Request.BudgetThresholdRequest request);
 }

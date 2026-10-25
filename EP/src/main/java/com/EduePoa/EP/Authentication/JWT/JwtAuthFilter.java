@@ -37,6 +37,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     // Comprehensive list of public paths that don't need JWT validation
     private static final List<String> PUBLIC_PATHS = Arrays.asList(
             "/api/v1/auth/login",
+            "/api/v1/auth/google",
             "/api/v1/auth/register",
             "/api/v1/auth/verify-otp",
             "/api/v1/auth/reset-password",

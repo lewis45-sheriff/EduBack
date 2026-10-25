@@ -1,5 +1,6 @@
 package com.EduePoa.EP.MpesaPaybill;
 
+import com.EduePoa.EP.Multitenancy.config.TenantContext;
 import com.EduePoa.EP.MpesaPaybill.Requests.ConfirmationRequest;
 import com.EduePoa.EP.MpesaPaybill.Requests.RegisterRequest;
 import com.EduePoa.EP.MpesaPaybill.Requests.ValidationRequest;
@@ -27,10 +28,23 @@ public class MpesaPaybillController {
         var response = mpesaPaybillService.validate(request);
         return  ResponseEntity.status(response.getStatusCode()).body(response);
     }
+    @GetMapping("mpesa-c2b/all-transactions")
+    ResponseEntity<?> getAllC2bTransactions() {
+        var response = mpesaPaybillService.getAllC2bTransactions();
+        return ResponseEntity.status(response.getStatusCode()).body(response);
+    }
+
     @PostMapping( value = {"/process-call-back", "/transactions/c2b/confirmation"}, consumes = "application/json", produces = "application/json")
     ResponseEntity<?>processCallBack(@RequestBody ConfirmationRequest request){
-        var response = mpesaPaybillService.processCallBack(request);
-        return  ResponseEntity.status(response.getStatusCode()).body(response);
+        try {
+            var response = mpesaPaybillService.processCallBack(request);
+            return  ResponseEntity.status(response.getStatusCode()).body(response);
+        } finally {
+            // Clear tenant context here (outside the @Transactional service boundary) so it
+            // survives until the transaction has committed and the JPA lifecycle callbacks
+            // have run. Prevents tenant leakage between unauthenticated callback requests.
+            TenantContext.clear();
+        }
     }
 //    @PostMapping("simulate-transaction")
 //    ResponseEntity<?>simulateTransaction(@RequestBody ConfirmationRequest request){

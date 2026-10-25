@@ -22,5 +22,6 @@ public class BudgetCategoryUpdateRequest {
 
     private String description;
 
+    /** Optional GL account systemKey mapping, e.g. "FEES_INCOME" or "EXPENSE_GENERAL". */
     private String mappingKey;
 }

@@ -17,9 +17,10 @@ import java.time.LocalDateTime;
  * Tenant-scoped budgeting taxonomy entry. Provides a stable category dimension for
  * budget allocations and for attributing actuals from the existing ledger.
  * <p>
- * {@code mappingKey} maps a category to a ledger {@code referenceType}
- * (e.g. "SUPPLIER_PAYMENT", "FEE_PAYMENT") so actuals can be resolved without
- * re-scanning source tables and without double counting.
+ * {@code mappingKey} maps a category to a General Ledger account {@code systemKey}
+ * (e.g. "FEES_INCOME", "EXPENSE_GENERAL") so actuals are resolved from posted journal
+ * lines on that account — never by re-scanning source tables — and without double
+ * counting (at most one active category per systemKey + type).
  */
 @Entity
 @Table(name = "budget_categories", uniqueConstraints = {
@@ -55,8 +56,8 @@ public class BudgetCategory extends TenantScopedEntity {
     private CategoryStatus status = CategoryStatus.ACTIVE;
 
     /**
-     * Ledger referenceType this category maps to (e.g. "SUPPLIER_PAYMENT", "FEE_PAYMENT").
-     * Nullable: an unmapped category resolves to zero actuals until a mapping is set.
+     * GL account {@code systemKey} this category maps to (e.g. "FEES_INCOME", "EXPENSE_GENERAL").
+     * Nullable: an unmapped category resolves to zero actuals (flagged UNMAPPED) until a mapping is set.
      */
     @Column(name = "mapping_key", length = 100)
     private String mappingKey;

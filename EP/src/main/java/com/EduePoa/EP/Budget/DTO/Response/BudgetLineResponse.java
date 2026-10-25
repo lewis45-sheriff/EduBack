@@ -18,6 +18,8 @@ public class BudgetLineResponse {
     private Long categoryId;
     private String categoryName;
     private CategoryType categoryType;
+    private Long orgUnitId;
+    private String orgUnitName;
     private BigDecimal allocatedAmount;
     private List<MonthlyAllocationResponse> monthlyAllocations;
 }

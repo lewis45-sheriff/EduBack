@@ -12,6 +12,8 @@ import com.EduePoa.EP.Multitenancy.entity.Tenant;
 import com.EduePoa.EP.Multitenancy.entity.TenantConfiguration;
 import com.EduePoa.EP.Multitenancy.repository.TenantConfigurationRepository;
 import com.EduePoa.EP.HR.config.seed.StatutoryConfigSeeder;
+import com.EduePoa.EP.GeneralLedger.seed.GlAccountSeeder;
+import com.EduePoa.EP.OrgUnit.Seed.OrgUnitSeeder;
 import com.EduePoa.EP.academics.curriculum.seed.CurriculumSeeder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,8 @@ public class TenantProvisioningService {
     private final PasswordEncoder passwordEncoder;
     private final CurriculumSeeder curriculumSeeder;
     private final StatutoryConfigSeeder statutoryConfigSeeder;
+    private final GlAccountSeeder glAccountSeeder;
+    private final OrgUnitSeeder orgUnitSeeder;
 
 
     @Transactional
@@ -67,6 +71,26 @@ public class TenantProvisioningService {
                 statutoryConfigSeeder.seedForTenant(tenantIdentifier);
             } catch (Exception e) {
                 log.error("Statutory config seeding failed during provisioning of tenant {}: {}",
+                        tenantIdentifier, e.getMessage(), e);
+            }
+
+            // Seed the General Ledger chart of accounts (idempotent, self-managing its
+            // own TenantContext) so the new tenant can post double-entry journals from
+            // day one.
+            try {
+                glAccountSeeder.seedForTenant(tenantIdentifier);
+            } catch (Exception e) {
+                log.error("GL chart-of-accounts seeding failed during provisioning of tenant {}: {}",
+                        tenantIdentifier, e.getMessage(), e);
+            }
+
+            // Seed the default organizational hierarchy (root + editable departments) so the new
+            // tenant can allocate budgets by unit from day one. Idempotent and self-managing its own
+            // TenantContext, exactly like the other seeders.
+            try {
+                orgUnitSeeder.seedForTenant(tenantIdentifier, tenant.getSchoolName());
+            } catch (Exception e) {
+                log.error("OrgUnit hierarchy seeding failed during provisioning of tenant {}: {}",
                         tenantIdentifier, e.getMessage(), e);
             }
 

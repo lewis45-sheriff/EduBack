@@ -46,6 +46,7 @@ public class PendingTransportTransactionServiceImpl implements PendingTransportT
     private final StudentRepository studentRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final com.EduePoa.EP.GeneralLedger.service.posting.GlPostingGateway glPostingGateway;
 
     // ---- Submit (maker): store only, no ledger effect ----------------------
 
@@ -206,6 +207,29 @@ public class PendingTransportTransactionServiceImpl implements PendingTransportT
             pending.setApprovedAt(LocalDateTime.now());
             pending.setPostedTransactionId(posted.getId());
             PendingTransportTransaction saved = pendingRepository.save(pending);
+
+            // Durable double-entry GL posting for this confirmed transport receipt.
+            // The persisted amount is a Double; it is converted to a fixed-scale
+            // BigDecimal exactly once here (no further floating-point arithmetic).
+            // Keyed on the posted TransportTransactions id; kept as TRANSPORT income,
+            // distinct from school-fees income.
+            try {
+                java.math.BigDecimal glAmount = java.math.BigDecimal
+                        .valueOf(posted.getAmount() != null ? posted.getAmount() : 0.0d)
+                        .setScale(2, java.math.RoundingMode.HALF_UP);
+                com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload glPayload =
+                        new com.EduePoa.EP.GeneralLedger.service.posting.GlPostingPayload(
+                                java.time.LocalDate.now(),
+                                "TRTXN-" + posted.getId(),
+                                "Transport fee receipt - " + student.getFirstName() + " " + student.getLastName(),
+                                java.util.Map.of("amount", glAmount));
+                glPostingGateway.requestPosting(
+                        com.EduePoa.EP.GeneralLedger.enums.GlSourceType.TRANSPORT_FEE_RECEIPT,
+                        posted.getId(), glPayload);
+            } catch (Exception glEx) {
+                log.error("Failed to enqueue GL posting for transport transaction {}: {}",
+                        posted.getId(), glEx.getMessage());
+            }
 
             auditService.log("TRANSPORT_TRANSACTION", "Approved payment request ID:", String.valueOf(saved.getId()),
                     "postedTransaction:", String.valueOf(posted.getId()),
