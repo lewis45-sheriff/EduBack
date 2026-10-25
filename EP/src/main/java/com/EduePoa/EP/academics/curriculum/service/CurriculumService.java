@@ -33,4 +33,12 @@ public interface CurriculumService {
     CustomResponse<List<ValueDto>> getValues();
 
     CustomResponse<List<PciDto>> getPcis();
+
+    /**
+     * Bridges the active curriculum version's grade mappings to the tenant's operational grades by
+     * matching grade name (case-insensitive). Seeded {@code GradeLevelMapping} rows start with no
+     * operational grade link, which breaks grade-scoped subject lookups in the UI; this fills that
+     * link in. Idempotent — already-linked mappings are left as-is. Returns the updated grade list.
+     */
+    CustomResponse<List<GradeDto>> bridgeGradesToOperational();
 }

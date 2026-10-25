@@ -1,5 +1,7 @@
 package com.EduePoa.EP.academics.curriculum.service.impl;
 
+import com.EduePoa.EP.Grade.Grade;
+import com.EduePoa.EP.Grade.GradeRepository;
 import com.EduePoa.EP.Utils.CustomResponse;
 import com.EduePoa.EP.academics.curriculum.dto.CurriculumDtos.*;
 import com.EduePoa.EP.academics.curriculum.entity.*;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +32,7 @@ public class CurriculumServiceImpl implements CurriculumService {
     private final CoreCompetencyRepository competencyRepository;
     private final CbcValueRepository valueRepository;
     private final PertinentContemporaryIssueRepository pciRepository;
+    private final GradeRepository gradeRepository;
 
     // --- interface ---
 
@@ -124,6 +128,58 @@ public class CurriculumServiceImpl implements CurriculumService {
     public CustomResponse<List<PciDto>> getPcis() {
         return withActiveVersion(v -> pciRepository.findByCurriculumVersionOrderBySequenceAsc(v)
                 .stream().map(this::toPciDto).toList(), "PCIs retrieved");
+    }
+
+    @Override
+    @Transactional
+    public CustomResponse<List<GradeDto>> bridgeGradesToOperational() {
+        CustomResponse<List<GradeDto>> r = new CustomResponse<>();
+        Optional<CurriculumVersion> vOpt = activeVersion();
+        if (vOpt.isEmpty()) {
+            r.setStatusCode(HttpStatus.NOT_FOUND.value());
+            r.setMessage("No active curriculum version configured");
+            r.setEntity(List.of());
+            return r;
+        }
+        try {
+            List<GradeLevelMapping> mappings = gradeLevelMappingRepository
+                    .findByCurriculumVersionOrderBySequenceAsc(vOpt.get());
+
+            int linked = 0;
+            for (GradeLevelMapping m : mappings) {
+                if (m.getGrade() != null) {
+                    continue; // already bridged — idempotent
+                }
+                // Match the operational grade by name (both repos are tenant-aware). Try the exact
+                // grade name first, then a case-insensitive compare against all tenant grades.
+                Grade match = gradeRepository.findByName(m.getGradeName()).orElse(null);
+                if (match == null && m.getGradeName() != null) {
+                    String target = m.getGradeName().trim().toLowerCase();
+                    match = gradeRepository.findAll().stream()
+                            .filter(g -> g.getName() != null && g.getName().trim().toLowerCase().equals(target))
+                            .findFirst().orElse(null);
+                }
+                if (match != null) {
+                    m.setGrade(match);
+                    gradeLevelMappingRepository.save(m);
+                    linked++;
+                }
+            }
+
+            List<GradeDto> result = gradeLevelMappingRepository
+                    .findByCurriculumVersionOrderBySequenceAsc(vOpt.get())
+                    .stream().map(this::toGradeDto).toList();
+
+            r.setStatusCode(HttpStatus.OK.value());
+            r.setMessage("Bridged " + linked + " curriculum grade(s) to operational grades");
+            r.setEntity(result);
+        } catch (Exception e) {
+            log.error("Grade bridging failed: {}", e.getMessage(), e);
+            r.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            r.setMessage("Error bridging grades: " + e.getMessage());
+            r.setEntity(List.of());
+        }
+        return r;
     }
 
     // --- helpers ---

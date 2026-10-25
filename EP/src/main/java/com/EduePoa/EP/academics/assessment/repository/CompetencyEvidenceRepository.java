@@ -13,4 +13,6 @@ import java.util.List;
 public interface CompetencyEvidenceRepository extends TenantAwareRepository<CompetencyEvidence, Long> {
     List<CompetencyEvidence> findByStudentAndTermAndAcademicYear(Student student, Term term, Year academicYear);
     List<CompetencyEvidence> findByStudent(Student student);
+
+    List<CompetencyEvidence> findByGrade_IdAndTermAndAcademicYear(Long gradeId, Term term, Year academicYear);
 }

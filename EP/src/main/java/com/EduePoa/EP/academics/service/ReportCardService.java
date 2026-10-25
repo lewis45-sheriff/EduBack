@@ -10,4 +10,12 @@ public interface ReportCardService {
      * attendance, comments and (only if a ranking policy is enabled) position.
      */
     CustomResponse<ReportCardDto> getReportCard(Long studentId, Long termId, int year);
+
+    /**
+     * List the learners eligible for a report card for the given grade (and optional stream),
+     * term and year. Each entry indicates whether results are available ("ready"). Backs the
+     * report-card search screen.
+     */
+    CustomResponse<java.util.List<com.EduePoa.EP.academics.dto.response.ReportCardListItemDto>> listReportCards(
+            Long gradeId, Long streamId, Long termId, int year);
 }

@@ -31,6 +31,18 @@ public class CurriculumController {
         return ResponseEntity.status(res.getStatusCode()).body(res);
     }
 
+    /**
+     * Links the active curriculum version's grade mappings to the tenant's operational grades
+     * (by matching grade name). Fixes grade-scoped subject lookups when a tenant was seeded with
+     * unlinked grade mappings. Idempotent.
+     */
+    @PostMapping("/grades/bridge")
+    @PreAuthorize("hasPermission(null, 'curriculum:manage')")
+    public ResponseEntity<?> bridgeGrades() {
+        var res = curriculumService.bridgeGradesToOperational();
+        return ResponseEntity.status(res.getStatusCode()).body(res);
+    }
+
     @GetMapping("/learning-areas")
     @PreAuthorize("hasPermission(null, 'curriculum:read')")
     public ResponseEntity<?> getAllLearningAreas() {

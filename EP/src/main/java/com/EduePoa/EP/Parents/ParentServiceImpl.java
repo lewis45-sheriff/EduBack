@@ -344,6 +344,27 @@ public class ParentServiceImpl implements ParentService {
     }
 
     @Override
+    public Long getCurrentParentId() {
+        Parent parent = resolveCurrentParent();
+        return parent != null ? parent.getId() : null;
+    }
+
+    @Override
+    public boolean currentParentOwnsStudent(Long studentId) {
+        if (studentId == null) {
+            return false;
+        }
+        Parent parent = resolveCurrentParent();
+        if (parent == null) {
+            return false;
+        }
+        // The guardian repository is tenant-aware, so a link in another tenant will not match.
+        return studentGuardianRepository
+                .findByStudent_IdAndParent_Id(studentId, parent.getId())
+                .isPresent();
+    }
+
+    @Override
     public CustomResponse<?> updateParent(Long id, UpdateParentRequestDTO request) {
         CustomResponse<ParentResponseDTO> response = new CustomResponse<>();
         try {

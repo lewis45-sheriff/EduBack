@@ -13,4 +13,7 @@ public interface CbcValueRepository extends TenantAwareRepository<CbcValue, Long
     List<CbcValue> findByCurriculumVersionOrderBySequenceAsc(CurriculumVersion curriculumVersion);
     Optional<CbcValue> findByCurriculumVersionAndCode(CurriculumVersion curriculumVersion, String code);
     boolean existsByCurriculumVersionAndCode(CurriculumVersion curriculumVersion, String code);
+
+    /** All values for the current tenant (tenant filter applied), ordered for display. */
+    List<CbcValue> findAllByOrderBySequenceAsc();
 }

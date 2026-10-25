@@ -25,9 +25,28 @@ public class ReportCardDto {
     private String streamName;
 
     // Sections
+    /** Overall term result per learning area (aggregated from CbcGradeResult). */
     private List<LearningAreaResult> learningAreas = new ArrayList<>();
+    /**
+     * Every individual assessment/exam recorded for the learner this term (from StudentsScore),
+     * one row per assessment per learning area. Distinct from {@link #learningAreas}, which is the
+     * aggregated overall result — these are the raw underlying assessments and are never
+     * double-counted against the overall.
+     */
+    private List<IndividualAssessment> individualAssessments = new ArrayList<>();
     private List<CompetencyResult> competencies = new ArrayList<>();
+    /**
+     * True when at least one competency evidence record exists for this learner/term. When false,
+     * the report shows a clear "not yet assessed" state rather than fabricating competency results.
+     */
+    private boolean competenciesAssessed;
     private List<ValueObservation> values = new ArrayList<>();
+    /**
+     * The school's CBC core values catalogue for the active curriculum (names only). These are the
+     * values the school promotes; they are NOT per-learner achievements. Per-learner value
+     * observations are not yet captured, so {@link #values} stays empty rather than fabricating.
+     */
+    private List<String> valueCatalogue = new ArrayList<>();
     private AttendanceSummary attendance;
 
     // Overall
@@ -41,6 +60,26 @@ public class ReportCardDto {
     private String assessmentFrameworkCode;
     private String curriculumVersionCode;
 
+    // Exam-column totals across all learning areas (null when the per-exam marks are absent).
+    // These mirror the "TOTAL" row of a printed report form.
+    private BigDecimal openerTotal;
+    private BigDecimal midtermTotal;
+    private BigDecimal endtermTotal;
+    private BigDecimal averageTotal;           // sum of per-subject averages
+
+    // Fees snapshot for the term/year, sourced from the Finance module. Null when no finance
+    // record exists for the student/term/year.
+    private FeesSummary fees;
+
+    @Data
+    public static class FeesSummary {
+        private BigDecimal totalFeeAmount;
+        private BigDecimal paidAmount;
+        private BigDecimal balance;            // > 0 means arrears outstanding
+        private boolean cleared;               // true when balance <= 0
+        private String status;                 // CLEARED | OUTSTANDING | OVERPAID
+    }
+
     @Data
     public static class LearningAreaResult {
         private Long learningAreaId;
@@ -51,6 +90,31 @@ public class ReportCardDto {
         private Integer performancePoints;      // e.g. 6 (KJSEA)
         private String teacherComment;
         private String teacherName;
+
+        // Raw per-exam marks for this learning area (each out of its exam's max, typically 100).
+        // Null when that exam has not been recorded — never defaulted to 0 so the report can
+        // distinguish "not sat" from an actual zero.
+        private BigDecimal openerScore;
+        private BigDecimal midtermScore;
+        private BigDecimal endtermScore;
+        private BigDecimal averageScore;        // mean of the available exam marks above
+    }
+
+    /**
+     * A single assessment/exam recorded for the learner in the term (from StudentsScore). The
+     * "assessmentName" is the exam type (e.g. Opener, Mid-Term, End-Term). Score/maxScore/percentage
+     * reflect that one assessment only — these rows are the evidence behind the overall aggregate
+     * and must not be summed into the overall result.
+     */
+    @Data
+    public static class IndividualAssessment {
+        private Long learningAreaId;
+        private String learningAreaName;
+        private String assessmentName;      // exam type name
+        private BigDecimal score;           // raw mark obtained
+        private BigDecimal maxScore;        // exam maximum (e.g. 100)
+        private BigDecimal percentage;      // score / maxScore * 100, rounded
+        private String assessmentDate;      // ISO date when available, else null
     }
 
     @Data

@@ -21,4 +21,18 @@ public class ReportCardController {
         var res = reportCardService.getReportCard(studentId, termId, year);
         return ResponseEntity.status(res.getStatusCode()).body(res);
     }
+
+    /**
+     * Lists learners eligible for a report card for a grade (optionally a stream), term and year.
+     * Backs the admin report-card search screen. Each item flags whether results are ready.
+     */
+    @GetMapping("/report-card/list")
+    @PreAuthorize("hasPermission(null, 'report:generate')")
+    public ResponseEntity<?> listReportCards(@RequestParam Long gradeId,
+                                             @RequestParam(required = false) Long streamId,
+                                             @RequestParam Long termId,
+                                             @RequestParam int year) {
+        var res = reportCardService.listReportCards(gradeId, streamId, termId, year);
+        return ResponseEntity.status(res.getStatusCode()).body(res);
+    }
 }

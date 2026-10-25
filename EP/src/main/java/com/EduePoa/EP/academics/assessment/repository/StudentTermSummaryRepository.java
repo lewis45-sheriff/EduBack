@@ -15,4 +15,7 @@ public interface StudentTermSummaryRepository extends TenantAwareRepository<Stud
     Optional<StudentTermSummary> findByStudentAndTermAndYear(Student student, Term term, Year year);
     List<StudentTermSummary> findByGradeIdAndTermAndYear(Long gradeId, Term term, Year year);
     List<StudentTermSummary> findByGradeStreamIdAndTermAndYear(Long gradeStreamId, Term term, Year year);
+
+    /** Every computed term summary for a learner, across all terms/years/grades (for the trend graph). */
+    List<StudentTermSummary> findByStudent(Student student);
 }
